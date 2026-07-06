@@ -1,5 +1,8 @@
 # Rendilo Reale — horde-shooter vertical
 
+**▶ Jouer : [rendilo-reale.netlify.app](https://rendilo-reale.netlify.app)** — déployé
+automatiquement depuis `main` via Netlify.
+
 Jeu web du gameplay « phase de tir » de *Last War: Survival* : une escouade en bas d'écran
 auto-tire vers le haut (avec aim-assist) pendant que la voie défile ; hordes d'ennemis,
 portes bonus/malus (« x2 », « +10 », « -5 ») qui font grossir l'escouade, boss de fin de
