@@ -44,7 +44,9 @@
       display: flex; flex-direction: column; align-items: center; gap: 12px;
       width: min(86vw, 380px); max-height: 92vh; overflow-y: auto;
       text-align: center; padding: 12px;
+      animation: panel-in 0.28s cubic-bezier(0.2, 1.2, 0.4, 1);
     }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(26px) scale(0.96); } to { opacity: 1; transform: none; } }
     .panel h1 {
       margin: 0 0 6px; font-size: 44px; font-weight: 900; letter-spacing: 3px;
       line-height: 1.05; color: #60a5fa; text-shadow: 0 3px 0 #1d4ed8;

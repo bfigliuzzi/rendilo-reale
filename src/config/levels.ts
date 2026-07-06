@@ -34,6 +34,7 @@ export interface LevelDef {
   scrollSpeed: number;
   startSquad?: number; // défaut : effectif de départ du joueur (méta)
   hpMul?: number; // multiplicateur de PV ennemis (défaut 1)
+  biome?: number; // index dans atlas.grounds (défaut 0)
   events: LevelEvent[];
   /** Endless : appelé quand le spawner approche de la fin de `events` pour générer la suite. */
   extend?: (events: LevelEvent[], dist: number) => void;

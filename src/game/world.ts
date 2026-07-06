@@ -175,6 +175,7 @@ export class World {
     this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
     this.endTimer = 0;
     this.pendingResult = null;
+    this.layers.ground.texture = this.atlas.grounds[def.biome ?? 0];
     this.crates.contactKills = Math.max(1, B.CRATE_CONTACT_KILLS - playerStats.contactShield);
     this.squad.reset(def.startSquad ?? playerStats.startSquad);
     this.spawner = new Spawner(def, {

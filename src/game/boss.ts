@@ -47,9 +47,9 @@ export class Boss {
     this.aimLine.tint = 0xef4444;
     this.aimLine.visible = false;
 
-    this.body = new Sprite(atlas.enemyByKind[2]);
+    this.body = new Sprite(atlas.boss);
     this.body.anchor.set(0.5);
-    this.body.width = this.body.height = B.BOSS_RADIUS * 2;
+    this.body.width = this.body.height = B.BOSS_RADIUS * 2.2;
 
     const barBg = new Sprite(atlas.white);
     barBg.anchor.set(0.5);

@@ -19,7 +19,7 @@ export class Layers {
   readonly labels = new Container();
 
   constructor(stage: Container, atlas: Atlas) {
-    this.ground = new TilingSprite({ texture: atlas.ground, width: DESIGN_W, height: DESIGN_H });
+    this.ground = new TilingSprite({ texture: atlas.grounds[0], width: DESIGN_W, height: DESIGN_H });
     // uv dynamique pour les ennemis : la frame change quand un slot du pool est réutilisé par un autre type
     this.enemies = new ParticleContainer({ dynamicProperties: { position: true, uv: true } });
     this.bullets = new ParticleContainer({ dynamicProperties: { position: true } });

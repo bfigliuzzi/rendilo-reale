@@ -205,9 +205,15 @@ export class Squad {
 
   renderSync(alpha: number, distI: number): void {
     const cx = lerp(this.prevX, this.x, alpha);
+    // trottinement : chaque soldat oscille en phase avec l'avancée, décalé par index
+    const phase = distI * 0.08;
     for (let i = 0; i < this.rendered; i++) {
       const s = this.sprites[i];
-      s.position.set(cx + this.curX[i] * this.visualScale, -distI + this.curY[i] * this.visualScale);
+      const bob = Math.sin(phase + i * 1.31) * 1.6;
+      s.position.set(
+        cx + this.curX[i] * this.visualScale,
+        -distI + this.curY[i] * this.visualScale + bob,
+      );
       s.scale.set(this.visualScale);
     }
     this.label.position.set(cx, -distI - 22);

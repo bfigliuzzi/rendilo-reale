@@ -17,8 +17,17 @@ export interface Atlas {
   crate: Texture; // bois (PV)
   crateExplosive: Texture;
   crateBonus: Texture;
-  ground: Texture; // motif de la voie, pour TilingSprite (source séparée)
+  boss: Texture;
+  grounds: readonly Texture[]; // un motif de voie par biome (sources séparées)
 }
+
+/** Palettes de biomes : pont/eau, désert, neige, nuit — tournent avec les niveaux. */
+const BIOMES = [
+  { side: '#17456b', sideDetail: '#0f3a5c', rail: '#8d99a6', road: '#4a545e', roadAlt: '#515c67', seam: '#3d454e' },
+  { side: '#d4a373', sideDetail: '#c2905e', rail: '#926c43', road: '#9c6f2f', roadAlt: '#a87a36', seam: '#845c26' },
+  { side: '#dbeafe', sideDetail: '#c6dcf8', rail: '#94a3b8', road: '#64748b', roadAlt: '#6b7f94', seam: '#526075' },
+  { side: '#0b1222', sideDetail: '#0e1830', rail: '#334155', road: '#1e293b', roadAlt: '#243244', seam: '#16202e' },
+] as const;
 
 function circle(
   ctx: CanvasRenderingContext2D,
@@ -72,7 +81,9 @@ export function buildAtlas(): Atlas {
   canvas.height = 192;
   const ctx = canvas.getContext('2d')!;
 
-  // soldat (0,0,20,20) — bleu, casque clair
+  // soldat (0,0,20,20) — bleu, casque clair, canon vers l'avant
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(8.5, 0, 3, 7); // canon
   circle(ctx, 10, 10, 8, '#3b82f6', '#1d4ed8');
   circle(ctx, 10, 7, 4, '#93c5fd', '#1d4ed8');
   // balle (32,0,8,16) — traçante jaune
@@ -156,6 +167,22 @@ export function buildAtlas(): Atlas {
   ctx.textBaseline = 'middle';
   ctx.fillText('!', 148, 93);
   drawCrate(ctx, 0, 124, '#f59e0b', '#b45309', '#92400e');
+  // boss (150,130,44,44) — masse sombre à pointes, œil
+  const bx = 172;
+  const by = 152;
+  ctx.fillStyle = '#7f1d1d';
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + Math.cos(a - 0.24) * 15, by + Math.sin(a - 0.24) * 15);
+    ctx.lineTo(bx + Math.cos(a) * 21.5, by + Math.sin(a) * 21.5);
+    ctx.lineTo(bx + Math.cos(a + 0.24) * 15, by + Math.sin(a + 0.24) * 15);
+    ctx.closePath();
+    ctx.fill();
+  }
+  circle(ctx, bx, by, 15, '#b91c1c', '#450a0a');
+  circle(ctx, bx, by, 8.5, '#7f1d1d', '#450a0a');
+  circle(ctx, bx, by, 4, '#fbbf24', '#92400e'); // œil
 
   const source = Texture.from(canvas).source;
   const frame = (x: number, y: number, w: number, h: number): Texture =>
@@ -180,12 +207,13 @@ export function buildAtlas(): Atlas {
     crate: frame(0, 64, 96, 56),
     crateExplosive: frame(100, 64, 96, 56),
     crateBonus: frame(0, 124, 96, 56),
-    ground: buildGroundPattern(),
+    boss: frame(150, 130, 44, 44),
+    grounds: BIOMES.map((b) => buildGroundPattern(b)),
   };
 }
 
-/** Motif du pont : eau sur les côtés, rambardes, asphalte avec joints réguliers. */
-function buildGroundPattern(): Texture {
+/** Motif de voie : bas-côtés, rambardes, chaussée avec joints réguliers. */
+function buildGroundPattern(biome: (typeof BIOMES)[number]): Texture {
   const w = 540;
   const h = 240;
   const canvas = document.createElement('canvas');
@@ -193,21 +221,21 @@ function buildGroundPattern(): Texture {
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#17456b'; // eau
+  ctx.fillStyle = biome.side;
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#0f3a5c';
+  ctx.fillStyle = biome.sideDetail;
   for (let y = 0; y < h; y += 30) {
     ctx.fillRect(0, y, 24, 12);
     ctx.fillRect(w - 24, y + 15, 24, 12);
   }
-  ctx.fillStyle = '#8d99a6'; // rambardes
+  ctx.fillStyle = biome.rail;
   ctx.fillRect(24, 0, 14, h);
   ctx.fillRect(w - 38, 0, 14, h);
-  ctx.fillStyle = '#4a545e'; // asphalte
+  ctx.fillStyle = biome.road;
   ctx.fillRect(38, 0, w - 76, h);
-  ctx.fillStyle = '#515c67';
+  ctx.fillStyle = biome.roadAlt;
   ctx.fillRect(38, 0, w - 76, h / 2);
-  ctx.strokeStyle = '#3d454e'; // joints
+  ctx.strokeStyle = biome.seam;
   ctx.lineWidth = 4;
   for (const y of [0, h / 2]) {
     ctx.beginPath();

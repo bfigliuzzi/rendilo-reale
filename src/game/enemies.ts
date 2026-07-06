@@ -123,7 +123,8 @@ export class EnemyPool {
   syncRender(alpha: number): void {
     for (let i = 0; i < this.count; i++) {
       const p = this.particles[i];
-      p.x = lerp(this.prevX[i], this.x[i], alpha);
+      // dandinement de marche : purement visuel (±1.5 px), les collisions restent exactes
+      p.x = lerp(this.prevX[i], this.x[i], alpha) + Math.sin(this.y[i] * 0.09 + i * 0.7) * 1.5;
       p.y = lerp(this.prevY[i], this.y[i], alpha);
     }
     this.container.update();
