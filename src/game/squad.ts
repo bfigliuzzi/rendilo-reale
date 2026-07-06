@@ -9,27 +9,42 @@ interface Slot {
   dy: number;
 }
 
-const slotCache = new Map<number, Slot[]>();
+interface Formation {
+  slots: Slot[];
+  halfWidth: number;
+}
+
+const formationCache = new Map<number, Formation>();
 
 /**
- * Formation en rangs concentriques derrière un leader : rangs de 1, 3, 5, 7…
- * remplis du centre vers l'extérieur (un rang partiel reste centré).
+ * Formation en masse large (aspect FORM_ASPECT, quinconce) : le nombre de colonnes
+ * croît en √n et l'espacement se resserre pour tenir dans FORM_MAX_WIDTH — un gros
+ * effectif se densifie en foule au lieu de s'étirer en profondeur. Chaque rang est
+ * rempli du centre vers l'extérieur (un rang partiel reste centré).
  */
-export function formationSlots(n: number): Slot[] {
-  let slots = slotCache.get(n);
-  if (slots) return slots;
-  slots = [];
-  let row = 0;
-  while (slots.length < n) {
-    const take = Math.min(2 * row + 1, n - slots.length);
+export function formation(n: number): Formation {
+  let f = formationCache.get(n);
+  if (f) return f;
+  const cols = Math.min(B.FORM_MAX_COLS, Math.max(1, Math.ceil(Math.sqrt(n * B.FORM_ASPECT))));
+  const spacingX = Math.min(B.SQUAD_SPACING_X, B.FORM_MAX_WIDTH / Math.max(cols - 1, 1));
+  const spacingY = Math.max(B.FORM_MIN_SPACING_Y, spacingX * 0.9);
+  const slots: Slot[] = [];
+  let halfWidth = 0;
+  let remaining = n;
+  for (let row = 0; remaining > 0; row++) {
+    const take = Math.min(cols, remaining);
+    remaining -= take;
+    const stagger = row % 2 === 1 && take > 1 ? spacingX / 2 : 0;
     for (let i = 0; i < take; i++) {
       const col = i === 0 ? 0 : i % 2 === 1 ? (i + 1) >> 1 : -(i >> 1);
-      slots.push({ dx: col * B.SQUAD_SPACING_X, dy: row * B.SQUAD_SPACING_Y });
+      const dx = col * spacingX + stagger;
+      slots.push({ dx, dy: row * spacingY });
+      if (Math.abs(dx) > halfWidth) halfWidth = Math.abs(dx);
     }
-    row++;
   }
-  slotCache.set(n, slots);
-  return slots;
+  f = { slots, halfWidth };
+  formationCache.set(n, f);
+  return f;
 }
 
 /**
@@ -43,6 +58,7 @@ export class Squad {
   prevX = B.LANE_CENTER;
   rendered = 0;
   visualScale = 1;
+  halfWidth = 0;
   private readonly sprites: Sprite[] = [];
   private readonly curX = new Float32Array(B.SQUAD_RENDER_CAP);
   private readonly curY = new Float32Array(B.SQUAD_RENDER_CAP);
@@ -89,7 +105,11 @@ export class Squad {
 
   update(dt: number, dragDX: number): void {
     this.prevX = this.x;
-    this.x = clamp(this.x + dragDX * B.DRAG_SENSITIVITY, B.LANE_MIN_X, B.LANE_MAX_X);
+    // le centre est borné pour que la masse déborde à peine de la voie, même très large
+    const hw = this.halfWidth * this.visualScale;
+    const minX = Math.min(B.LANE_CENTER, B.LANE_MIN_X - 12 + hw);
+    const maxX = Math.max(B.LANE_CENTER, B.LANE_MAX_X + 12 - hw);
+    this.x = clamp(this.x + dragDX * B.DRAG_SENSITIVITY, Math.max(B.LANE_MIN_X, minX), Math.min(B.LANE_MAX_X, maxX));
     const t = Math.min(1, dt * 8);
     for (let i = 0; i < this.rendered; i++) {
       this.curX[i] += (this.tgtX[i] - this.curX[i]) * t;
@@ -112,7 +132,8 @@ export class Squad {
 
   private syncFormation(snap: boolean): void {
     const r = Math.min(this.logical, B.SQUAD_RENDER_CAP);
-    const slots = formationSlots(Math.max(r, 1));
+    const { slots, halfWidth } = formation(Math.max(r, 1));
+    this.halfWidth = halfWidth;
     for (let i = 0; i < r; i++) {
       this.tgtX[i] = slots[i].dx;
       this.tgtY[i] = slots[i].dy;
@@ -127,7 +148,10 @@ export class Squad {
     this.rendered = r;
     this.visualScale =
       this.logical > B.SQUAD_RENDER_CAP
-        ? 1 + 0.15 * Math.log10(this.logical / B.SQUAD_RENDER_CAP)
+        ? Math.min(
+            B.SQUAD_SCALE_MAX,
+            1 + B.SQUAD_SCALE_LOG * Math.log10(this.logical / B.SQUAD_RENDER_CAP),
+          )
         : 1;
     this.label.text = String(this.logical);
   }

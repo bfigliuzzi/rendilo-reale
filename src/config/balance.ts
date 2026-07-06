@@ -16,10 +16,19 @@ export const CULL_BEHIND = 200; // en-deçà derrière l'escouade : entités dé
 
 // Escouade
 export const START_SQUAD = 5;
-export const SQUAD_RENDER_CAP = 50; // soldats affichés max ; au-delà, label + scale-up
+export const SQUAD_RENDER_CAP = 150; // soldats affichés max ; au-delà, label + scale-up
 export const SQUAD_HARD_CAP = 9999;
-export const SQUAD_SPACING_X = 22;
+export const SQUAD_SPACING_X = 22; // espacement max (petits effectifs)
 export const SQUAD_SPACING_Y = 20;
+// Formation : plus large que profonde (aspect ~2.5), compactée quand l'effectif grossit
+// pour tenir dans FORM_MAX_WIDTH — la masse se densifie au lieu de s'étirer en profondeur.
+export const FORM_ASPECT = 2.5;
+export const FORM_MAX_COLS = 21;
+export const FORM_MAX_WIDTH = 220;
+export const FORM_MIN_SPACING_Y = 13;
+// Au-delà du cap de rendu, le blob grossit : ×1.4 à 10× le cap, plafonné à ×1.8
+export const SQUAD_SCALE_LOG = 0.4;
+export const SQUAD_SCALE_MAX = 1.8;
 export const SOLDIER_RADIUS = 9;
 export const DRAG_SENSITIVITY = 1.2;
 
@@ -27,7 +36,7 @@ export const DRAG_SENSITIVITY = 1.2;
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.
 export const SOLDIER_DPS = 8;
 export const FIRE_RATE_PER_SOLDIER = 5;
-export const FIRE_SOLDIER_CAP = 24; // cadence max = 24 × 5 = 120 balles/s
+export const FIRE_SOLDIER_CAP = 48; // cadence max = 48 × 5 = 240 balles/s
 export const BULLET_SPEED = 760;
 export const BULLET_RADIUS = 5;
 export const BULLET_X_JITTER = 60;
