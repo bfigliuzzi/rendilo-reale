@@ -59,7 +59,9 @@ export class Squad {
   rendered = 0;
   visualScale = 1;
   halfWidth = 0;
+  shielded = false;
   onLost: (n: number) => void = () => {};
+  private badge = '';
   private readonly sprites: Sprite[] = [];
   private readonly curX = new Float32Array(B.SQUAD_RENDER_CAP);
   private readonly curY = new Float32Array(B.SQUAD_RENDER_CAP);
@@ -122,8 +124,28 @@ export class Squad {
 
   loseSoldiers(n: number): void {
     if (n <= 0 || this.logical <= 0) return;
+    if (this.shielded) return; // bouclier temporaire : aucune perte
     this.setLogical(this.logical - n);
     this.onLost(n);
+  }
+
+  /** Bouclier actif : les pertes sont annulées et les soldats virent au bleu clair. */
+  setShielded(on: boolean): void {
+    if (on === this.shielded) return;
+    this.shielded = on;
+    const tint = on ? 0x9bd8ff : 0xffffff;
+    for (const s of this.sprites) s.tint = tint;
+  }
+
+  /** Suffixe affiché à côté de l'effectif (buffs actifs). */
+  setBadge(badge: string): void {
+    if (badge === this.badge) return;
+    this.badge = badge;
+    this.refreshLabel();
+  }
+
+  private refreshLabel(): void {
+    this.label.text = this.badge ? `${this.logical} ${this.badge}` : String(this.logical);
   }
 
   private setLogical(n: number): void {
@@ -154,7 +176,7 @@ export class Squad {
             1 + B.SQUAD_SCALE_LOG * Math.log10(this.logical / B.SQUAD_RENDER_CAP),
           )
         : 1;
-    this.label.text = String(this.logical);
+    this.refreshLabel();
   }
 
   worldY(dist: number): number {

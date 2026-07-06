@@ -10,8 +10,10 @@ export interface Atlas {
   bullet: Texture;
   enemyByKind: readonly [Texture, Texture, Texture]; // grunt, runner, brute
   white: Texture; // rect blanc, à teinter (portes, bannières)
-  spark: Texture; // disque blanc, à teinter (particules d'effets)
-  crate: Texture;
+  spark: Texture; // disque blanc, à teinter (particules d'effets, marqueurs)
+  crate: Texture; // bois (PV)
+  crateExplosive: Texture;
+  crateBonus: Texture;
   ground: Texture; // motif de la voie, pour TilingSprite (source séparée)
 }
 
@@ -32,10 +34,39 @@ function circle(
   ctx.stroke();
 }
 
+function drawCrate(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  base: string,
+  edge: string,
+  cross: string,
+): void {
+  ctx.fillStyle = base;
+  ctx.fillRect(x, y, 96, 56);
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x + 1.5, y + 1.5, 93, 53);
+  ctx.lineWidth = 2;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, y + i * 14);
+    ctx.lineTo(x + 94, y + i * 14);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = cross;
+  ctx.beginPath();
+  ctx.moveTo(x + 4, y + 4);
+  ctx.lineTo(x + 92, y + 52);
+  ctx.moveTo(x + 92, y + 4);
+  ctx.lineTo(x + 4, y + 52);
+  ctx.stroke();
+}
+
 export function buildAtlas(): Atlas {
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
+  canvas.width = 256;
+  canvas.height = 192;
   const ctx = canvas.getContext('2d')!;
 
   // soldat (0,0,20,20) — bleu, casque clair
@@ -66,26 +97,19 @@ export function buildAtlas(): Atlas {
   ctx.beginPath();
   ctx.arc(118, 22, 6, 0, Math.PI * 2);
   ctx.fill();
-  // caisse (0,64,96,56) — planches bois
-  ctx.fillStyle = '#b98a4a';
-  ctx.fillRect(0, 64, 96, 56);
-  ctx.strokeStyle = '#8a6234';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(1.5, 65.5, 93, 53);
-  ctx.lineWidth = 2;
-  for (let i = 1; i < 4; i++) {
-    ctx.beginPath();
-    ctx.moveTo(2, 64 + i * 14);
-    ctx.lineTo(94, 64 + i * 14);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = '#77542c';
+  // caisses (96×56) : bois (0,64), explosive (100,64), bonus dorée (0,124)
+  drawCrate(ctx, 0, 64, '#b98a4a', '#8a6234', '#77542c');
+  drawCrate(ctx, 100, 64, '#dc2626', '#7f1d1d', '#450a0a');
+  ctx.fillStyle = '#fde68a'; // pastille « danger » de la caisse explosive
   ctx.beginPath();
-  ctx.moveTo(4, 68);
-  ctx.lineTo(92, 116);
-  ctx.moveTo(92, 68);
-  ctx.lineTo(4, 116);
-  ctx.stroke();
+  ctx.arc(148, 92, 11, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#7f1d1d';
+  ctx.font = '900 17px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', 148, 93);
+  drawCrate(ctx, 0, 124, '#f59e0b', '#b45309', '#92400e');
 
   const source = Texture.from(canvas).source;
   const frame = (x: number, y: number, w: number, h: number): Texture =>
@@ -98,6 +122,8 @@ export function buildAtlas(): Atlas {
     white: frame(113, 1, 10, 10),
     spark: frame(112, 16, 12, 12),
     crate: frame(0, 64, 96, 56),
+    crateExplosive: frame(100, 64, 96, 56),
+    crateBonus: frame(0, 124, 96, 56),
     ground: buildGroundPattern(),
   };
 }

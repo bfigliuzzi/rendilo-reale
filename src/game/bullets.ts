@@ -1,6 +1,7 @@
 import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
-import { lerp } from '../core/math';
+import { clamp, lerp } from '../core/math';
+import type { EnemyPool } from './enemies';
 import type { Squad } from './squad';
 
 const PARK = -9999; // les particules mortes sont garées hors écran (le PC rend tout ce qu'il contient)
@@ -72,7 +73,7 @@ export class BulletPool {
    * limite), cadence visuelle plafonnée, dégâts par balle = DPS / cadence réelle.
    * Retourne le nombre de balles tirées ce tick (pour le son, throttlé en aval).
    */
-  autoFire(dt: number, squad: Squad, dist: number, dpsMul: number): number {
+  autoFire(dt: number, squad: Squad, dist: number, dpsMul: number, enemies: EnemyPool): number {
     if (squad.logical <= 0) return 0;
     const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER;
     const dmg = (squad.logical * B.SOLDIER_DPS * dpsMul) / rate;
@@ -85,12 +86,38 @@ export class BulletPool {
       this.spawn(
         this.muzzle.x,
         this.muzzle.y,
-        (Math.random() - 0.5) * B.BULLET_X_JITTER,
+        this.aimVX(this.muzzle.x, this.muzzle.y, enemies),
         -B.BULLET_SPEED,
         dmg,
       );
     }
     return fired;
+  }
+
+  /**
+   * Aim-assist : vise l'ennemi vivant le plus proche dans le cône frontal —
+   * une horde large se fait balayer sur toute sa largeur au lieu de flanquer.
+   */
+  private aimVX(mx: number, my: number, enemies: EnemyPool): number {
+    let bestD2 = Infinity;
+    let bestDX = 0;
+    let bestDY = 0;
+    for (let e = 0; e < enemies.count; e++) {
+      if (enemies.hp[e] <= 0) continue;
+      const dy = enemies.y[e] - my;
+      if (dy >= -20) continue; // uniquement devant
+      const dx = enemies.x[e] - mx;
+      if (dx > B.BULLET_AIM_RANGE_X || dx < -B.BULLET_AIM_RANGE_X) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestDX = dx;
+        bestDY = dy;
+      }
+    }
+    if (bestD2 === Infinity) return (Math.random() - 0.5) * B.BULLET_X_JITTER;
+    const t = -bestDY / B.BULLET_SPEED; // temps de vol jusqu'à la cible
+    return clamp(bestDX / Math.max(t, 0.05), -B.BULLET_AIM_MAX_VX, B.BULLET_AIM_MAX_VX);
   }
 
   update(dt: number, topY: number, bottomY: number): void {

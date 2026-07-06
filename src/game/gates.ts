@@ -42,11 +42,11 @@ function buildGate(mod: GateModifier, centerX: number, atlas: Atlas): Container 
 
 class GatePair {
   done = false;
-  private consumed = false;
+  consumed = false;
   private readonly root = new Container();
 
   constructor(
-    private readonly y: number,
+    readonly y: number,
     private readonly left: GateModifier,
     private readonly right: GateModifier,
     parent: Container,
@@ -108,6 +108,17 @@ export class Gates {
     }
     if (anyDone) this.pairs = this.pairs.filter((p) => !p.done);
     return chosen;
+  }
+
+  /** Distance (en avant de l'escouade) de la prochaine porte non consommée, ou null. */
+  nextGateDistance(dist: number): number | null {
+    let best: number | null = null;
+    for (const pair of this.pairs) {
+      if (pair.consumed) continue;
+      const ahead = -dist - pair.y; // positif si la porte est devant
+      if (ahead > 0 && (best === null || ahead < best)) best = ahead;
+    }
+    return best;
   }
 
   reset(): void {

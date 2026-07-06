@@ -30,6 +30,7 @@
     #hud-stats { right: 8px; text-align: right; display: none; }
     #hud.in-game #hud-stats { display: block; }
     #hud-stats .big { font-size: 18px; font-weight: 800; }
+    #hud-stats .buffs { color: #fbbf24; font-weight: 700; }
 
     /* Écrans (menu, boutique, résultat) */
     #ui {
@@ -49,8 +50,14 @@
       line-height: 1.05; color: #60a5fa; text-shadow: 0 3px 0 #1d4ed8;
     }
     .panel h2 { margin: 0; font-size: 34px; font-weight: 900; letter-spacing: 2px; }
-    .panel h2.win { color: #4ade80; }
-    .panel h2.lose { color: #f87171; }
+    .panel h2.win {
+      color: #4ade80; font-size: 46px;
+      text-shadow: 0 0 24px rgba(74, 222, 128, 0.55);
+      animation: pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1);
+    }
+    .panel h2.lose { color: #f87171; animation: slam 0.35s ease-out; }
+    @keyframes pop { 0% { transform: scale(0.2); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes slam { 0% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     .sub { font-size: 15px; opacity: 0.85; }
     .result-stats { font-size: 14px; opacity: 0.85; }
     .gold-line { font-size: 20px; font-weight: 800; color: #fbbf24; }

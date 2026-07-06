@@ -140,6 +140,28 @@ export class Sfx {
     this.tone(140, 0.3, { type: 'square', vol: 0.08, endFreq: 60 });
   }
 
+  missileWarn(): void {
+    if (this.throttled('warn', 200)) return;
+    this.tone(1400, 1.0, { type: 'sine', vol: 0.05, endFreq: 250 }); // sifflement qui tombe
+  }
+
+  explosion(): void {
+    if (this.throttled('boom', 90)) return;
+    this.noise(0.4, 0.18, 600);
+    this.tone(110, 0.4, { type: 'sawtooth', vol: 0.1, endFreq: 40 });
+  }
+
+  powerup(): void {
+    const notes = [440, 660, 880];
+    notes.forEach((f, i) => this.tone(f, 0.1, { type: 'square', vol: 0.06, delay: i * 0.05 }));
+  }
+
+  firework(): void {
+    if (this.throttled('fw', 120)) return;
+    this.noise(0.25, 0.09, 1600);
+    this.tone(900 + Math.random() * 600, 0.2, { type: 'triangle', vol: 0.05, endFreq: 200 });
+  }
+
   victory(): void {
     const notes = [523, 659, 784, 1047];
     notes.forEach((f, i) => this.tone(f, 0.16, { type: 'triangle', vol: 0.1, delay: i * 0.13 }));

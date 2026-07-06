@@ -34,28 +34,49 @@ export const DRAG_SENSITIVITY = 1.2;
 
 // Tir — le DPS est découplé du nombre de balles : la cadence visuelle sature,
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.
-export const SOLDIER_DPS = 8;
+export const SOLDIER_DPS = 9;
 export const FIRE_RATE_PER_SOLDIER = 5;
 export const FIRE_SOLDIER_CAP = 48; // cadence max = 48 × 5 = 240 balles/s
 export const BULLET_SPEED = 760;
 export const BULLET_RADIUS = 5;
 export const BULLET_X_JITTER = 60;
+// aim-assist : les balles dévient vers l'ennemi le plus proche dans ce cône frontal
+export const BULLET_AIM_RANGE_X = 170;
+export const BULLET_AIM_MAX_VX = 220;
 
 // Pools
 export const MAX_BULLETS = 1500;
-export const MAX_ENEMIES = 600;
+export const MAX_ENEMIES = 900;
 
 // Grille de collisions (couvre la bande visible + portée des balles)
 export const GRID_CELL = 64;
 export const GRID_COLS = 9; // 9 × 64 = 576 ≥ 540
 export const GRID_ROWS = 18; // 18 × 64 = 1152 ≥ 920 devant + 200 derrière
 export const GRID_AHEAD = 920;
-export const GRID_MAX_PER_CELL = 48;
+export const GRID_MAX_PER_CELL = 64;
 
 // Caisses
 export const CRATE_CONTACT_KILLS = 12;
 export const CRATE_HALF_W = 85;
 export const CRATE_HALF_H = 50;
+export const CRATE_EXPLOSIVE_KILLS = 16; // contact ou explosion proche
+export const EXPLOSION_RADIUS = 175; // souffle : tue les ennemis, blesse l'escouade si proche
+export const EXPLOSION_BOSS_DAMAGE = 120;
+
+// Buffs temporaires (caisses bonus)
+export const BUFF_DMG_MUL = 2;
+export const BUFF_DMG_DURATION = 10;
+export const BUFF_SHIELD_DURATION = 8;
+
+// Missiles (urgence à l'approche des portes + frappes ambiantes)
+export const MISSILE_WARNING = 1.25; // délai marqueur → impact
+export const MISSILE_RADIUS = 130;
+export const MISSILE_KILLS = 12; // plafond — les pertes réelles sont proportionnelles à l'effectif
+export const MISSILE_MIN_DIST = 700; // pas de frappes en tout début de niveau
+export const MISSILE_GATE_RANGE = 650; // barrage tant qu'une porte est à moins de X devant
+export const MISSILE_GATE_INTERVAL: [number, number] = [1.0, 1.7];
+export const MISSILE_AMBIENT_FROM = 2500; // frappes aléatoires au-delà de cette distance
+export const MISSILE_AMBIENT_INTERVAL: [number, number] = [6, 12];
 
 // Boss
 export const BOSS_RADIUS = 42;

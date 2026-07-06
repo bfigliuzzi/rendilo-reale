@@ -43,6 +43,9 @@ export class Hud {
       const p95 = this.sorted[Math.min(n - 1, Math.floor(n * 0.95))];
       this.perfEl.textContent = `${fps.toFixed(0)} fps · p95 ${p95.toFixed(1)} ms\nballes ${stats.bullets} · ennemis ${stats.enemies}`;
     }
-    this.statsEl.innerHTML = `<span class="big">⚔ ${stats.squad}</span><br>💰 ${stats.gold} · ☠ ${stats.kills}<br>${stats.dist} m`;
+    const buffs =
+      (stats.dmgBuff > 0 ? ` 🔥×2 ${Math.ceil(stats.dmgBuff)}s` : '') +
+      (stats.shieldBuff > 0 ? ` 🛡 ${Math.ceil(stats.shieldBuff)}s` : '');
+    this.statsEl.innerHTML = `<span class="big">⚔ ${stats.squad}</span><br>💰 ${stats.gold} · ☠ ${stats.kills}<br>${stats.dist} m${buffs ? `<br><span class="buffs">${buffs}</span>` : ''}`;
   }
 }

@@ -64,8 +64,45 @@ while (Date.now() - start < SECONDS * 1000) {
         targetX = score(p.left) >= score(p.right) ? 165 : 375;
         break;
       }
+      // caisses : un bon joueur s'aligne dessus DE LOIN pour les détruire au
+      // tir (bonus à ramasser, murs à percer), et ne les évite qu'au contact
+      const allCrates = (w.crates?.list ?? []).filter((c) => !c.dead);
+      const farCrates = allCrates.filter((c) => {
+        const ahead = -w.dist - c.cy;
+        return ahead > 260 && ahead < 900;
+      });
+      if (farCrates.length > 0) {
+        farCrates.sort((a, b) => a.hp - b.hp);
+        targetX = farCrates[0].cx;
+      }
+      // esquiver : maximiser la distance aux dangers immédiats (frappes de
+      // missiles, caisses trop proches pour être cassées) près de la cible
+      const strikes = (w.missiles?.list ?? [])
+        .filter((s) => Math.abs(s.y + w.dist) < 260)
+        .map((s) => ({ x: s.x, keep: 210 }));
+      const nearCrates = allCrates
+        .filter((c) => c.cy > -w.dist - 260 && c.cy < -w.dist + 20)
+        .map((c) => ({ x: c.cx, keep: 150 }));
+      const dangers = strikes.concat(nearCrates);
+      if (dangers.length > 0) {
+        let bestX = targetX;
+        let bestScore = -Infinity;
+        for (let x = 80; x <= 460; x += 20) {
+          let danger = 0;
+          for (const d of dangers) {
+            const dist = Math.abs(d.x - x);
+            if (dist < d.keep) danger += (d.keep - dist) * 4;
+          }
+          const score = -danger - Math.abs(x - targetX);
+          if (score > bestScore) {
+            bestScore = score;
+            bestX = x;
+          }
+        }
+        targetX = bestX;
+      }
       const dx = targetX - w.squad.x;
-      w.squad.x += Math.max(-45, Math.min(45, dx));
+      w.squad.x += Math.max(-60, Math.min(60, dx));
     }
     return {
       state: w.state,

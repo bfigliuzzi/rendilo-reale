@@ -1,9 +1,15 @@
 # Rendilo Reale — horde-shooter vertical
 
 Jeu web du gameplay « phase de tir » de *Last War: Survival* : une escouade en bas d'écran
-auto-tire vers le haut pendant que la voie défile ; hordes d'ennemis, portes bonus/malus
-(« x2 », « +10 », « -5 ») qui font grossir l'escouade, caisses à points de vie, boss de
-fin de niveau.
+auto-tire vers le haut (avec aim-assist) pendant que la voie défile ; hordes d'ennemis,
+portes bonus/malus (« x2 », « +10 », « -5 ») qui font grossir l'escouade, boss de fin de
+niveau, et une bonne dose d'apocalypse :
+
+- **Caisses** : bois (PV, bloquent et blessent), **explosives** (souffle qui tue ennemis
+  ET soldats proches — à faire sauter de loin), **bonus** dorées (dégâts ×2 ou bouclier
+  temporaire si détruites au tir — perdues si percutées).
+- **Frappes de missiles** : champ de mines à l'approche des portes (marqueurs d'alerte à
+  esquiver), frappes ambiantes qui visent le joueur en seconde partie de niveau.
 
 ## Lancer
 

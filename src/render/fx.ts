@@ -2,7 +2,7 @@ import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import { lerp, rand } from '../core/math';
 
 const PARK = -9999;
-const CAP = 512;
+const CAP = 1024;
 
 export interface BurstOpts {
   count: number;

@@ -11,6 +11,10 @@ export interface GateModifier {
 
 export type HordePattern = 'grid' | 'blob' | 'stream';
 
+/** hp : bloque et blesse · explosive : souffle au sol (ennemis ET escouade) ·
+ *  damage : dégâts ×2 temporaires si détruite · shield : bouclier temporaire si détruite. */
+export type CrateVariant = 'hp' | 'explosive' | 'damage' | 'shield';
+
 export type LevelEvent =
   | {
       at: number;
@@ -22,7 +26,7 @@ export type LevelEvent =
       hpMul?: number; // défaut : LevelDef.hpMul
     }
   | { at: number; type: 'gates'; left: GateModifier; right: GateModifier }
-  | { at: number; type: 'crate'; hp: number; xNorm: number } // xNorm ∈ [0,1] en travers de la voie
+  | { at: number; type: 'crate'; hp: number; xNorm: number; variant?: CrateVariant } // xNorm ∈ [0,1]
   | { at: number; type: 'boss'; hp: number; final?: boolean } // final : sa mort = victoire
   | { at: number; type: 'finish' };
 

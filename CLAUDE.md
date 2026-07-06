@@ -18,9 +18,10 @@ d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance
 le test de perf (escouade 500).
 
 **Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
-le N1 sans méta *de justesse* (~20 survivants) ; N2 sans méta = défaite rapide ; N2 avec
-l'or d'une victoire (`{"dps":1,"start":1}`) = meurt au boss ; N2 avec 2-3 victoires
-(`{"dps":3,"start":2}`) = victoire.
+le N1 sans méta ~1 fois sur 3 (défaites entre 480 et 620 m, souvent au boss — le mode
+apocalypse ajoute de la variance via les missiles) ; N2 avec la méta de 2-3 runs
+(`{"dps":2,"start":2,"armor":1}`) = victoire. Le bot casse les caisses de loin, esquive
+les marqueurs de missiles et choisit les bonnes portes — c'est le proxy « bon joueur ».
 
 ## Invariants d'architecture
 
