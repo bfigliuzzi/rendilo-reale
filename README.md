@@ -10,6 +10,9 @@ niveau, et une bonne dose d'apocalypse :
   temporaire si détruites au tir — perdues si percutées).
 - **Frappes de missiles** : champ de mines à l'approche des portes (marqueurs d'alerte à
   esquiver), frappes ambiantes qui visent le joueur en seconde partie de niveau.
+- **Lances du boss** : le boss verrouille une ligne de visée rouge (télégraphe ~0,85 s)
+  puis tire une lance en ligne droite — esquivable, jamais injuste. Il s'enrage quand
+  il est blessé.
 
 ## Lancer
 

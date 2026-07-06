@@ -140,6 +140,17 @@ export class Sfx {
     this.tone(140, 0.3, { type: 'square', vol: 0.08, endFreq: 60 });
   }
 
+  lanceFire(): void {
+    if (this.throttled('lance', 150)) return;
+    this.noise(0.12, 0.06, 2400);
+    this.tone(700, 0.18, { type: 'sawtooth', vol: 0.05, endFreq: 220 });
+  }
+
+  lanceHit(): void {
+    this.noise(0.15, 0.1, 900);
+    this.tone(160, 0.18, { type: 'square', vol: 0.07, endFreq: 70 });
+  }
+
   missileWarn(): void {
     if (this.throttled('warn', 200)) return;
     this.tone(1400, 1.0, { type: 'sine', vol: 0.05, endFreq: 250 }); // sifflement qui tombe

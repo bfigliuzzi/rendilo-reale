@@ -83,7 +83,23 @@ while (Date.now() - start < SECONDS * 1000) {
       const nearCrates = allCrates
         .filter((c) => c.cy > -w.dist - 260 && c.cy < -w.dist + 20)
         .map((c) => ({ x: c.cx, keep: 150 }));
-      const dangers = strikes.concat(nearCrates);
+      // lances du boss : projeter la ligne de visée / la trajectoire au niveau de l'escouade
+      const squadY = -w.dist;
+      const lanceThreats = [];
+      for (const b of w.bosses?.list ?? []) {
+        if (b.telegraph > 0 && Math.sin(b.aimAngle) > 0.05) {
+          const t = (squadY - b.y) / Math.sin(b.aimAngle);
+          lanceThreats.push({ x: b.x + Math.cos(b.aimAngle) * t, keep: 130 });
+        }
+      }
+      const lp = w.bosses?.lances;
+      for (let i = 0; i < (lp?.count ?? 0); i++) {
+        if (lp.vy[i] > 10) {
+          const t = (squadY - lp.y[i]) / lp.vy[i];
+          if (t > 0) lanceThreats.push({ x: lp.x[i] + lp.vx[i] * t, keep: 130 });
+        }
+      }
+      const dangers = strikes.concat(nearCrates, lanceThreats);
       if (dangers.length > 0) {
         let bestX = targetX;
         let bestScore = -Infinity;

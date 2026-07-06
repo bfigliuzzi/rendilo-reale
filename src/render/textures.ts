@@ -11,6 +11,7 @@ export interface Atlas {
   enemyByKind: readonly [Texture, Texture, Texture]; // grunt, runner, brute
   white: Texture; // rect blanc, à teinter (portes, bannières)
   spark: Texture; // disque blanc, à teinter (particules d'effets, marqueurs)
+  lance: Texture; // projectile du boss
   crate: Texture; // bois (PV)
   crateExplosive: Texture;
   crateBonus: Texture;
@@ -89,6 +90,21 @@ export function buildAtlas(): Atlas {
   // blanc (112,0,12,12)
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(112, 0, 12, 12);
+  // lance du boss (200,0,12,30) — dard rouge sombre pointe claire, pointe vers le bas
+  ctx.fillStyle = '#7f1d1d';
+  ctx.beginPath();
+  ctx.moveTo(206, 30); // pointe
+  ctx.lineTo(212, 8);
+  ctx.quadraticCurveTo(206, 2, 200, 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#fca5a5';
+  ctx.beginPath();
+  ctx.moveTo(206, 30);
+  ctx.lineTo(209, 16);
+  ctx.lineTo(203, 16);
+  ctx.closePath();
+  ctx.fill();
   // spark : disque blanc doux (112,16,12,12)
   const grad = ctx.createRadialGradient(118, 22, 1, 118, 22, 6);
   grad.addColorStop(0, 'rgba(255,255,255,1)');
@@ -121,6 +137,7 @@ export function buildAtlas(): Atlas {
     enemyByKind: [frame(0, 32, 20, 20), frame(32, 32, 18, 18), frame(64, 32, 32, 32)],
     white: frame(113, 1, 10, 10),
     spark: frame(112, 16, 12, 12),
+    lance: frame(200, 0, 12, 30),
     crate: frame(0, 64, 96, 56),
     crateExplosive: frame(100, 64, 96, 56),
     crateBonus: frame(0, 124, 96, 56),

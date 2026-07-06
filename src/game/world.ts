@@ -113,6 +113,18 @@ export class World {
       this.fx.shake(9);
       this.sfx.bossContact();
     };
+    this.bosses.onLanceFire = () => this.sfx.lanceFire();
+    this.bosses.onLanceHit = (x, y) => {
+      const losses = Math.max(
+        2,
+        Math.min(B.LANCE_KILLS_MAX, Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO)) -
+          this.playerStats.contactShield,
+      );
+      this.squad.loseSoldiers(losses);
+      this.fx.burst(x, y, { count: 16, color: 0xef4444, speed: 220, life: 0.4, size: 1.3 });
+      this.fx.shake(6);
+      this.sfx.lanceHit();
+    };
     this.missiles.onWarn = () => this.sfx.missileWarn();
     this.missiles.onImpact = (x, y) => {
       // pertes proportionnelles : une frappe ampute sans annihiler une petite escouade
@@ -192,7 +204,9 @@ export class World {
     this.squad.update(dt, this.input.consumeDX());
     spawner.update(this.dist);
     const dpsMul = this.playerStats.dpsMul * (dmgActive ? B.BUFF_DMG_MUL : 1);
-    if (this.bullets.autoFire(dt, this.squad, this.dist, dpsMul, this.enemies) > 0) {
+    if (
+      this.bullets.autoFire(dt, this.squad, this.dist, dpsMul, this.enemies, this.bosses, this.crates) > 0
+    ) {
       this.sfx.shoot();
     }
     this.bullets.update(dt, -this.dist - B.CULL_AHEAD, -this.dist + B.CULL_BEHIND);
@@ -281,9 +295,15 @@ export class World {
 
   private handleCrateBreak(crate: Crate, byBullet: boolean): void {
     switch (crate.variant) {
-      case 'explosive':
-        this.explode(crate.cx, crate.cy, B.EXPLOSION_RADIUS, B.CRATE_EXPLOSIVE_KILLS);
+      case 'explosive': {
+        // pertes proportionnelles : le souffle ampute, il n'annihile pas une petite escouade
+        const kills = Math.min(
+          B.CRATE_EXPLOSIVE_KILLS,
+          Math.max(2, Math.ceil(this.squad.logical * 0.3)),
+        );
+        this.explode(crate.cx, crate.cy, B.EXPLOSION_RADIUS, kills);
         break;
+      }
       case 'damage':
         if (byBullet) {
           this.dmgBuffUntil = this.time + B.BUFF_DMG_DURATION;

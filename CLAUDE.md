@@ -18,10 +18,18 @@ d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance
 le test de perf (escouade 500).
 
 **Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
-le N1 sans méta ~1 fois sur 3 (défaites entre 480 et 620 m, souvent au boss — le mode
-apocalypse ajoute de la variance via les missiles) ; N2 avec la méta de 2-3 runs
-(`{"dps":2,"start":2,"armor":1}`) = victoire. Le bot casse les caisses de loin, esquive
-les marqueurs de missiles et choisit les bonnes portes — c'est le proxy « bon joueur ».
+le N1 sans méta ~3 fois sur 4, de justesse (~20-50 survivants sur ~480 kills, défaites
+contre les déluges de fin de niveau) ; N2 exige la méta de ~3 victoires N1
+(`{"dps":4,"start":3,"armor":1}` ≈ 1100 or) et se gagne à 20-35 survivants. Le bot casse
+les caisses de loin, esquive missiles et lances télégraphiées, choisit les bonnes portes —
+c'est le proxy « bon joueur ».
+
+**Aim-assist** : les balles ciblent la menace la plus proche du cône frontal — ennemis,
+boss ET caisses (`bullets.aimVX`). Toute nouvelle entité tirable doit y être ajoutée,
+sinon elle devient quasi intouchable dès qu'il y a des ennemis à l'écran.
+**Dégâts de zone sur l'escouade** (missiles, explosions, lances) : toujours proportionnels
+à l'effectif avec un plancher/plafond — jamais un forfait fixe, qui one-shot les petites
+escouades en début de niveau.
 
 ## Invariants d'architecture
 

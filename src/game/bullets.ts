@@ -1,6 +1,8 @@
 import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
 import { clamp, lerp } from '../core/math';
+import type { Bosses } from './boss';
+import type { Crates } from './crates';
 import type { EnemyPool } from './enemies';
 import type { Squad } from './squad';
 
@@ -73,7 +75,15 @@ export class BulletPool {
    * limite), cadence visuelle plafonnée, dégâts par balle = DPS / cadence réelle.
    * Retourne le nombre de balles tirées ce tick (pour le son, throttlé en aval).
    */
-  autoFire(dt: number, squad: Squad, dist: number, dpsMul: number, enemies: EnemyPool): number {
+  autoFire(
+    dt: number,
+    squad: Squad,
+    dist: number,
+    dpsMul: number,
+    enemies: EnemyPool,
+    bosses: Bosses,
+    crates: Crates,
+  ): number {
     if (squad.logical <= 0) return 0;
     const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER;
     const dmg = (squad.logical * B.SOLDIER_DPS * dpsMul) / rate;
@@ -86,7 +96,7 @@ export class BulletPool {
       this.spawn(
         this.muzzle.x,
         this.muzzle.y,
-        this.aimVX(this.muzzle.x, this.muzzle.y, enemies),
+        this.aimVX(this.muzzle.x, this.muzzle.y, enemies, bosses, crates),
         -B.BULLET_SPEED,
         dmg,
       );
@@ -95,10 +105,10 @@ export class BulletPool {
   }
 
   /**
-   * Aim-assist : vise l'ennemi vivant le plus proche dans le cône frontal —
-   * une horde large se fait balayer sur toute sa largeur au lieu de flanquer.
+   * Aim-assist : vise l'ennemi (ou le boss) vivant le plus proche dans le cône
+   * frontal — une horde large se fait balayer sur toute sa largeur au lieu de flanquer.
    */
-  private aimVX(mx: number, my: number, enemies: EnemyPool): number {
+  private aimVX(mx: number, my: number, enemies: EnemyPool, bosses: Bosses, crates: Crates): number {
     let bestD2 = Infinity;
     let bestDX = 0;
     let bestDY = 0;
@@ -107,6 +117,37 @@ export class BulletPool {
       const dy = enemies.y[e] - my;
       if (dy >= -20) continue; // uniquement devant
       const dx = enemies.x[e] - mx;
+      if (dx > B.BULLET_AIM_RANGE_X || dx < -B.BULLET_AIM_RANGE_X) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestDX = dx;
+        bestDY = dy;
+      }
+    }
+    for (const boss of bosses.list) {
+      if (!boss.alive || boss.hp <= 0) continue;
+      const dy = boss.y - my;
+      if (dy >= -20) continue;
+      const dx = boss.x - mx;
+      const range = B.BULLET_AIM_RANGE_X + B.BOSS_RADIUS; // grosse cible, grand cône
+      if (dx > range || dx < -range) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestDX = dx;
+        bestDY = dy;
+      }
+    }
+    // caisses : ciblées comme le reste — la plus proche gagne, donc une caisse
+    // devient prioritaire exactement quand elle est la menace immédiate
+    for (const crate of crates.list) {
+      if (crate.dead) continue;
+      const dy = crate.cy - my;
+      if (dy >= -20) continue;
+      // point visé : le bord de la caisse le plus proche du canon
+      const tx = clamp(mx, crate.cx - B.CRATE_HALF_W + 8, crate.cx + B.CRATE_HALF_W - 8);
+      const dx = tx - mx;
       if (dx > B.BULLET_AIM_RANGE_X || dx < -B.BULLET_AIM_RANGE_X) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 < bestD2) {

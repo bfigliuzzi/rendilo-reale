@@ -46,7 +46,7 @@ export const BULLET_AIM_MAX_VX = 220;
 
 // Pools
 export const MAX_BULLETS = 1500;
-export const MAX_ENEMIES = 900;
+export const MAX_ENEMIES = 1350;
 
 // Grille de collisions (couvre la bande visible + portée des balles)
 export const GRID_CELL = 64;
@@ -84,6 +84,15 @@ export const BOSS_SPEED = 46;
 export const BOSS_STEER = 60;
 export const BOSS_CONTACT_KILLS = 20;
 export const BOSS_KNOCKBACK = 260;
+
+// Lances du boss : télégraphiées par une ligne de visée, puis tir en ligne droite
+export const LANCE_TELEGRAPH = 0.85; // durée d'affichage de la ligne de visée
+export const LANCE_SPEED = 520;
+export const LANCE_INTERVAL: [number, number] = [2.0, 3.2]; // réduit quand le boss est blessé
+export const LANCE_KILLS_RATIO = 0.15; // pertes = clamp(ratio × effectif, 2, max)
+export const LANCE_KILLS_MAX = 10;
+export const LANCE_RADIUS = 10;
+export const MAX_LANCES = 24;
 
 // Or (multiplié par le bonus Butin de la méta)
 export const GOLD_PER_KILL = 0.5;

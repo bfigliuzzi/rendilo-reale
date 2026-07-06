@@ -15,7 +15,8 @@ import {
 export function makeCampaignLevel(n: number): LevelDef {
   const rand = mulberry32(0xc0ffee + n * 7919);
   const len = 6500 + n * 700;
-  const hpMul = 1 + 0.35 * (n - 1);
+  // l'escalade vient surtout du NOMBRE (×1,5) ; les PV suivent plus doucement
+  const hpMul = 1 + 0.25 * (n - 1);
   const events: LevelEvent[] = [];
 
   // ouverture un peu plus généreuse : l'apocalypse exige un matelas de départ
@@ -68,10 +69,11 @@ export function makeCampaignLevel(n: number): LevelDef {
         ['brute', n >= 2 ? 0.14 : 0],
       ]);
       // le poids du niveau porte surtout sur la fin : un début jouable, une fin apocalyptique
-      const base = 13 + (n - 1) * 3 + progress * (32 + n * 9);
+      // ×1,5 sur la masse totale, mais chargé vers la fin : début jouable, fin déluge
+      const base = 14 + (n - 1) * 4 + progress * (64 + n * 16);
       const count =
         kind === 'brute'
-          ? Math.round(4 + n * 0.8 + progress * 7)
+          ? Math.round(4 + n + progress * 12)
           : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
       const pattern = pickWeighted(rand, [
         ['grid', 0.4],
@@ -144,8 +146,8 @@ export function makeEndlessLevel(): LevelDef {
         ]);
         const count =
           kind === 'brute'
-            ? Math.round(4 + d / 1500)
-            : Math.min(160, Math.round((15 + d / 190) * rangeOf(rand, 0.8, 1.25)));
+            ? Math.round(6 + d / 1000)
+            : Math.min(240, Math.round((22 + d / 130) * rangeOf(rand, 0.8, 1.25)));
         const pattern = pickWeighted(rand, [
           ['grid', 0.4],
           ['blob', 0.35],
