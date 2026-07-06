@@ -1,9 +1,16 @@
+// Partie pilotée en Chrome headless : démarre un mode via window.__game.flow,
+// joue avec un bot simple (tient le centre, choisit la meilleure porte),
+// remonte FPS réel, erreurs console, stats de jeu et une capture d'écran.
+//
+// Usage : node tools/verify.mjs [url] [mode] [secondes] [capture.png]
+//   mode : campaign | endless | stress
 import puppeteer from 'puppeteer-core';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const URL = process.argv[2] ?? 'http://localhost:5199/';
-const SECONDS = Number(process.argv[3] ?? 20);
-const SHOT = process.argv[4] ?? 'verify.png';
+const URL = process.argv[2] ?? 'http://localhost:5173/';
+const MODE = process.argv[3] ?? 'campaign';
+const SECONDS = Number(process.argv[4] ?? 60);
+const SHOT = process.argv[5] ?? 'verify.png';
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -22,39 +29,49 @@ page.on('pageerror', (e) => errors.push(String(e)));
 await page.goto(URL, { waitUntil: 'networkidle0' });
 await page.waitForFunction('window.__game !== undefined', { timeout: 5000 });
 
-// petit drag gauche-droite pendant la partie pour exercer l'input
-const drag = async (fromX, toX) => {
-  await page.mouse.move(fromX, 800);
-  await page.mouse.down();
-  for (let i = 0; i <= 10; i++) {
-    await page.mouse.move(fromX + ((toX - fromX) * i) / 10, 800);
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  await page.mouse.up();
-};
+await page.evaluate((mode) => {
+  const flow = window.__game.flow;
+  if (mode === 'stress') flow.startStress();
+  else if (mode === 'endless') flow.startEndless();
+  else flow.startCampaign(1);
+}, MODE);
 
 const samples = [];
 const start = Date.now();
-let dragFlip = false;
+let last = null;
 while (Date.now() - start < SECONDS * 1000) {
-  await drag(dragFlip ? 400 : 140, dragFlip ? 140 : 400);
-  dragFlip = !dragFlip;
-  const s = await page.evaluate(() => {
+  last = await page.evaluate(() => {
     const w = window.__game.world;
+    if (w.state === 'playing') {
+      // bot : viser la meilleure porte à venir, sinon tenir le centre
+      let targetX = 270;
+      const pairs = w.gates?.pairs ?? [];
+      for (const p of pairs) {
+        if (p.consumed || p.y > -w.dist) continue;
+        if (p.y < -w.dist - 700) continue;
+        const score = (m) => (m.op === 'mul' ? w.squad.logical * (m.value - 1) : m.value);
+        targetX = score(p.left) >= score(p.right) ? 165 : 375;
+        break;
+      }
+      const dx = targetX - w.squad.x;
+      w.squad.x += Math.max(-45, Math.min(45, dx));
+    }
     return {
       state: w.state,
       squad: w.squad.logical,
       kills: w.kills,
-      dist: Math.round(w.dist),
+      gold: w.gold,
+      dist: Math.round(w.dist / 10),
       bullets: w.bullets.count,
       enemies: w.enemies.count,
+      bosses: w.bosses.list.length,
     };
   });
-  samples.push(s);
-  if (s.state !== 'playing') break;
+  samples.push(last);
+  if (last.state !== 'playing') break;
+  await new Promise((r) => setTimeout(r, 150));
 }
 
-// FPS réel mesuré dans la page sur 2 s
 const fps = await page.evaluate(
   () =>
     new Promise((resolve) => {
@@ -70,5 +87,16 @@ const fps = await page.evaluate(
 );
 
 await page.screenshot({ path: SHOT });
-console.log(JSON.stringify({ fps, errors: errors.slice(0, 5), last: samples.at(-1), samples: samples.filter((_, i) => i % 4 === 0) }, null, 1));
+console.log(
+  JSON.stringify(
+    {
+      fps,
+      errors: errors.slice(0, 5),
+      last,
+      samples: samples.filter((_, i) => i % 20 === 0),
+    },
+    null,
+    1,
+  ),
+);
 await browser.close();

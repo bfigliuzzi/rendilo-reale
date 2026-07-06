@@ -42,14 +42,14 @@ export class EnemyPool {
     }
   }
 
-  spawn(kind: number, x: number, y: number): void {
+  spawn(kind: number, x: number, y: number, hpMul = 1): void {
     if (this.count >= this.cap) return;
     const def = B.ENEMY_KINDS[kind];
     const i = this.count++;
     this.x[i] = this.prevX[i] = x;
     this.y[i] = this.prevY[i] = y;
     this.vx[i] = 0;
-    this.hp[i] = def.hp;
+    this.hp[i] = def.hp * hpMul;
     this.radius[i] = def.radius;
     this.kind[i] = kind;
     this.particles[i].texture = this.atlas.enemyByKind[kind as 0 | 1 | 2];
@@ -88,11 +88,13 @@ export class EnemyPool {
   }
 
   /** Swap-remove différé des ennemis marqués morts pendant les collisions. */
-  sweepDead(onKill: () => void): void {
+  sweepDead(onKill: (x: number, y: number) => void): void {
     for (let i = this.count - 1; i >= 0; i--) {
       if (this.hp[i] <= 0) {
+        const x = this.x[i];
+        const y = this.y[i];
         this.kill(i);
-        onKill();
+        onKill(x, y);
       }
     }
   }

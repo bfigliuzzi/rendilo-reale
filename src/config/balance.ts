@@ -57,6 +57,21 @@ export const CRATE_CONTACT_KILLS = 8;
 export const CRATE_HALF_W = 85;
 export const CRATE_HALF_H = 50;
 
+// Boss
+export const BOSS_RADIUS = 42;
+export const BOSS_SPEED = 38;
+export const BOSS_STEER = 60;
+export const BOSS_CONTACT_KILLS = 15;
+export const BOSS_KNOCKBACK = 300;
+
+// Or (multiplié par le bonus Butin de la méta)
+export const GOLD_PER_KILL = 1;
+export const GOLD_PER_CRATE = 15;
+export const GOLD_PER_BOSS = 120;
+export const GOLD_VICTORY_BASE = 60;
+export const GOLD_VICTORY_PER_LEVEL = 30;
+export const GOLD_ENDLESS_PER_100M = 5;
+
 // Ennemis
 export interface EnemyKindDef {
   hp: number;

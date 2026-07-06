@@ -15,6 +15,7 @@ export class Layers {
   readonly enemies: ParticleContainer;
   readonly squad = new Container();
   readonly bullets: ParticleContainer;
+  readonly fx: ParticleContainer;
   readonly labels = new Container();
 
   constructor(stage: Container, atlas: Atlas) {
@@ -22,8 +23,18 @@ export class Layers {
     // uv dynamique pour les ennemis : la frame change quand un slot du pool est réutilisé par un autre type
     this.enemies = new ParticleContainer({ dynamicProperties: { position: true, uv: true } });
     this.bullets = new ParticleContainer({ dynamicProperties: { position: true } });
+    // particules d'effets : échelle et teinte/alpha varient pendant la vie
+    this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 
     stage.addChild(this.ground, this.world);
-    this.world.addChild(this.gates, this.crates, this.enemies, this.squad, this.bullets, this.labels);
+    this.world.addChild(
+      this.gates,
+      this.crates,
+      this.enemies,
+      this.squad,
+      this.bullets,
+      this.fx,
+      this.labels,
+    );
   }
 }

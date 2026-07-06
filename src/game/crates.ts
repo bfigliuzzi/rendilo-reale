@@ -6,6 +6,8 @@ import type { Squad } from './squad';
 export class Crate {
   dead = false;
   hp: number;
+  onHit: () => void = () => {};
+  onBreak: (x: number, y: number, byBullet: boolean) => void = () => {};
   private shownHp: number;
   private readonly sprite: Sprite;
   private readonly label: Text;
@@ -50,9 +52,11 @@ export class Crate {
   damage(d: number): void {
     this.hp -= d;
     if (this.hp <= 0) {
+      this.onBreak(this.cx, this.cy, true);
       this.destroySelf();
       return;
     }
+    this.onHit();
     const shown = Math.ceil(this.hp);
     if (shown !== this.shownHp) {
       // le re-layout d'un Text coûte cher : uniquement quand l'entier affiché change
@@ -71,6 +75,9 @@ export class Crate {
 
 export class Crates {
   list: Crate[] = [];
+  onHit: () => void = () => {};
+  onBreak: (x: number, y: number, byBullet: boolean) => void = () => {};
+  contactKills = B.CRATE_CONTACT_KILLS;
 
   constructor(
     private readonly spriteParent: Container,
@@ -80,7 +87,10 @@ export class Crates {
 
   spawn(at: number, hp: number, xNorm: number): void {
     const cx = B.LANE_MIN_X + xNorm * (B.LANE_MAX_X - B.LANE_MIN_X);
-    this.list.push(new Crate(cx, -at, hp, this.spriteParent, this.labelParent, this.atlas));
+    const crate = new Crate(cx, -at, hp, this.spriteParent, this.labelParent, this.atlas);
+    crate.onHit = this.onHit;
+    crate.onBreak = this.onBreak;
+    this.list.push(crate);
   }
 
   update(squad: Squad, dist: number): void {
@@ -93,7 +103,8 @@ export class Crates {
       }
       const inBand = frontY <= crate.cy + B.CRATE_HALF_H && frontY >= crate.cy - B.CRATE_HALF_H;
       if (inBand && Math.abs(squad.x - crate.cx) < B.CRATE_HALF_W + 30) {
-        squad.loseSoldiers(B.CRATE_CONTACT_KILLS);
+        squad.loseSoldiers(this.contactKills);
+        crate.onBreak(crate.cx, crate.cy, false);
         crate.destroySelf();
         anyDead = true;
       } else if (crate.cy - B.CRATE_HALF_H > -dist + B.CULL_BEHIND) {

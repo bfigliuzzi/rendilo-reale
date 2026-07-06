@@ -59,6 +59,7 @@ export class Squad {
   rendered = 0;
   visualScale = 1;
   halfWidth = 0;
+  onLost: (n: number) => void = () => {};
   private readonly sprites: Sprite[] = [];
   private readonly curX = new Float32Array(B.SQUAD_RENDER_CAP);
   private readonly curY = new Float32Array(B.SQUAD_RENDER_CAP);
@@ -67,12 +68,9 @@ export class Squad {
   private readonly label: Text;
   private muzzleIdx = 0;
 
-  constructor(
-    container: Container,
-    labels: Container,
-    atlas: Atlas,
-    private readonly startCount = B.START_SQUAD,
-  ) {
+  private startCount = B.START_SQUAD;
+
+  constructor(container: Container, labels: Container, atlas: Atlas) {
     for (let i = 0; i < B.SQUAD_RENDER_CAP; i++) {
       const s = new Sprite(atlas.soldier);
       s.anchor.set(0.5);
@@ -92,11 +90,12 @@ export class Squad {
     });
     this.label.anchor.set(0.5, 1);
     labels.addChild(this.label);
-    this.reset();
+    this.reset(this.startCount);
   }
 
-  reset(): void {
-    this.logical = this.startCount;
+  reset(startCount: number): void {
+    this.startCount = startCount;
+    this.logical = startCount;
     this.x = this.prevX = B.LANE_CENTER;
     this.muzzleIdx = 0;
     this.rendered = 0;
@@ -122,7 +121,9 @@ export class Squad {
   }
 
   loseSoldiers(n: number): void {
+    if (n <= 0 || this.logical <= 0) return;
     this.setLogical(this.logical - n);
+    this.onLost(n);
   }
 
   private setLogical(n: number): void {

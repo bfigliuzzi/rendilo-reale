@@ -24,22 +24,62 @@
       font-size: 12px; line-height: 1.5;
       background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 6px 10px;
       font-variant-numeric: tabular-nums;
+      white-space: pre-line;
     }
     #hud-perf { left: 8px; color: #9fe0a0; font-family: ui-monospace, monospace; }
-    #hud-stats { right: 8px; text-align: right; }
+    #hud-stats { right: 8px; text-align: right; display: none; }
+    #hud.in-game #hud-stats { display: block; }
     #hud-stats .big { font-size: 18px; font-weight: 800; }
-    #overlay {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
+
+    /* Écrans (menu, boutique, résultat) */
+    #ui {
+      position: fixed; inset: 0; display: none;
+      align-items: center; justify-content: center;
       background: rgba(5, 10, 18, 0.72);
-      pointer-events: auto; cursor: pointer;
-      text-align: center; gap: 12px;
+      color: #fff;
     }
-    #overlay[hidden] { display: none; }
-    #overlay-title { font-size: 44px; font-weight: 900; letter-spacing: 2px; }
-    #overlay-sub { font-size: 16px; opacity: 0.9; white-space: pre-line; }
-    #overlay-hint { font-size: 14px; opacity: 0.6; margin-top: 18px; animation: pulse 1.4s ease-in-out infinite; }
-    @keyframes pulse { 50% { opacity: 0.25; } }
+    #ui.visible { display: flex; }
+    .panel {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      width: min(86vw, 380px); max-height: 92vh; overflow-y: auto;
+      text-align: center; padding: 12px;
+    }
+    .panel h1 {
+      margin: 0 0 6px; font-size: 44px; font-weight: 900; letter-spacing: 3px;
+      line-height: 1.05; color: #60a5fa; text-shadow: 0 3px 0 #1d4ed8;
+    }
+    .panel h2 { margin: 0; font-size: 34px; font-weight: 900; letter-spacing: 2px; }
+    .panel h2.win { color: #4ade80; }
+    .panel h2.lose { color: #f87171; }
+    .sub { font-size: 15px; opacity: 0.85; }
+    .result-stats { font-size: 14px; opacity: 0.85; }
+    .gold-line { font-size: 20px; font-weight: 800; color: #fbbf24; }
+    .gold-line .dim { font-size: 13px; font-weight: 400; opacity: 0.75; }
+    .btn {
+      width: 100%; padding: 14px 18px; border: 0; border-radius: 12px;
+      font: inherit; font-size: 17px; font-weight: 700; color: #fff;
+      background: #1f2c3d; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .btn.primary { background: #2563eb; box-shadow: 0 3px 0 #1e40af; }
+    .btn.small { width: auto; padding: 8px 16px; font-size: 14px; background: #16202e; }
+    .btn[disabled] { opacity: 0.45; cursor: default; }
+    .chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .chip {
+      min-width: 44px; padding: 8px 10px; border: 0; border-radius: 10px;
+      font: inherit; font-weight: 800; color: #fff; background: #1f2c3d; cursor: pointer;
+    }
+    .chip.next { background: #2563eb; }
+    .chip.done { background: #14532d; }
+    .chip.locked { opacity: 0.4; cursor: default; }
+    .cards { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .card { background: #131c29; border-radius: 12px; padding: 12px; text-align: left; }
+    .card-head { display: flex; gap: 6px; align-items: baseline; font-size: 16px; }
+    .card-head .lvl { margin-left: auto; font-size: 12px; opacity: 0.7; }
+    .card-effect { font-size: 13px; opacity: 0.85; margin: 6px 0 10px; }
+    .btn.buy { padding: 10px; font-size: 15px; background: #2563eb; box-shadow: 0 3px 0 #1e40af; }
+    .btn.buy[disabled] { background: #1f2c3d; box-shadow: none; }
   </style>
 </head>
 <body>
@@ -47,12 +87,8 @@
   <div id="hud">
     <div id="hud-perf" class="hud-box"></div>
     <div id="hud-stats" class="hud-box"></div>
-    <div id="overlay" hidden>
-      <div id="overlay-title"></div>
-      <div id="overlay-sub"></div>
-      <div id="overlay-hint">Touchez pour rejouer</div>
-    </div>
   </div>
+  <div id="ui"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

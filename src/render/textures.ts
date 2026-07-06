@@ -10,6 +10,7 @@ export interface Atlas {
   bullet: Texture;
   enemyByKind: readonly [Texture, Texture, Texture]; // grunt, runner, brute
   white: Texture; // rect blanc, à teinter (portes, bannières)
+  spark: Texture; // disque blanc, à teinter (particules d'effets)
   crate: Texture;
   ground: Texture; // motif de la voie, pour TilingSprite (source séparée)
 }
@@ -57,6 +58,14 @@ export function buildAtlas(): Atlas {
   // blanc (112,0,12,12)
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(112, 0, 12, 12);
+  // spark : disque blanc doux (112,16,12,12)
+  const grad = ctx.createRadialGradient(118, 22, 1, 118, 22, 6);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(1, 'rgba(255,255,255,0.15)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(118, 22, 6, 0, Math.PI * 2);
+  ctx.fill();
   // caisse (0,64,96,56) — planches bois
   ctx.fillStyle = '#b98a4a';
   ctx.fillRect(0, 64, 96, 56);
@@ -87,6 +96,7 @@ export function buildAtlas(): Atlas {
     bullet: frame(32, 0, 8, 16),
     enemyByKind: [frame(0, 32, 20, 20), frame(32, 32, 18, 18), frame(64, 32, 32, 32)],
     white: frame(113, 1, 10, 10),
+    spark: frame(112, 16, 12, 12),
     crate: frame(0, 64, 96, 56),
     ground: buildGroundPattern(),
   };

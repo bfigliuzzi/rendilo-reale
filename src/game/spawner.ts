@@ -9,6 +9,7 @@ export interface SpawnTargets {
   enemies: EnemyPool;
   spawnGates: (ev: Extract<LevelEvent, { type: 'gates' }>) => void;
   spawnCrate: (ev: Extract<LevelEvent, { type: 'crate' }>) => void;
+  spawnBoss: (ev: Extract<LevelEvent, { type: 'boss' }>) => void;
   onFinishLine: (at: number) => void;
 }
 
@@ -30,6 +31,8 @@ export class Spawner {
 
   update(dist: number): void {
     const events = this.level.events;
+    // endless : générer le tronçon suivant avant d'épuiser la liste
+    if (this.level.extend && this.idx > events.length - 8) this.level.extend(events, dist);
     while (this.idx < events.length && events[this.idx].at <= dist + B.SPAWN_AHEAD) {
       this.dispatch(events[this.idx]);
       this.idx++;
@@ -47,6 +50,9 @@ export class Spawner {
       case 'crate':
         this.targets.spawnCrate(ev);
         break;
+      case 'boss':
+        this.targets.spawnBoss(ev);
+        break;
       case 'finish':
         this.targets.onFinishLine(ev.at);
         break;
@@ -55,6 +61,7 @@ export class Spawner {
 
   private spawnHorde(ev: Extract<LevelEvent, { type: 'horde' }>): void {
     const kind = KIND_INDEX[ev.kind];
+    const hpMul = ev.hpMul ?? this.level.hpMul ?? 1;
     const spacing = kind === 2 ? 44 : 34;
     const width = ev.width ?? 300;
     const baseY = -ev.at;
@@ -71,6 +78,7 @@ export class Spawner {
             kind,
             px(cx - ((colCount - 1) * spacing) / 2 + col * spacing + rand(-4, 4)),
             baseY - row * spacing,
+            hpMul,
           );
         }
         break;
@@ -84,6 +92,7 @@ export class Spawner {
             kind,
             px(cx + Math.cos(a) * rx * r),
             baseY - 100 + Math.sin(a) * 110 * r,
+            hpMul,
           );
         }
         break;
@@ -95,6 +104,7 @@ export class Spawner {
             kind,
             px(cx + Math.sin(i * 0.9) * 130 + rand(-20, 20)),
             baseY - i * 55,
+            hpMul,
           );
         }
         break;

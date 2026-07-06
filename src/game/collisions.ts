@@ -1,5 +1,6 @@
 import * as B from '../config/balance';
 import { SpatialGrid } from '../core/spatialGrid';
+import type { Bosses } from './boss';
 import type { BulletPool } from './bullets';
 import type { Crates } from './crates';
 import type { EnemyPool } from './enemies';
@@ -14,7 +15,16 @@ import type { Squad } from './squad';
 export class Collisions {
   private readonly grid = new SpatialGrid(B.GRID_COLS, B.GRID_ROWS, B.GRID_CELL, B.GRID_MAX_PER_CELL);
 
-  run(dist: number, bullets: BulletPool, enemies: EnemyPool, squad: Squad, crates: Crates): void {
+  onBossHit: () => void = () => {};
+
+  run(
+    dist: number,
+    bullets: BulletPool,
+    enemies: EnemyPool,
+    squad: Squad,
+    crates: Crates,
+    bosses: Bosses,
+  ): void {
     const grid = this.grid;
     grid.setOrigin(0, -dist - B.GRID_AHEAD);
     grid.clear();
@@ -58,6 +68,20 @@ export class Collisions {
         for (const crate of crates.list) {
           if (!crate.dead && crate.hits(bx, by, B.BULLET_RADIUS)) {
             crate.damage(bullets.dmg[b]);
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (!hit) {
+        for (const boss of bosses.list) {
+          if (!boss.alive || boss.hp <= 0) continue;
+          const dx = boss.x - bx;
+          const dy = boss.y - by;
+          const r = B.BOSS_RADIUS + B.BULLET_RADIUS;
+          if (dx * dx + dy * dy < r * r) {
+            boss.damage(bullets.dmg[b]);
+            this.onBossHit();
             hit = true;
             break;
           }

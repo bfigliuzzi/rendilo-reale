@@ -68,16 +68,19 @@ export class BulletPool {
   }
 
   /**
-   * Modèle de tir : DPS = effectif × SOLDIER_DPS (scale linéaire sans limite),
-   * cadence visuelle plafonnée, dégâts par balle = DPS / cadence réelle.
+   * Modèle de tir : DPS = effectif × SOLDIER_DPS × bonus méta (scale linéaire sans
+   * limite), cadence visuelle plafonnée, dégâts par balle = DPS / cadence réelle.
+   * Retourne le nombre de balles tirées ce tick (pour le son, throttlé en aval).
    */
-  autoFire(dt: number, squad: Squad, dist: number): void {
-    if (squad.logical <= 0) return;
+  autoFire(dt: number, squad: Squad, dist: number, dpsMul: number): number {
+    if (squad.logical <= 0) return 0;
     const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER;
-    const dmg = (squad.logical * B.SOLDIER_DPS) / rate;
+    const dmg = (squad.logical * B.SOLDIER_DPS * dpsMul) / rate;
+    let fired = 0;
     this.fireAcc += rate * dt;
     while (this.fireAcc >= 1) {
       this.fireAcc -= 1;
+      fired++;
       squad.nextMuzzle(dist, this.muzzle);
       this.spawn(
         this.muzzle.x,
@@ -87,6 +90,7 @@ export class BulletPool {
         dmg,
       );
     }
+    return fired;
   }
 
   update(dt: number, topY: number, bottomY: number): void {

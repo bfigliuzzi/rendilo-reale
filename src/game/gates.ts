@@ -94,14 +94,20 @@ export class Gates {
     this.pairs.push(pair);
   }
 
-  update(dt: number, squad: Squad, dist: number): void {
+  /** Applique la porte franchie ce tick et la retourne (pour le feedback fx/sfx). */
+  update(dt: number, squad: Squad, dist: number): GateModifier | null {
+    let chosen: GateModifier | null = null;
     let anyDone = false;
     for (const pair of this.pairs) {
       const mod = pair.update(dt, squad, dist);
-      if (mod) squad.applyModifier(mod);
+      if (mod) {
+        squad.applyModifier(mod);
+        chosen = mod;
+      }
       anyDone ||= pair.done;
     }
     if (anyDone) this.pairs = this.pairs.filter((p) => !p.done);
+    return chosen;
   }
 
   reset(): void {

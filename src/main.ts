@@ -1,12 +1,16 @@
 import { Application } from 'pixi.js';
+import { Sfx } from './audio/sfx';
 import { DESIGN_H, DESIGN_W } from './config/balance';
-import { MAIN_LEVEL, makeStressLevel } from './config/levels';
 import { startLoop } from './core/loop';
+import { Flow } from './game/flow';
 import { World } from './game/world';
 import { PointerInput } from './input/pointer';
+import { loadSave } from './meta/save';
+import { Fx } from './render/fx';
 import { Layers } from './render/layers';
 import { buildAtlas } from './render/textures';
 import { Hud } from './ui/hud';
+import { Menu } from './ui/menu';
 
 async function boot(): Promise<void> {
   const app = new Application();
@@ -38,22 +42,18 @@ async function boot(): Promise<void> {
   const layers = new Layers(app.stage, atlas);
   const input = new PointerInput(() => scale);
   const hud = new Hud();
+  const save = loadSave();
+  const sfx = new Sfx(save.muted);
+  const fx = new Fx(layers.fx, atlas.spark);
+  const world = new World(layers, atlas, input, fx, sfx);
+  const menu = new Menu(document.getElementById('ui')!, save);
+  const flow = new Flow(world, menu, sfx, hud, save);
 
-  const stress = new URLSearchParams(location.search).has('stress');
-  const level = stress ? makeStressLevel() : MAIN_LEVEL;
-  const world = new World(layers, atlas, level, input);
-
-  world.onGameOver = (state, stats) => {
-    if (state === 'victory') {
-      hud.showOverlay('VICTOIRE', `${stats.kills} ennemis abattus\nEscouade finale : ${stats.squad}`, '#4ade80');
-    } else {
-      hud.showOverlay('DÉFAITE', `${stats.dist} m parcourus · ${stats.kills} ennemis abattus`, '#f87171');
-    }
-  };
-  hud.onRestart(() => world.reset());
+  if (new URLSearchParams(location.search).has('stress')) flow.startStress();
+  else flow.showMenu();
 
   // hook de debug pour les tests automatisés et la console
-  (window as unknown as Record<string, unknown>).__game = { world, app };
+  (window as unknown as Record<string, unknown>).__game = { world, flow, save, app };
 
   startLoop(
     (dt) => world.update(dt),
