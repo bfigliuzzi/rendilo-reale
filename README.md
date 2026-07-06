@@ -53,4 +53,5 @@ node tools/verify.mjs http://localhost:5199/ stress 30 shot3.png
 
 Le script pilote une partie en Chrome headless (un bot tient le centre et choisit les
 bonnes portes), remonte FPS réel, erreurs console, stats (`window.__game`) et une capture.
-Référence : le bot gagne le niveau 1 de campagne sans aucune amélioration.
+Mode `campaign:N` + un 5e argument JSON d'améliorations permettent de tester n'importe quel
+palier de la courbe de difficulté (référence détaillée dans CLAUDE.md).

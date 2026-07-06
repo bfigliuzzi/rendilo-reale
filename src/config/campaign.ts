@@ -15,11 +15,11 @@ import {
 export function makeCampaignLevel(n: number): LevelDef {
   const rand = mulberry32(0xc0ffee + n * 7919);
   const len = 6500 + n * 700;
-  const hpMul = 1 + 0.25 * (n - 1);
+  const hpMul = 1 + 0.35 * (n - 1);
   const events: LevelEvent[] = [];
 
-  // ouverture généreuse : la première porte lance la boucle de croissance
-  events.push({ at: 250, type: 'gates', left: gateAdd(6 + 2 * n), right: gateMul(2) });
+  // ouverture : une seule porte correcte, la croissance se mérite ensuite
+  events.push({ at: 250, type: 'gates', left: gateAdd(4 + n), right: gateMul(2) });
 
   let at = 600;
   let sinceGates = 0;
@@ -27,20 +27,28 @@ export function makeCampaignLevel(n: number): LevelDef {
     const progress = at / len;
     const roll = rand();
     sinceGates++;
-    // la croissance de l'escouade est LA boucle du jeu : une porte au moins tous les 4 segments
-    if (sinceGates >= 4 || roll < 0.18) {
+    // une porte au plus tous les 5 segments — et pas toujours un bon choix
+    if (sinceGates >= 5 || roll < 0.14) {
       sinceGates = 0;
-      // portes : un bon choix et un piège (ou un choix moyen)
-      const good = rand() < 0.5 ? gateMul(2) : gateAdd(Math.round(8 + n * 2 + progress * 20));
+      const good = rand() < 0.35 ? gateMul(2) : gateAdd(Math.round(6 + n + progress * 14));
       const bad =
-        rand() < 0.5
-          ? gateAdd(-Math.round(4 + progress * 12))
-          : gateAdd(Math.round(3 + progress * 6));
-      const [left, right] = rand() < 0.5 ? [good, bad] : [bad, good];
+        rand() < 0.6
+          ? gateAdd(-Math.round(6 + progress * 16))
+          : gateAdd(Math.round(2 + progress * 4));
+      // dans la moitié difficile, parfois deux pièges : limiter la casse fait partie du jeu
+      const trap = progress > 0.5 && rand() < 0.15;
+      const worst = gateAdd(-Math.round(10 + progress * 20));
+      const [left, right] = trap
+        ? rand() < 0.5
+          ? [bad, worst]
+          : [worst, bad]
+        : rand() < 0.5
+          ? [good, bad]
+          : [bad, good];
       events.push({ at, type: 'gates', left, right });
-    } else if (roll < 0.3) {
-      const hp = Math.round((90 + progress * 220 + n * 45) * rangeOf(rand, 0.8, 1.2));
-      if (rand() < 0.35) {
+    } else if (roll < 0.28) {
+      const hp = Math.round((110 + progress * 280 + n * 60) * rangeOf(rand, 0.8, 1.2));
+      if (rand() < 0.4) {
         events.push({ at, type: 'crate', hp, xNorm: 0.28 });
         events.push({ at, type: 'crate', hp, xNorm: 0.72 });
       } else {
@@ -48,14 +56,15 @@ export function makeCampaignLevel(n: number): LevelDef {
       }
     } else {
       const kind = pickWeighted<EnemyKind>(rand, [
-        ['grunt', 0.65],
-        ['runner', 0.25],
-        ['brute', n >= 2 ? 0.12 : 0],
+        ['grunt', 0.62],
+        ['runner', 0.28],
+        ['brute', n >= 2 ? 0.14 : 0],
       ]);
-      const base = 8 + n * 2 + progress * (18 + n * 3);
+      // le poids du niveau porte surtout sur la fin : un début jouable, une fin féroce
+      const base = 10 + (n - 1) * 2 + progress * (26 + n * 8);
       const count =
         kind === 'brute'
-          ? Math.round(2 + n * 0.5 + progress * 5)
+          ? Math.round(3 + n * 0.7 + progress * 6)
           : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
       const pattern = pickWeighted(rand, [
         ['grid', 0.4],
@@ -63,13 +72,13 @@ export function makeCampaignLevel(n: number): LevelDef {
         ['stream', 0.25],
       ] as const);
       events.push({ at, type: 'horde', kind, count, pattern, width: 260 + progress * 160 });
-      // seconde vague simultanée dans la moitié difficile du niveau
-      if (progress > 0.45 && rand() < 0.25) {
+      // seconde vague simultanée, de plus en plus fréquente
+      if (progress > 0.35 && rand() < 0.35) {
         events.push({
           at: at + 60,
           type: 'horde',
           kind: 'runner',
-          count: Math.round(base * 0.4),
+          count: Math.round(base * 0.45),
           pattern: 'stream',
         });
       }
@@ -77,7 +86,7 @@ export function makeCampaignLevel(n: number): LevelDef {
     at += 280 + rand() * 260;
   }
 
-  events.push({ at: len - 700, type: 'boss', hp: Math.round(350 * (1 + 0.55 * n)), final: true });
+  events.push({ at: len - 700, type: 'boss', hp: Math.round(500 * (1 + 0.7 * n)), final: true });
   // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)
   events.push({ at: len + 400, type: 'finish' });
 
@@ -98,32 +107,32 @@ export function makeEndlessLevel(): LevelDef {
   const extend = (evts: LevelEvent[], dist: number): void => {
     while (genAt < dist + 3000) {
       const d = genAt;
-      const hpMul = 1 + d / 3500;
+      const hpMul = 1 + d / 2800;
       sinceGates += 1;
       sinceBoss += 1;
-      if (sinceBoss > 14 && d > 5000 && rand() < 0.3) {
+      if (sinceBoss > 11 && d > 4000 && rand() < 0.4) {
         sinceBoss = 0;
-        evts.push({ at: genAt, type: 'boss', hp: Math.round(300 + d / 8) });
-      } else if (sinceGates > 2 && rand() < 0.35) {
+        evts.push({ at: genAt, type: 'boss', hp: Math.round(400 + d / 6) });
+      } else if (sinceGates > 3 && rand() < 0.35) {
         sinceGates = 0;
-        // l'endless doit continuer à nourrir la croissance : portes surtout positives
-        const good = rand() < 0.45 ? gateMul(2) : gateAdd(Math.round(10 + d / 400));
-        const bad = rand() < 0.4 ? gateAdd(-Math.round(5 + d / 800)) : gateAdd(Math.round(4 + d / 900));
+        // la croissance se paie : le mauvais côté est souvent un vrai piège
+        const good = rand() < 0.4 ? gateMul(2) : gateAdd(Math.round(8 + d / 550));
+        const bad = rand() < 0.55 ? gateAdd(-Math.round(6 + d / 600)) : gateAdd(Math.round(3 + d / 1000));
         const [left, right] = rand() < 0.5 ? [good, bad] : [bad, good];
         evts.push({ at: genAt, type: 'gates', left, right });
       } else if (rand() < 0.14) {
-        const hp = Math.round(100 + d / 18);
+        const hp = Math.round(120 + d / 14);
         evts.push({ at: genAt, type: 'crate', hp, xNorm: rangeOf(rand, 0.3, 0.7) });
       } else {
         const kind = pickWeighted<EnemyKind>(rand, [
           ['grunt', 0.6],
           ['runner', 0.25],
-          ['brute', d > 2500 ? 0.15 : 0],
+          ['brute', d > 2000 ? 0.16 : 0],
         ]);
         const count =
           kind === 'brute'
-            ? Math.round(2 + d / 2200)
-            : Math.min(130, Math.round((10 + d / 260) * rangeOf(rand, 0.8, 1.25)));
+            ? Math.round(3 + d / 1800)
+            : Math.min(130, Math.round((12 + d / 220) * rangeOf(rand, 0.8, 1.25)));
         const pattern = pickWeighted(rand, [
           ['grid', 0.4],
           ['blob', 0.35],

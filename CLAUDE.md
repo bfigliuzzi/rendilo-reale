@@ -13,9 +13,14 @@ npm run build            # typecheck + vite build
 node tools/verify.mjs http://localhost:5199/ campaign 90 shot.png   # partie pilotée headless
 ```
 
-Modes du script verify : `campaign` | `endless` | `stress`. Le bot tient le centre et choisit
-les bonnes portes ; référence : il gagne le niveau 1 sans améliorations. `?stress` dans l'URL
-lance directement le test de perf (escouade 500).
+Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON
+d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance directement
+le test de perf (escouade 500).
+
+**Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
+le N1 sans méta *de justesse* (~20 survivants) ; N2 sans méta = défaite rapide ; N2 avec
+l'or d'une victoire (`{"dps":1,"start":1}`) = meurt au boss ; N2 avec 2-3 victoires
+(`{"dps":3,"start":2}`) = victoire.
 
 ## Invariants d'architecture
 

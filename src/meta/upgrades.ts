@@ -20,23 +20,23 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '👥',
     name: 'Effectif de départ',
     maxLevel: 15,
-    cost: (l) => Math.round(50 * Math.pow(1.55, l)),
-    effectLabel: (l) => `${START_SQUAD + 3 * l} soldats`,
+    cost: (l) => Math.round(80 * Math.pow(1.7, l)),
+    effectLabel: (l) => `${START_SQUAD + 2 * l} soldats`,
   },
   {
     id: 'dps',
     icon: '🔥',
     name: 'Puissance de feu',
     maxLevel: 25,
-    cost: (l) => Math.round(40 * Math.pow(1.45, l)),
-    effectLabel: (l) => `+${l * 12} % de dégâts`,
+    cost: (l) => Math.round(60 * Math.pow(1.6, l)),
+    effectLabel: (l) => `+${l * 10} % de dégâts`,
   },
   {
     id: 'loot',
     icon: '💰',
     name: 'Butin',
     maxLevel: 10,
-    cost: (l) => Math.round(60 * Math.pow(1.6, l)),
+    cost: (l) => Math.round(90 * Math.pow(1.75, l)),
     effectLabel: (l) => `+${l * 15} % d'or`,
   },
   {
@@ -44,8 +44,8 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '🛡️',
     name: 'Blindage',
     maxLevel: 6,
-    cost: (l) => Math.round(80 * Math.pow(1.7, l)),
-    effectLabel: (l) => `−${l} perte(s) par impact caisse/boss`,
+    cost: (l) => Math.round(120 * Math.pow(1.8, l)),
+    effectLabel: (l) => `−${l * 2} perte(s) par impact caisse/boss`,
   },
 ];
 
@@ -59,9 +59,9 @@ export interface PlayerStats {
 
 export function computeStats(upgrades: Record<string, number>): PlayerStats {
   return {
-    startSquad: START_SQUAD + 3 * (upgrades.start ?? 0),
-    dpsMul: 1 + 0.12 * (upgrades.dps ?? 0),
+    startSquad: START_SQUAD + 2 * (upgrades.start ?? 0),
+    dpsMul: 1 + 0.1 * (upgrades.dps ?? 0),
     lootMul: 1 + 0.15 * (upgrades.loot ?? 0),
-    contactShield: upgrades.armor ?? 0,
+    contactShield: 2 * (upgrades.armor ?? 0), // pertes évitées par impact caisse/boss
   };
 }

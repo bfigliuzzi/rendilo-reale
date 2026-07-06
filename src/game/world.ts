@@ -97,7 +97,7 @@ export class World {
       if (boss.final) this.finalBossDown = true;
     };
     this.bosses.onContact = (kills) => {
-      const losses = Math.max(2, kills - 2 * this.playerStats.contactShield);
+      const losses = Math.max(2, kills - this.playerStats.contactShield);
       this.squad.loseSoldiers(losses);
       this.fx.shake(9);
       this.sfx.bossContact();

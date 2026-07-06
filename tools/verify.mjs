@@ -2,8 +2,9 @@
 // joue avec un bot simple (tient le centre, choisit la meilleure porte),
 // remonte FPS réel, erreurs console, stats de jeu et une capture d'écran.
 //
-// Usage : node tools/verify.mjs [url] [mode] [secondes] [capture.png]
-//   mode : campaign | endless | stress
+// Usage : node tools/verify.mjs [url] [mode] [secondes] [capture.png] [upgradesJSON]
+//   mode : campaign | campaign:N | endless | stress
+//   upgradesJSON : ex. '{"dps":2,"start":1}' — améliorations méta injectées avant la run
 import puppeteer from 'puppeteer-core';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -11,6 +12,7 @@ const URL = process.argv[2] ?? 'http://localhost:5173/';
 const MODE = process.argv[3] ?? 'campaign';
 const SECONDS = Number(process.argv[4] ?? 60);
 const SHOT = process.argv[5] ?? 'verify.png';
+const UPGRADES = process.argv[6] ? JSON.parse(process.argv[6]) : {};
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -29,12 +31,21 @@ page.on('pageerror', (e) => errors.push(String(e)));
 await page.goto(URL, { waitUntil: 'networkidle0' });
 await page.waitForFunction('window.__game !== undefined', { timeout: 5000 });
 
-await page.evaluate((mode) => {
-  const flow = window.__game.flow;
-  if (mode === 'stress') flow.startStress();
-  else if (mode === 'endless') flow.startEndless();
-  else flow.startCampaign(1);
-}, MODE);
+await page.evaluate(
+  (mode, upgrades) => {
+    const g = window.__game;
+    Object.assign(g.save.upgrades, upgrades);
+    if (mode === 'stress') g.flow.startStress();
+    else if (mode === 'endless') g.flow.startEndless();
+    else {
+      const n = Number(mode.split(':')[1] ?? 1);
+      g.save.campaignLevel = Math.max(g.save.campaignLevel, n);
+      g.flow.startCampaign(n);
+    }
+  },
+  MODE,
+  UPGRADES,
+);
 
 const samples = [];
 const start = Date.now();

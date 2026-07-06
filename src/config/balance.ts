@@ -53,24 +53,24 @@ export const GRID_AHEAD = 920;
 export const GRID_MAX_PER_CELL = 48;
 
 // Caisses
-export const CRATE_CONTACT_KILLS = 8;
+export const CRATE_CONTACT_KILLS = 12;
 export const CRATE_HALF_W = 85;
 export const CRATE_HALF_H = 50;
 
 // Boss
 export const BOSS_RADIUS = 42;
-export const BOSS_SPEED = 38;
+export const BOSS_SPEED = 46;
 export const BOSS_STEER = 60;
-export const BOSS_CONTACT_KILLS = 15;
-export const BOSS_KNOCKBACK = 300;
+export const BOSS_CONTACT_KILLS = 20;
+export const BOSS_KNOCKBACK = 260;
 
 // Or (multiplié par le bonus Butin de la méta)
-export const GOLD_PER_KILL = 1;
-export const GOLD_PER_CRATE = 15;
-export const GOLD_PER_BOSS = 120;
-export const GOLD_VICTORY_BASE = 60;
-export const GOLD_VICTORY_PER_LEVEL = 30;
-export const GOLD_ENDLESS_PER_100M = 5;
+export const GOLD_PER_KILL = 0.5;
+export const GOLD_PER_CRATE = 10;
+export const GOLD_PER_BOSS = 80;
+export const GOLD_VICTORY_BASE = 40;
+export const GOLD_VICTORY_PER_LEVEL = 20;
+export const GOLD_ENDLESS_PER_100M = 3;
 
 // Ennemis
 export interface EnemyKindDef {
