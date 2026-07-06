@@ -1,4 +1,5 @@
 import { Application } from 'pixi.js';
+import { registerSW } from 'virtual:pwa-register';
 import { Sfx } from './audio/sfx';
 import { DESIGN_H, DESIGN_W } from './config/balance';
 import { startLoop } from './core/loop';
@@ -66,4 +67,5 @@ async function boot(): Promise<void> {
   );
 }
 
+registerSW({ immediate: true }); // PWA : installable, jouable hors ligne, mise à jour auto
 void boot();

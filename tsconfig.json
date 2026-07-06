@@ -11,7 +11,8 @@
     "useDefineForClassFields": true,
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "types": ["vite-plugin-pwa/client"]
   },
   "include": ["src"]
 }
