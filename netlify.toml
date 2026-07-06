@@ -1,0 +1,13 @@
+# Déploiement continu Netlify : build Vite, publication du dossier dist.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# SPA : toute route sert index.html (utile si des routes apparaissent plus tard)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
