@@ -51,6 +51,11 @@ export const PRESSURE_MISSILE_RATE = 0.55; // accélération des frappes par dou
 // Tir — le DPS est découplé du nombre de balles : la cadence visuelle sature,
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.
 export const SOLDIER_DPS = 10;
+// Cadence de base volontairement sous ×1 : l'amélioration « Cadence de tir » (méta)
+// la remonte. Le DPS total ne change pas, mais moins de balles = plus de dégâts
+// gâchés en surplus sur les petits ennemis — les nuées passent mieux.
+// 0,75 est calibré au bot : à 0,70 le N1 sans méta sortait de la bande (~1/3 de wins).
+export const RATE_BASE = 0.75;
 export const FIRE_RATE_PER_SOLDIER = 5;
 export const FIRE_SOLDIER_CAP = 48; // cadence max fusiliers = 48 × 5 = 240 balles/s
 
@@ -114,10 +119,33 @@ export const MINE_RADIUS = 105; // souffle (tue aussi les ennemis proches)
 export const MINE_KILLS_RATIO = 0.18;
 export const MINE_KILLS_MAX = 8;
 
-// Missiles (urgence à l'approche des portes + frappes ambiantes)
-export const MISSILE_WARNING = 1.25; // délai marqueur → impact
-export const MISSILE_RADIUS = 130;
-export const MISSILE_KILLS = 12; // plafond — les pertes réelles sont proportionnelles à l'effectif
+// Missiles (urgence à l'approche des portes + frappes ambiantes), en quatre
+// calibres lisibles à la couleur du marqueur : le jaune arrose large mais pique
+// peu, le rouge est chirurgical et punitif (télégraphe plus court), l'atomique
+// — rare, réservé à la riposte adaptative — combine zone énorme et gros dégâts,
+// compensé par un long télégraphe : il se fuit, mais il faut s'y mettre tôt.
+export interface MissileKindDef {
+  radius: number;
+  killsRatio: number; // part de l'effectif perdue (plancher 2, plafond heavyCap(killsCap))
+  killsCap: number;
+  warning: number; // délai marqueur → impact
+  color: number; // teinte du marqueur d'alerte
+}
+export const MISSILE_KINDS = {
+  yellow: { radius: 200, killsRatio: 0.12, killsCap: 7, warning: 1.35, color: 0xfacc15 },
+  orange: { radius: 130, killsRatio: 0.25, killsCap: 12, warning: 1.25, color: 0xf97316 },
+  red: { radius: 80, killsRatio: 0.5, killsCap: 22, warning: 1.05, color: 0xef4444 },
+  nuke: { radius: 240, killsRatio: 0.65, killsCap: 45, warning: 2.2, color: 0x93c5fd },
+} as const satisfies Record<string, MissileKindDef>;
+export type MissileKind = keyof typeof MISSILE_KINDS;
+// tirage pondéré des frappes ordinaires — l'atomique a son propre timer, sous riposte
+export const MISSILE_KIND_WEIGHTS: readonly (readonly [MissileKind, number])[] = [
+  ['yellow', 0.35],
+  ['orange', 0.45],
+  ['red', 0.2],
+];
+export const NUKE_MIN_PRESSURE = 0.25; // riposte requise (~155 soldats) pour l'atomique
+export const NUKE_INTERVAL: [number, number] = [26, 42];
 export const MISSILE_MIN_DIST = 700; // pas de frappes en tout début de niveau
 export const MISSILE_GATE_RANGE = 650; // barrage tant qu'une porte est à moins de X devant
 export const MISSILE_GATE_INTERVAL: [number, number] = [1.0, 1.7];

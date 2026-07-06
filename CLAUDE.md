@@ -66,6 +66,16 @@ SOUS-proportionnelle au DPS : grossir reste rentable, mais plus auto-win. Rien n
 sous la référence — la bande d'équilibrage N1/N2 n'est pas affectée. Toute nouvelle
 source de PV spawnés ou de pertes plafonnées doit passer par ces deux helpers. Affichée
 au HUD (`⚠️ riposte ×N`).
+**Missiles en quatre calibres** (`MISSILE_KINDS`) : jaune (large/faible), orange
+(standard), rouge (chirurgical/punitif, télégraphe court), atomique (rare, RÉSERVÉ à la
+riposte adaptative, zone énorme + gros dégâts compensés par un long télégraphe). Le
+danger d'un calibre se lit à la couleur/taille du marqueur — préserver cette lisibilité.
+Le bot d'esquive lit `strike.radius` : toute nouvelle zone de danger doit exposer son
+rayon réel.
+**Cadence de tir** : base ×0,75 (`RATE_BASE`, calibrée au bot — 0,70 sortait le N1 de
+la bande), remontée par l'amélioration méta `rate`
+et l'arme. Le DPS reste découplé du nombre de balles — la cadence ne joue que sur la
+répartition des dégâts (surplus gâché sur les petits ennemis).
 
 ## Invariants d'architecture
 

@@ -86,7 +86,7 @@ while (Date.now() - start < SECONDS * 1000) {
       // missiles, caisses trop proches pour être cassées) près de la cible
       const strikes = (w.missiles?.list ?? [])
         .filter((s) => Math.abs(s.y + w.dist) < 260)
-        .map((s) => ({ x: s.x, keep: 210 }));
+        .map((s) => ({ x: s.x, keep: (s.radius ?? 130) + 80 }));
       const nearCrates = allCrates
         .filter((c) => c.cy > -w.dist - 260 && c.cy < -w.dist + 20)
         .map((c) => ({ x: c.cx, keep: 150 }));

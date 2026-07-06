@@ -93,6 +93,7 @@ export class World {
   private droneFireAcc = 0;
   private gateMissileT = 0;
   private ambientMissileT = 0;
+  private nukeT = 0;
   private endTimer = 0;
   private fireworkT = 0;
   private pendingResult: RunResult | null = null;
@@ -173,13 +174,14 @@ export class World {
       this.explode(x, y, B.MINE_RADIUS, kills);
     };
     this.missiles.onWarn = () => this.sfx.missileWarn();
-    this.missiles.onImpact = (x, y) => {
-      // pertes proportionnelles : une frappe ampute sans annihiler une petite escouade
+    this.missiles.onImpact = (x, y, kind) => {
+      // pertes proportionnelles au calibre : une frappe ampute sans annihiler
+      const def = B.MISSILE_KINDS[kind];
       const kills = Math.min(
-        this.heavyCap(B.MISSILE_KILLS),
-        Math.max(2, Math.ceil(this.squad.logical * 0.25)),
+        this.heavyCap(def.killsCap),
+        Math.max(2, Math.ceil(this.squad.logical * def.killsRatio)),
       );
-      this.explode(x, y, B.MISSILE_RADIUS, kills);
+      this.explode(x, y, def.radius, kills);
     };
   }
 
@@ -204,6 +206,7 @@ export class World {
     this.droneFireAcc = 0;
     this.gateMissileT = 0.4;
     this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
+    this.nukeT = rand(...B.NUKE_INTERVAL);
     this.endTimer = 0;
     this.pendingResult = null;
     this.pressure = 0;
@@ -512,6 +515,7 @@ export class World {
         this.missiles.spawn(
           rand(B.LANE_MIN_X + 20, B.LANE_MAX_X - 20),
           -this.dist - rand(120, Math.max(200, gateAhead - 60)),
+          this.pickMissileKind(),
         );
       }
     } else {
@@ -524,10 +528,30 @@ export class World {
         this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL) / haste;
         // frappe ambiante : celle-là vise le joueur — rare, mais elle réveille
         const x = clamp(this.squad.x + rand(-90, 90), B.LANE_MIN_X, B.LANE_MAX_X);
-        this.missiles.spawn(x, -this.dist - rand(60, 200));
+        this.missiles.spawn(x, -this.dist - rand(60, 200), this.pickMissileKind());
+      }
+    }
+    // l'atomique : réservé à la riposte adaptative — rare, vise le joueur,
+    // long télégraphe : il se fuit, mais il faut décoller tout de suite
+    if (this.pressure >= B.NUKE_MIN_PRESSURE) {
+      this.nukeT -= dt;
+      if (this.nukeT <= 0) {
+        this.nukeT = rand(...B.NUKE_INTERVAL);
+        const x = clamp(this.squad.x + rand(-70, 70), B.LANE_MIN_X, B.LANE_MAX_X);
+        this.missiles.spawn(x, -this.dist - rand(80, 240), 'nuke');
       }
     }
     this.missiles.update(dt);
+  }
+
+  /** Tirage pondéré du calibre des frappes ordinaires (l'atomique est à part). */
+  private pickMissileKind(): B.MissileKind {
+    let r = Math.random();
+    for (const [kind, w] of B.MISSILE_KIND_WEIGHTS) {
+      r -= w;
+      if (r <= 0) return kind;
+    }
+    return 'orange';
   }
 
   /** Fin de run : la défaite claque, la victoire se célèbre avant l'écran de résultat. */

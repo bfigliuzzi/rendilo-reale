@@ -99,6 +99,7 @@ export class Menu {
         <div class="card">
           <div class="card-head">${u.icon} <b>${u.name}</b><span class="lvl">niv. ${lvl}/${u.maxLevel}</span></div>
           <div class="card-effect">${u.effectLabel(lvl)}${maxed ? '' : ` &nbsp;→&nbsp; ${u.effectLabel(lvl + 1)}`}</div>
+          <div class="card-sub">${u.desc}</div>
           <button class="btn buy" data-action="buy" data-id="${u.id}" ${canBuy ? '' : 'disabled'}>
             ${maxed ? 'MAX' : `Acheter — ${cost} 💰`}
           </button>
@@ -112,10 +113,12 @@ export class Menu {
       const cost = !owned ? w.unlockCost : maxed ? 0 : w.levelCost(lvl);
       const canBuy = !maxed && s.gold >= cost;
       const buyLabel = !owned ? `Débloquer — ${cost} 💰` : maxed ? 'MAX' : `Améliorer — ${cost} 💰`;
+      const statsLine = `cadence ×${w.rateMul} · dégâts ×${w.dpsBonus}${w.splash > 0 ? ` · zone ${w.splash} px` : ''} · +8 % de dégâts/niveau`;
       return `
         <div class="card ${equipped ? 'equipped' : ''}">
           <div class="card-head">${w.icon} <b>${w.name}</b><span class="lvl">${owned ? `niv. ${lvl}/${w.maxLevel}` : '🔒'}</span></div>
           <div class="card-effect">${w.desc}</div>
+          <div class="card-sub">${statsLine}</div>
           <div class="card-row">
             <button class="btn buy" data-action="wbuy" data-id="${w.id}" ${canBuy ? '' : 'disabled'}>${buyLabel}</button>
             ${owned ? `<button class="btn buy alt" data-action="wequip" data-id="${w.id}" ${equipped ? 'disabled' : ''}>${equipped ? '✓ Équipée' : 'Équiper'}</button>` : ''}
@@ -146,6 +149,7 @@ export class Menu {
       <h2>Arsenal</h2>
       <div class="gold-line">💰 ${s.gold}</div>
       <div class="section-title">Armes</div>
+      <div class="section-note">L'arme équipée arme TOUTE l'escouade — fusiliers, snipers et artilleurs : sa cadence et ses dégâts sont globaux, la zone du canon s'ajoute à chaque balle.</div>
       <div class="cards">${weaponCards}</div>
       ${compSection}
       <div class="section-title">Améliorations</div>
