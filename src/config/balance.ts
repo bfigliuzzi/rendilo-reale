@@ -15,7 +15,7 @@ export const CULL_AHEAD = 920; // au-delà : balles détruites
 export const CULL_BEHIND = 200; // en-deçà derrière l'escouade : entités détruites
 
 // Escouade
-export const START_SQUAD = 5;
+export const START_SQUAD = 8;
 export const SQUAD_RENDER_CAP = 150; // soldats affichés max ; au-delà, label + scale-up
 export const SQUAD_HARD_CAP = 9999;
 export const SQUAD_SPACING_X = 22; // espacement max (petits effectifs)
@@ -72,6 +72,12 @@ export const BUFF_DRONE_DPS_RATIO = 0.5;
 export const BUFF_DRONE_FIRE_RATE = 10;
 export const BUFF_GOLD_MUL = 2;
 export const BUFF_GOLD_DURATION = 15;
+
+// Mines : pièges au sol, non tirables — se repèrent et s'évitent
+export const MINE_TRIGGER_R = 26; // + demi-largeur de la formation
+export const MINE_RADIUS = 105; // souffle (tue aussi les ennemis proches)
+export const MINE_KILLS_RATIO = 0.18;
+export const MINE_KILLS_MAX = 8;
 
 // Missiles (urgence à l'approche des portes + frappes ambiantes)
 export const MISSILE_WARNING = 1.25; // délai marqueur → impact

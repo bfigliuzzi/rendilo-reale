@@ -28,6 +28,13 @@ ATTENTION : modifier les tirages du générateur (poids, variantes) re-seed les 
 toujours re-vérifier le N1 après. L'intensité des missiles est un paramètre de niveau
 (`missileMinDist`, `missileIntervalMul`) : le N1 épargne le début de partie.
 
+**Garanties d'équité du générateur** (à préserver) : une paire de caisses bloquante
+contient toujours au moins une caisse non explosive ; pas de méga-horde dans le premier
+tiers d'un niveau (cap déterministe) ; le filet continu d'ennemis (anti-temps-mort) et
+les mines sont ajoutés APRÈS la boucle principale puis `events.sort()` — le spawner
+exige des événements triés. Les mines ne sont ni tirables ni dans l'aim-assist :
+danger de positionnement pur.
+
 **Aim-assist** : les balles ciblent la menace la plus proche du cône frontal — ennemis,
 boss ET caisses (`bullets.aimVX`). Toute nouvelle entité tirable doit y être ajoutée,
 sinon elle devient quasi intouchable dès qu'il y a des ennemis à l'écran.

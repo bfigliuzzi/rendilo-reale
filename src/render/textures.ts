@@ -18,6 +18,7 @@ export interface Atlas {
   crateExplosive: Texture;
   crateBonus: Texture;
   boss: Texture;
+  mine: Texture;
   grounds: readonly Texture[]; // un motif de voie par biome (sources séparées)
 }
 
@@ -146,6 +147,14 @@ export function buildAtlas(): Atlas {
   ctx.lineTo(203, 16);
   ctx.closePath();
   ctx.fill();
+  // mine (232,32,22,22) — disque sombre, picots, témoin rouge (le clignotement est fait en jeu)
+  circle(ctx, 243, 43, 9, '#1f2937', '#0b1016');
+  ctx.fillStyle = '#374151';
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    ctx.fillRect(243 + Math.cos(a) * 8 - 1.5, 43 + Math.sin(a) * 8 - 1.5, 3, 3);
+  }
+  circle(ctx, 243, 43, 3, '#ef4444', '#7f1d1d');
   // spark : disque blanc doux (112,16,12,12)
   const grad = ctx.createRadialGradient(118, 22, 1, 118, 22, 6);
   grad.addColorStop(0, 'rgba(255,255,255,1)');
@@ -208,6 +217,7 @@ export function buildAtlas(): Atlas {
     crateExplosive: frame(100, 64, 96, 56),
     crateBonus: frame(0, 124, 96, 56),
     boss: frame(150, 130, 44, 44),
+    mine: frame(232, 32, 22, 22),
     grounds: BIOMES.map((b) => buildGroundPattern(b)),
   };
 }

@@ -14,6 +14,7 @@ import { Collisions } from './collisions';
 import { type Crate, Crates } from './crates';
 import { EnemyPool } from './enemies';
 import { Gates } from './gates';
+import { Mines } from './mines';
 import { Missiles } from './missiles';
 import { ProjectilePool } from './projectiles';
 import { Spawner } from './spawner';
@@ -71,6 +72,7 @@ export class World {
   private readonly gates: Gates;
   private readonly crates: Crates;
   private readonly missiles: Missiles;
+  readonly mines: Mines; // public : bot de test
   private readonly droneSprite: Sprite;
   private readonly collisions = new Collisions();
   private spawner: Spawner | null = null;
@@ -111,6 +113,7 @@ export class World {
     this.bosses = new Bosses(layers.crates, atlas);
     this.bolts = new ProjectilePool(B.MAX_BOLTS, layers.crates, atlas.bolt, B.BOLT_SPEED);
     this.missiles = new Missiles(layers.crates, atlas);
+    this.mines = new Mines(layers.gates, atlas); // sous les ennemis : elles sont au sol
     this.droneSprite = new Sprite(atlas.drone);
     this.droneSprite.anchor.set(0.5);
     this.droneSprite.visible = false;
@@ -158,6 +161,13 @@ export class World {
       this.fx.shake(6);
       this.sfx.lanceHit();
     };
+    this.mines.onTrigger = (x, y) => {
+      const kills = Math.min(
+        B.MINE_KILLS_MAX,
+        Math.max(2, Math.ceil(this.squad.logical * B.MINE_KILLS_RATIO)),
+      );
+      this.explode(x, y, B.MINE_RADIUS, kills);
+    };
     this.missiles.onWarn = () => this.sfx.missileWarn();
     this.missiles.onImpact = (x, y) => {
       // pertes proportionnelles : une frappe ampute sans annihiler une petite escouade
@@ -197,6 +207,7 @@ export class World {
       spawnGates: (ev) => this.gates.spawn(ev.at, ev.left, ev.right),
       spawnCrate: (ev) => this.crates.spawn(ev.at, ev.hp, ev.xNorm, ev.variant),
       spawnBoss: (ev) => this.bosses.spawn(ev.at, ev.hp, ev.final ?? false),
+      spawnMine: (ev) => this.mines.spawn(ev.at, ev.xNorm),
       onFinishLine: (at) => this.placeFinishLine(at),
     });
     this.state = 'playing';
@@ -306,6 +317,7 @@ export class World {
       else this.sfx.gateBad();
     }
     this.crates.update(this.squad, this.dist);
+    this.mines.update(dt, this.squad, this.dist);
     this.bosses.update(dt, this.squad, this.dist);
     this.fx.update(dt);
 
@@ -536,6 +548,7 @@ export class World {
     this.bosses.reset();
     this.bolts.clear();
     this.missiles.reset();
+    this.mines.reset();
     this.fx.clear();
     this.squad.setShielded(false);
     this.squad.setBadge('');

@@ -27,6 +27,7 @@ export type LevelEvent =
     }
   | { at: number; type: 'gates'; left: GateModifier; right: GateModifier }
   | { at: number; type: 'crate'; hp: number; xNorm: number; variant?: CrateVariant } // xNorm ∈ [0,1]
+  | { at: number; type: 'mine'; xNorm: number } // piège au sol : s'évite, ne se tire pas
   | { at: number; type: 'boss'; hp: number; final?: boolean } // final : sa mort = victoire
   | { at: number; type: 'finish' };
 

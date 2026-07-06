@@ -90,6 +90,10 @@ while (Date.now() - start < SECONDS * 1000) {
       const nearCrates = allCrates
         .filter((c) => c.cy > -w.dist - 260 && c.cy < -w.dist + 20)
         .map((c) => ({ x: c.cx, keep: 150 }));
+      const mines = (w.mines?.list ?? [])
+        .filter((m) => !m.dead && m.y > -w.dist - 300 && m.y < -w.dist + 20)
+        .map((m) => ({ x: m.x, keep: 110 }));
+      nearCrates.push(...mines);
       // lances du boss : projeter la ligne de visée / la trajectoire au niveau de l'escouade
       const squadY = -w.dist;
       const lanceThreats = [];

@@ -8,8 +8,12 @@ niveau, et une bonne dose d'apocalypse :
 - **Caisses** : bois (PV, bloquent et blessent), **explosives** (souffle qui tue ennemis
   ET soldats proches — à faire sauter de loin), **bonus** dorées (dégâts ×2 ou bouclier
   temporaire si détruites au tir — perdues si percutées).
-- **Frappes de missiles** : champ de mines à l'approche des portes (marqueurs d'alerte à
+- **Frappes de missiles** : barrage à l'approche des portes (marqueurs d'alerte à
   esquiver), frappes ambiantes qui visent le joueur en seconde partie de niveau.
+- **Mines** : pièges au sol clignotants, non tirables — se repèrent et s'évitent, le
+  souffle ampute l'escouade (et les ennemis proches).
+- **Pression continue** : un filet de petits groupes d'ennemis coule en permanence entre
+  les vagues principales — jamais plusieurs secondes sans danger.
 - **Lances du boss** : le boss verrouille une ligne de visée rouge (télégraphe ~0,85 s)
   puis tire une lance en ligne droite — esquivable, jamais injuste. Il s'enrage quand
   il est blessé.

@@ -17,6 +17,7 @@ export interface SpawnTargets {
   spawnGates: (ev: Extract<LevelEvent, { type: 'gates' }>) => void;
   spawnCrate: (ev: Extract<LevelEvent, { type: 'crate' }>) => void;
   spawnBoss: (ev: Extract<LevelEvent, { type: 'boss' }>) => void;
+  spawnMine: (ev: Extract<LevelEvent, { type: 'mine' }>) => void;
   onFinishLine: (at: number) => void;
 }
 
@@ -59,6 +60,9 @@ export class Spawner {
         break;
       case 'boss':
         this.targets.spawnBoss(ev);
+        break;
+      case 'mine':
+        this.targets.spawnMine(ev);
         break;
       case 'finish':
         this.targets.onFinishLine(ev.at);

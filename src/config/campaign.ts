@@ -28,8 +28,8 @@ export function makeCampaignLevel(n: number): LevelDef {
     const progress = at / len;
     const roll = rand();
     sinceGates++;
-    // une porte au moins tous les 4 segments — l'apocalypse taxe, les portes nourrissent
-    if (sinceGates >= 4 || roll < 0.14) {
+    // une porte au moins tous les 3 segments — l'attrition continue exige une croissance continue
+    if (sinceGates >= 3 || roll < 0.14) {
       sinceGates = 0;
       const good = rand() < 0.55 ? gateMul(2) : gateAdd(Math.round(9 + 2 * n + progress * 18));
       const bad =
@@ -58,9 +58,12 @@ export function makeCampaignLevel(n: number): LevelDef {
         ['gold', 0.07],
       ] as const);
       if (rand() < 0.4) {
-        // paire : une caisse utile flanquée d'une explosive — viser juste compte
+        // paire bloquante : TOUJOURS au moins une caisse cassable sans souffle —
+        // deux explosives seraient un péage de dégâts inesquivable, donc injuste
+        const flankerRoll = rand() < 0.5;
+        const flanker = variant === 'explosive' ? 'hp' : flankerRoll ? 'explosive' : 'hp';
         events.push({ at, type: 'crate', hp, xNorm: 0.28, variant });
-        events.push({ at, type: 'crate', hp, xNorm: 0.72, variant: rand() < 0.5 ? 'explosive' : 'hp' });
+        events.push({ at, type: 'crate', hp, xNorm: 0.72, variant: flanker });
       } else {
         events.push({ at, type: 'crate', hp, xNorm: rangeOf(rand, 0.3, 0.7), variant });
       }
@@ -75,7 +78,7 @@ export function makeCampaignLevel(n: number): LevelDef {
       ]);
       // ×1,5 sur la masse totale, mais chargé vers la fin : début jouable, fin déluge
       const base = 14 + (n - 1) * 4 + progress * (64 + n * 16);
-      const count =
+      let count =
         kind === 'brute'
           ? Math.round(4 + n + progress * 12)
           : kind === 'elite'
@@ -85,6 +88,8 @@ export function makeCampaignLevel(n: number): LevelDef {
               : kind === 'kamikaze'
                 ? Math.round(base * 0.35)
                 : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
+      // garantie anti-loterie : pas de méga-horde dans le premier tiers, quel que soit le tirage
+      if (progress < 0.33 && kind !== 'brute') count = Math.min(count, 16 + n * 4);
       const pattern = pickWeighted(rand, [
         ['grid', 0.4],
         ['blob', 0.35],
@@ -108,6 +113,27 @@ export function makeCampaignLevel(n: number): LevelDef {
   events.push({ at: len - 700, type: 'boss', hp: Math.round(500 * (1 + 0.7 * n)), final: true });
   // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)
   events.push({ at: len + 400, type: 'finish' });
+
+  // filet continu : de petits groupes en permanence — jamais plusieurs secondes sans danger
+  for (let t = 750; t < len - 900; t += 190 + rand() * 190) {
+    const p = t / len;
+    events.push({
+      at: t,
+      type: 'horde',
+      kind: rand() < 0.8 ? 'grunt' : 'runner',
+      count: Math.round((2 + p * 6 + n * 0.8) * rangeOf(rand, 0.7, 1.3)),
+      pattern: rand() < 0.5 ? 'blob' : 'stream',
+      width: 220,
+    });
+  }
+  // mines : par petits groupes, densifiées avec la progression et le niveau
+  for (let t = 1500; t < len - 1000; t += 520 + rand() * 620) {
+    const cluster = 1 + Math.floor(rand() * Math.min(3, 1 + n * 0.5));
+    for (let k = 0; k < cluster; k++) {
+      events.push({ at: t + k * (70 + rand() * 90), type: 'mine', xNorm: rangeOf(rand, 0.12, 0.88) });
+    }
+  }
+  events.sort((a, b) => a.at - b.at); // le spawner exige des événements triés
 
   return {
     scrollSpeed: 130 + Math.min(30, n * 2),
@@ -184,8 +210,21 @@ export function makeEndlessLevel(): LevelDef {
         ] as const);
         evts.push({ at: genAt, type: 'horde', kind, count, pattern, hpMul, width: 300 });
       }
+      // filet continu + mines : le même traitement anti-temps-mort qu'en campagne
+      evts.push({
+        at: genAt + 90 + rand() * 120,
+        type: 'horde',
+        kind: rand() < 0.8 ? 'grunt' : 'runner',
+        count: Math.round((4 + d / 600) * rangeOf(rand, 0.7, 1.3)),
+        pattern: rand() < 0.5 ? 'blob' : 'stream',
+        width: 220,
+      });
+      if (d > 1500 && rand() < 0.22) {
+        evts.push({ at: genAt + 150, type: 'mine', xNorm: rangeOf(rand, 0.12, 0.88) });
+      }
       genAt += 260 + rand() * 240;
     }
+    evts.sort((a, b) => a.at - b.at); // le spawner exige des événements triés
   };
 
   extend(events, 0);
