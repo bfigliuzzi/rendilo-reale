@@ -204,9 +204,14 @@ export class Menu {
       r.victory && r.mode === 'campaign'
         ? `<button class="btn primary" data-action="level" data-n="${r.levelN + 1}">Niveau suivant ▶</button>`
         : '';
+    // la revanche sur le même tirage (bonifiée) n'existe qu'après une défaite —
+    // sinon on farmerait le +25 % en rejouant en boucle un tirage déjà maîtrisé
+    const retrySame = !r.victory
+      ? `<button class="btn" data-action="retry-same">↻ Rejouer ce tirage <span class="dim">(+25 % 💰)</span></button>`
+      : '';
     const retry =
       r.mode === 'campaign'
-        ? `<button class="btn" data-action="retry-same">↻ Rejouer ce tirage <span class="dim">(+25 % 💰)</span></button>
+        ? `${retrySame}
            <button class="btn" data-action="level" data-n="${r.levelN}">🎲 Nouveau tirage</button>`
         : `<button class="btn" data-action="${r.mode === 'endless' ? 'endless' : 'menu'}">↻ Rejouer</button>`;
     this.show(`

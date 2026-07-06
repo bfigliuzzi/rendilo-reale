@@ -20,6 +20,7 @@ export class Flow {
   levelN = 1;
   private currentSeed = 0;
   private replayBonusActive = false;
+  private lastRunWon = false;
 
   constructor(
     private readonly world: World,
@@ -30,7 +31,9 @@ export class Flow {
   ) {
     menu.bind({
       startCampaign: (n) => this.startCampaign(n),
-      retrySameSeed: () => this.startCampaign(this.levelN, this.currentSeed, true),
+      // la revanche bonifiée n'existe qu'après une défaite (le bouton n'apparaît
+      // que là, mais on verrouille aussi ici — pas de farm du +25 % sur un tirage gagné)
+      retrySameSeed: () => this.startCampaign(this.levelN, this.currentSeed, !this.lastRunWon),
       startEndless: () => this.startEndless(),
       buyUpgrade: (id) => this.buyUpgrade(id),
       buyWeapon: (id) => this.buyWeapon(id),
@@ -75,6 +78,7 @@ export class Flow {
   }
 
   private handleGameOver(r: RunResult): void {
+    this.lastRunWon = r.victory;
     const lootMul = computeStats(this.save).lootMul;
     let bonus = 0;
     let newRecord = false;

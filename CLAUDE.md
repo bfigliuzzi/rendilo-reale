@@ -26,8 +26,11 @@ le test de perf (escouade 500).
 
 **Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
 le N1 sans méta ~1 fois sur 3 (défaites tardives : déluge final ou boss, jamais avant
-~480 m) ; N2 se gagne avec la méta de ~3 victoires
-(`'{"upgrades":{"dps":4,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`).
+~480 m) ; N2 se gagne avec la méta de ~4-5 victoires
+(`'{"upgrades":{"dps":8,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`).
+Les paliers de boutique sont volontairement serrés (+5 % dégâts, +10 % or) avec une
+courbe de coût dps adoucie (40×1,28^l) — au net l'or achète ~1,6-2× moins de puissance
+qu'un tuning « généreux » ; ne pas re-buffer l'un sans retoucher l'autre.
 Le 5e argument de verify.mjs accepte un patch complet `{upgrades, weapons, equipped}` ou
 des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts,
 choisit les bonnes portes — c'est le proxy « bon joueur ».

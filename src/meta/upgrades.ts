@@ -30,8 +30,10 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '🔥',
     name: 'Puissance de feu',
     maxLevel: 999, // déplafonné : c'est le tapis roulant de la campagne infinie
-    cost: (l) => Math.round(60 * Math.pow(1.6, l)),
-    effectLabel: (l) => `+${l * 10} % de dégâts`,
+    // paliers fins (+5 %) : la courbe de coût est adoucie en proportion, sinon le
+    // tapis roulant casse — au net, l'or achète ~1,6-2× moins de dégâts qu'avant
+    cost: (l) => Math.round(40 * Math.pow(1.28, l)),
+    effectLabel: (l) => `+${l * 5} % de dégâts`,
   },
   {
     id: 'loot',
@@ -39,7 +41,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Butin',
     maxLevel: 30,
     cost: (l) => Math.round(90 * Math.pow(1.75, l)),
-    effectLabel: (l) => `+${l * 15} % d'or`,
+    effectLabel: (l) => `+${l * 10} % d'or`,
   },
   {
     id: 'armor',
@@ -80,8 +82,8 @@ export function computeStats(
   const total = Math.max(1, c.rifle + c.sniper + c.art);
   return {
     startSquad: START_SQUAD + 2 * (up.start ?? 0),
-    dpsMul: (1 + 0.1 * (up.dps ?? 0)) * weapon.dpsMul,
-    lootMul: 1 + 0.15 * (up.loot ?? 0),
+    dpsMul: (1 + 0.05 * (up.dps ?? 0)) * weapon.dpsMul,
+    lootMul: 1 + 0.1 * (up.loot ?? 0),
     contactShield: 2 * (up.armor ?? 0), // pertes évitées par impact caisse/boss
     rateMul: weapon.rateMul,
     splash: weapon.splash,
