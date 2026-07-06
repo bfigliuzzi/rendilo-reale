@@ -4,6 +4,13 @@ Jeu web vertical : escouade auto-tir en bas, hordes qui descendent, portes x2/+N
 boss. Campagne + endless + métaprogression (or, boutique, localStorage).
 PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 
+## Déploiement
+
+- **Prod** : https://rendilo-reale.netlify.app — déploiement continu Netlify sur push
+  `main` (repo GitHub `bfigliuzzi/rendilo-reale`, webhook + deploy key, config dans
+  `netlify.toml` : `npm run build` → `dist`, Node 22).
+- Admin Netlify : https://app.netlify.com/projects/rendilo-reale
+
 ## Commandes
 
 ```bash
