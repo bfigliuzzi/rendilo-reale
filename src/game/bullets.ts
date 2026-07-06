@@ -166,10 +166,13 @@ export class BulletPool {
     let bestD2 = Infinity;
     let bestDX = 0;
     let bestDY = 0;
+    // ne jamais viser au-delà de la portée réelle des balles (bord d'écran) :
+    // sinon elles courbent vers des cibles qu'elles ne peuvent plus atteindre
+    const reach = -(B.CULL_AHEAD - 25);
     for (let e = 0; e < enemies.count; e++) {
       if (enemies.hp[e] <= 0) continue;
       const dy = enemies.y[e] - my;
-      if (dy >= -20) continue; // uniquement devant
+      if (dy >= -20 || dy < reach) continue; // uniquement devant, à portée
       const dx = enemies.x[e] - mx;
       if (dx > aimRange || dx < -aimRange) continue;
       const d2 = dx * dx + dy * dy;
@@ -182,7 +185,7 @@ export class BulletPool {
     for (const boss of bosses.list) {
       if (!boss.alive || boss.hp <= 0) continue;
       const dy = boss.y - my;
-      if (dy >= -20) continue;
+      if (dy >= -20 || dy < reach) continue;
       const dx = boss.x - mx;
       const range = aimRange + B.BOSS_RADIUS; // grosse cible, grand cône
       if (dx > range || dx < -range) continue;
@@ -198,7 +201,7 @@ export class BulletPool {
     for (const crate of crates.list) {
       if (crate.dead) continue;
       const dy = crate.cy - my;
-      if (dy >= -20) continue;
+      if (dy >= -20 || dy < reach) continue;
       // point visé : le bord de la caisse le plus proche du canon
       const tx = clamp(mx, crate.cx - B.CRATE_HALF_W + 8, crate.cx + B.CRATE_HALF_W - 8);
       const dx = tx - mx;

@@ -11,7 +11,9 @@ export const LANE_CENTER = 270;
 // Défilement / caméra
 export const SCROLL_SPEED = 130;
 export const SPAWN_AHEAD = 900; // distance d'avance à laquelle le spawner déclenche les événements
-export const CULL_AHEAD = 920; // au-delà : balles détruites
+// Les balles meurent AU BORD de l'écran (écran visible = SQUAD_SCREEN_Y devant
+// l'escouade) : rien ne doit mourir hors champ, sinon les vagues arrivent pré-tuées.
+export const CULL_AHEAD = 795;
 export const CULL_BEHIND = 200; // en-deçà derrière l'escouade : entités détruites
 
 // Escouade
