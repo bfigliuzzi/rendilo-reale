@@ -47,7 +47,9 @@ export class Hud {
       (stats.dmgBuff > 0 ? ` 🔥×2 ${Math.ceil(stats.dmgBuff)}s` : '') +
       (stats.shieldBuff > 0 ? ` 🛡 ${Math.ceil(stats.shieldBuff)}s` : '') +
       (stats.droneBuff > 0 ? ` ✈ ${Math.ceil(stats.droneBuff)}s` : '') +
-      (stats.goldBuff > 0 ? ` 💰×2 ${Math.ceil(stats.goldBuff)}s` : '');
+      (stats.goldBuff > 0 ? ` 💰×2 ${Math.ceil(stats.goldBuff)}s` : '') +
+      // riposte adaptative : rendre visible que le monde durcit face à la masse
+      (stats.threat > 1.05 ? ` ⚠️ riposte ×${stats.threat.toFixed(1)}` : '');
     this.statsEl.innerHTML = `<span class="big">⚔ ${stats.squad}</span><br>💰 ${stats.gold} · ☠ ${stats.kills}<br>${stats.dist} m${buffs ? `<br><span class="buffs">${buffs}</span>` : ''}`;
   }
 }

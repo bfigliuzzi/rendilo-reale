@@ -19,6 +19,7 @@ export interface SpawnTargets {
   spawnBoss: (ev: Extract<LevelEvent, { type: 'boss' }>) => void;
   spawnMine: (ev: Extract<LevelEvent, { type: 'mine' }>) => void;
   onFinishLine: (at: number) => void;
+  pressureHpMul: () => number; // riposte adaptative : ×PV appliqué au moment du spawn
 }
 
 /**
@@ -72,7 +73,7 @@ export class Spawner {
 
   private spawnHorde(ev: Extract<LevelEvent, { type: 'horde' }>): void {
     const kind = KIND_INDEX[ev.kind];
-    const hpMul = ev.hpMul ?? this.level.hpMul ?? 1;
+    const hpMul = (ev.hpMul ?? this.level.hpMul ?? 1) * this.targets.pressureHpMul();
     const spacing = kind === 2 || kind === 5 ? 44 : 34;
     const width = ev.width ?? 300;
     const baseY = -ev.at;

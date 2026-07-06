@@ -55,6 +55,14 @@ l'Endurance (PV/soldat) absorbe pleinement le contact ordinaire mais est PLAFONN
 `VITALITY_HEAVY_CAP` (1,5) contre les sources `heavy` (missiles, mines, explosions,
 lances, bolts, contacts boss/caisse) : les dangers esquivables doivent rester des
 menaces à tout niveau de méta. Toute nouvelle source de dégâts doit choisir son canal.
+**Riposte adaptative** (anti-steamroll) : au-delà de `PRESSURE_SQUAD_REF` (130) soldats,
+`world.pressure = log2(effectif/réf)` fait monter les PV ennemis/boss/caisses au spawn
+(`pressureHpMul`, +45 %/doublement, plafonné ×2,6), rend les plafonds de pertes lourdes
+proportionnels à la masse (`world.heavyCap`) et accélère les missiles. Volontairement
+SOUS-proportionnelle au DPS : grossir reste rentable, mais plus auto-win. Rien ne change
+sous la référence — la bande d'équilibrage N1/N2 n'est pas affectée. Toute nouvelle
+source de PV spawnés ou de pertes plafonnées doit passer par ces deux helpers. Affichée
+au HUD (`⚠️ riposte ×N`).
 
 ## Invariants d'architecture
 

@@ -33,6 +33,7 @@ export interface WorldStats {
   shieldBuff: number;
   droneBuff: number;
   goldBuff: number;
+  threat: number; // multiplicateur de riposte adaptative (1 = escouade sous la masse critique)
 }
 
 export interface RunResult {
@@ -95,9 +96,10 @@ export class World {
   private endTimer = 0;
   private fireworkT = 0;
   private pendingResult: RunResult | null = null;
+  private pressure = 0; // doublements d'effectif au-delà de PRESSURE_SQUAD_REF (0 = aucun)
   private readonly statsObj: WorldStats = {
     squad: 0, kills: 0, dist: 0, gold: 0, bullets: 0, enemies: 0,
-    dmgBuff: 0, shieldBuff: 0, droneBuff: 0, goldBuff: 0,
+    dmgBuff: 0, shieldBuff: 0, droneBuff: 0, goldBuff: 0, threat: 1,
   };
 
   constructor(
@@ -131,7 +133,7 @@ export class World {
     this.collisions.onBossHit = () => this.sfx.bossHit();
     this.collisions.onKamikaze = (x, y) => {
       const kills = Math.min(
-        B.KAMIKAZE_KILLS_MAX,
+        this.heavyCap(B.KAMIKAZE_KILLS_MAX),
         Math.max(2, Math.ceil(this.squad.logical * B.KAMIKAZE_KILLS_RATIO)),
       );
       this.explode(x, y, B.KAMIKAZE_RADIUS, kills);
@@ -146,7 +148,7 @@ export class World {
       if (boss.final) this.finalBossDown = true;
     };
     this.bosses.onContact = (kills) => {
-      const losses = Math.max(2, kills - this.playerStats.contactShield);
+      const losses = Math.max(2, this.heavyCap(kills) - this.playerStats.contactShield);
       this.squad.loseSoldiers(losses, true);
       this.fx.shake(9);
       this.sfx.bossContact();
@@ -155,7 +157,7 @@ export class World {
     this.bosses.onLanceHit = (x, y) => {
       const losses = Math.max(
         2,
-        Math.min(B.LANCE_KILLS_MAX, Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO)) -
+        Math.min(this.heavyCap(B.LANCE_KILLS_MAX), Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO)) -
           this.playerStats.contactShield,
       );
       this.squad.loseSoldiers(losses, true);
@@ -165,7 +167,7 @@ export class World {
     };
     this.mines.onTrigger = (x, y) => {
       const kills = Math.min(
-        B.MINE_KILLS_MAX,
+        this.heavyCap(B.MINE_KILLS_MAX),
         Math.max(2, Math.ceil(this.squad.logical * B.MINE_KILLS_RATIO)),
       );
       this.explode(x, y, B.MINE_RADIUS, kills);
@@ -173,7 +175,10 @@ export class World {
     this.missiles.onWarn = () => this.sfx.missileWarn();
     this.missiles.onImpact = (x, y) => {
       // pertes proportionnelles : une frappe ampute sans annihiler une petite escouade
-      const kills = Math.min(B.MISSILE_KILLS, Math.max(2, Math.ceil(this.squad.logical * 0.25)));
+      const kills = Math.min(
+        this.heavyCap(B.MISSILE_KILLS),
+        Math.max(2, Math.ceil(this.squad.logical * 0.25)),
+      );
       this.explode(x, y, B.MISSILE_RADIUS, kills);
     };
   }
@@ -201,6 +206,7 @@ export class World {
     this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
     this.endTimer = 0;
     this.pendingResult = null;
+    this.pressure = 0;
     this.layers.ground.texture = this.atlas.grounds[def.biome ?? 0];
     this.crates.contactKills = Math.max(1, B.CRATE_CONTACT_KILLS - playerStats.contactShield);
     this.squad.reset(
@@ -211,10 +217,12 @@ export class World {
     this.spawner = new Spawner(def, {
       enemies: this.enemies,
       spawnGates: (ev) => this.gates.spawn(ev.at, ev.left, ev.right),
-      spawnCrate: (ev) => this.crates.spawn(ev.at, ev.hp, ev.xNorm, ev.variant),
-      spawnBoss: (ev) => this.bosses.spawn(ev.at, ev.hp, ev.final ?? false),
+      // la riposte adaptative gonfle aussi les PV des caisses et des boss au spawn
+      spawnCrate: (ev) => this.crates.spawn(ev.at, ev.hp * this.pressureHpMul, ev.xNorm, ev.variant),
+      spawnBoss: (ev) => this.bosses.spawn(ev.at, ev.hp * this.pressureHpMul, ev.final ?? false),
       spawnMine: (ev) => this.mines.spawn(ev.at, ev.xNorm),
       onFinishLine: (at) => this.placeFinishLine(at),
+      pressureHpMul: () => this.pressureHpMul,
     });
     this.state = 'playing';
   }
@@ -262,6 +270,16 @@ export class World {
     );
 
     this.squad.update(dt, this.input.consumeDX());
+    // riposte adaptative : mesurée AVANT le spawn — les hordes naissent calibrées
+    // sur la masse actuelle ; le contact caisse suit aussi l'effectif
+    this.pressure =
+      this.squad.logical > B.PRESSURE_SQUAD_REF
+        ? Math.log2(this.squad.logical / B.PRESSURE_SQUAD_REF)
+        : 0;
+    this.crates.contactKills = Math.max(
+      1,
+      this.heavyCap(B.CRATE_CONTACT_KILLS) - this.playerStats.contactShield,
+    );
     spawner.update(this.dist);
     const dpsMul = this.playerStats.dpsMul * (dmgActive ? B.BUFF_DMG_MUL : 1);
     if (
@@ -289,7 +307,7 @@ export class World {
     this.bolts.update(dt, this.squad, this.dist, (x, y) => {
       const losses = Math.max(
         1,
-        Math.min(B.BOLT_KILLS_MAX, Math.ceil(this.squad.logical * B.BOLT_KILLS_RATIO)) -
+        Math.min(this.heavyCap(B.BOLT_KILLS_MAX), Math.ceil(this.squad.logical * B.BOLT_KILLS_RATIO)) -
           this.playerStats.contactShield,
       );
       this.squad.loseSoldiers(losses, true);
@@ -353,7 +371,22 @@ export class World {
     s.shieldBuff = Math.max(0, this.shieldUntil - this.time);
     s.droneBuff = Math.max(0, this.droneUntil - this.time);
     s.goldBuff = Math.max(0, this.goldUntil - this.time);
+    s.threat = this.pressureHpMul;
     return s;
+  }
+
+  /** Multiplicateur de PV de la riposte adaptative (1 sous la masse critique, plafonné). */
+  private get pressureHpMul(): number {
+    return Math.min(B.PRESSURE_HP_MAX, 1 + B.PRESSURE_HP_PER_DOUBLING * this.pressure);
+  }
+
+  /**
+   * Plafond de pertes lourdes suivant la masse : fixe sous PRESSURE_SQUAD_REF
+   * (invariant plancher/plafond intact pour les petites escouades), proportionnel
+   * au-delà — une mine doit rester une amputation en %, pas un forfait cosmétique.
+   */
+  private heavyCap(base: number): number {
+    return Math.ceil(base * Math.max(1, this.squad.logical / B.PRESSURE_SQUAD_REF));
   }
 
   /** Souffle : tue les ennemis dans le rayon, blesse boss et escouade proches. */
@@ -387,7 +420,7 @@ export class World {
       case 'explosive': {
         // pertes proportionnelles : le souffle ampute, il n'annihile pas une petite escouade
         const kills = Math.min(
-          B.CRATE_EXPLOSIVE_KILLS,
+          this.heavyCap(B.CRATE_EXPLOSIVE_KILLS),
           Math.max(2, Math.ceil(this.squad.logical * 0.3)),
         );
         this.explode(crate.cx, crate.cy, B.EXPLOSION_RADIUS, kills);
@@ -467,11 +500,14 @@ export class World {
       this.missiles.update(dt);
       return;
     }
+    // la riposte accélère les frappes quand l'escouade dépasse la masse critique
+    const haste = 1 + B.PRESSURE_MISSILE_RATE * this.pressure;
     const gateAhead = this.gates.nextGateDistance(this.dist);
     if (gateAhead !== null && gateAhead < B.MISSILE_GATE_RANGE) {
       this.gateMissileT -= dt;
       if (this.gateMissileT <= 0) {
-        this.gateMissileT = rand(...B.MISSILE_GATE_INTERVAL) * (this.level?.missileIntervalMul ?? 1);
+        this.gateMissileT =
+          (rand(...B.MISSILE_GATE_INTERVAL) * (this.level?.missileIntervalMul ?? 1)) / haste;
         // champ de mines devant la porte : positions fixes sur la voie, à traverser
         this.missiles.spawn(
           rand(B.LANE_MIN_X + 20, B.LANE_MAX_X - 20),
@@ -481,10 +517,11 @@ export class World {
     } else {
       this.gateMissileT = Math.min(this.gateMissileT, 0.4);
     }
-    if (this.dist > B.MISSILE_AMBIENT_FROM) {
+    // sous pression, les frappes ambiantes commencent aussi plus tôt dans le niveau
+    if (this.dist > B.MISSILE_AMBIENT_FROM / haste) {
       this.ambientMissileT -= dt;
       if (this.ambientMissileT <= 0) {
-        this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
+        this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL) / haste;
         // frappe ambiante : celle-là vise le joueur — rare, mais elle réveille
         const x = clamp(this.squad.x + rand(-90, 90), B.LANE_MIN_X, B.LANE_MAX_X);
         this.missiles.spawn(x, -this.dist - rand(60, 200));
