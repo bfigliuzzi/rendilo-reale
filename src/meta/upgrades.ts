@@ -55,7 +55,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     name: 'Endurance',
     maxLevel: 6,
     cost: (l) => Math.round(150 * Math.pow(1.9, l)),
-    effectLabel: (l) => `${1 + 0.5 * l} PV par soldat`,
+    effectLabel: (l) => `${1 + 0.5 * l} PV par soldat (plafonné à 1,5 contre explosions/impacts)`,
   },
 ];
 

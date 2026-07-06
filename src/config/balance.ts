@@ -31,6 +31,10 @@ export const SQUAD_SCALE_LOG = 0.4;
 export const SQUAD_SCALE_MAX = 1.8;
 export const SOLDIER_RADIUS = 9;
 export const DRAG_SENSITIVITY = 1.2;
+// L'Endurance est PLAFONNÉE contre les dégâts lourds (missiles, mines, explosions,
+// lances, contacts boss/caisse) : tanker l'attrition de contact oui, neutraliser
+// les dangers télégraphiés que le skill doit éviter, non.
+export const VITALITY_HEAVY_CAP = 1.5;
 
 // Tir — le DPS est découplé du nombre de balles : la cadence visuelle sature,
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.

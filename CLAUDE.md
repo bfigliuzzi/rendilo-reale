@@ -50,6 +50,11 @@ sinon elle devient quasi intouchable dès qu'il y a des ennemis à l'écran.
 **Dégâts de zone sur l'escouade** (missiles, explosions, lances) : toujours proportionnels
 à l'effectif avec un plancher/plafond — jamais un forfait fixe, qui one-shot les petites
 escouades en début de niveau.
+**Pertes de soldats** : TOUTES les sources passent par `squad.loseSoldiers(n, heavy?)` —
+l'Endurance (PV/soldat) absorbe pleinement le contact ordinaire mais est PLAFONNÉE à
+`VITALITY_HEAVY_CAP` (1,5) contre les sources `heavy` (missiles, mines, explosions,
+lances, bolts, contacts boss/caisse) : les dangers esquivables doivent rester des
+menaces à tout niveau de méta. Toute nouvelle source de dégâts doit choisir son canal.
 
 ## Invariants d'architecture
 

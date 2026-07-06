@@ -147,7 +147,7 @@ export class World {
     };
     this.bosses.onContact = (kills) => {
       const losses = Math.max(2, kills - this.playerStats.contactShield);
-      this.squad.loseSoldiers(losses);
+      this.squad.loseSoldiers(losses, true);
       this.fx.shake(9);
       this.sfx.bossContact();
     };
@@ -158,7 +158,7 @@ export class World {
         Math.min(B.LANCE_KILLS_MAX, Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO)) -
           this.playerStats.contactShield,
       );
-      this.squad.loseSoldiers(losses);
+      this.squad.loseSoldiers(losses, true);
       this.fx.burst(x, y, { count: 16, color: 0xef4444, speed: 220, life: 0.4, size: 1.3 });
       this.fx.shake(6);
       this.sfx.lanceHit();
@@ -292,7 +292,7 @@ export class World {
         Math.min(B.BOLT_KILLS_MAX, Math.ceil(this.squad.logical * B.BOLT_KILLS_RATIO)) -
           this.playerStats.contactShield,
       );
-      this.squad.loseSoldiers(losses);
+      this.squad.loseSoldiers(losses, true);
       this.fx.burst(x, y, { count: 10, color: 0xa855f7, speed: 180, life: 0.35 });
       this.sfx.lanceHit();
     });
@@ -378,7 +378,7 @@ export class World {
     const sdy = -this.dist - y;
     const sr = radius + 40 * this.squad.visualScale;
     if (sdx * sdx + sdy * sdy < sr * sr) {
-      this.squad.loseSoldiers(Math.max(2, squadKills - this.playerStats.contactShield));
+      this.squad.loseSoldiers(Math.max(2, squadKills - this.playerStats.contactShield), true);
     }
   }
 

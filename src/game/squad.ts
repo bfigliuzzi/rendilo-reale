@@ -73,7 +73,8 @@ export class Squad {
   private startCount = B.START_SQUAD;
   private comp = { rifle: 1, sniper: 0, art: 0 };
   private hpPerSoldier = 1;
-  private partialDamage = 0; // dégâts accumulés pas encore convertis en pertes
+  private partialDamage = 0; // dégâts « contact » accumulés pas encore convertis en pertes
+  private partialHeavy = 0; // idem pour les dégâts lourds (absorption plafonnée)
   private readonly classTex: Texture[];
 
   constructor(container: Container, labels: Container, atlas: Atlas) {
@@ -109,6 +110,7 @@ export class Squad {
     if (comp) this.comp = comp;
     this.hpPerSoldier = hpPerSoldier;
     this.partialDamage = 0;
+    this.partialHeavy = 0;
     this.logical = startCount;
     this.x = this.prevX = B.LANE_CENTER;
     this.muzzleIdx = 0;
@@ -137,15 +139,28 @@ export class Squad {
   /**
    * Toutes les sources de pertes passent ici, en « unités de dégâts » (1 = un
    * contact). L'Endurance (PV par soldat) absorbe : à 2 PV, deux contacts
-   * coûtent un seul soldat. Le reliquat s'accumule entre les coups.
+   * coûtent un seul soldat ; le reliquat s'accumule entre les coups.
+   * `heavy` (missiles, mines, explosions, lances, contacts boss/caisse) :
+   * l'absorption est plafonnée à VITALITY_HEAVY_CAP — les dangers esquivables
+   * restent des menaces quel que soit le niveau d'Endurance.
    */
-  loseSoldiers(n: number): void {
+  loseSoldiers(n: number, heavy = false): void {
     if (n <= 0 || this.logical <= 0) return;
     if (this.shielded) return; // bouclier temporaire : aucune perte
+    const hp = heavy ? Math.min(this.hpPerSoldier, B.VITALITY_HEAVY_CAP) : this.hpPerSoldier;
+    if (heavy) {
+      this.partialHeavy += n;
+      const lost = Math.floor(this.partialHeavy / hp);
+      if (lost <= 0) return;
+      this.partialHeavy -= lost * hp;
+      this.setLogical(this.logical - lost);
+      this.onLost(lost);
+      return;
+    }
     this.partialDamage += n;
-    const lost = Math.floor(this.partialDamage / this.hpPerSoldier);
+    const lost = Math.floor(this.partialDamage / hp);
     if (lost <= 0) return;
-    this.partialDamage -= lost * this.hpPerSoldier;
+    this.partialDamage -= lost * hp;
     this.setLogical(this.logical - lost);
     this.onLost(lost);
   }

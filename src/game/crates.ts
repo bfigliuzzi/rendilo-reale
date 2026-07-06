@@ -135,7 +135,7 @@ export class Crates {
       const inBand = frontY <= crate.cy + B.CRATE_HALF_H && frontY >= crate.cy - B.CRATE_HALF_H;
       if (inBand && Math.abs(squad.x - crate.cx) < B.CRATE_HALF_W + 30) {
         // contact : les caisses PV blessent, les bonus se perdent, l'explosive détone (géré par onBreak)
-        if (crate.variant === 'hp') squad.loseSoldiers(this.contactKills);
+        if (crate.variant === 'hp') squad.loseSoldiers(this.contactKills, true);
         crate.onBreak(crate, false);
         crate.destroySelf();
         anyDead = true;
