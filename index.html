@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Rendilo Reale — Horde POC</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%233b82f6'/></svg>" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #0b1016;
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #stage { position: fixed; left: 50%; top: 50%; }
+    #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+    .hud-box {
+      position: absolute; top: max(8px, env(safe-area-inset-top));
+      font-size: 12px; line-height: 1.5;
+      background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 6px 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    #hud-perf { left: 8px; color: #9fe0a0; font-family: ui-monospace, monospace; }
+    #hud-stats { right: 8px; text-align: right; }
+    #hud-stats .big { font-size: 18px; font-weight: 800; }
+    #overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(5, 10, 18, 0.72);
+      pointer-events: auto; cursor: pointer;
+      text-align: center; gap: 12px;
+    }
+    #overlay[hidden] { display: none; }
+    #overlay-title { font-size: 44px; font-weight: 900; letter-spacing: 2px; }
+    #overlay-sub { font-size: 16px; opacity: 0.9; white-space: pre-line; }
+    #overlay-hint { font-size: 14px; opacity: 0.6; margin-top: 18px; animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.25; } }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <div id="hud-perf" class="hud-box"></div>
+    <div id="hud-stats" class="hud-box"></div>
+    <div id="overlay" hidden>
+      <div id="overlay-title"></div>
+      <div id="overlay-sub"></div>
+      <div id="overlay-hint">Touchez pour rejouer</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
