@@ -140,6 +140,11 @@ export class Sfx {
     this.tone(140, 0.3, { type: 'square', vol: 0.08, endFreq: 60 });
   }
 
+  boltFire(): void {
+    if (this.throttled('bolt', 180)) return;
+    this.tone(950, 0.08, { type: 'square', vol: 0.035, endFreq: 400 });
+  }
+
   lanceFire(): void {
     if (this.throttled('lance', 150)) return;
     this.noise(0.12, 0.06, 2400);

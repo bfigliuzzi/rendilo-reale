@@ -9,6 +9,15 @@ const STROKE_BY_VARIANT: Record<CrateVariant, number> = {
   explosive: 0x450a0a,
   damage: 0x92400e,
   shield: 0x92400e,
+  drone: 0x92400e,
+  gold: 0x92400e,
+};
+
+const BONUS_TAG: Partial<Record<CrateVariant, string>> = {
+  damage: '×2 🔥',
+  shield: '🛡',
+  drone: '✈',
+  gold: '💰×2',
 };
 
 function textureFor(variant: CrateVariant, atlas: Atlas): Sprite {
@@ -48,7 +57,7 @@ export class Crate {
     this.sprite.position.set(cx, cy);
     spriteParent.addChild(this.sprite);
     // les bonus affichent leur récompense, les autres leurs PV
-    const bonusTag = variant === 'damage' ? '×2 🔥' : variant === 'shield' ? '🛡' : '';
+    const bonusTag = BONUS_TAG[variant] ?? '';
     this.label = new Text({
       text: bonusTag ? `${this.shownHp} ${bonusTag}` : String(this.shownHp),
       style: {
@@ -82,7 +91,7 @@ export class Crate {
     if (shown !== this.shownHp) {
       // le re-layout d'un Text coûte cher : uniquement quand l'entier affiché change
       this.shownHp = shown;
-      const bonusTag = this.variant === 'damage' ? '×2 🔥' : this.variant === 'shield' ? '🛡' : '';
+      const bonusTag = BONUS_TAG[this.variant] ?? '';
       this.label.text = bonusTag ? `${shown} ${bonusTag}` : String(shown);
     }
   }

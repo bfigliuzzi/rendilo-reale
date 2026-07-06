@@ -15,6 +15,7 @@ import { type Crate, Crates } from './crates';
 import { EnemyPool } from './enemies';
 import { Gates } from './gates';
 import { Missiles } from './missiles';
+import { ProjectilePool } from './projectiles';
 import { Spawner } from './spawner';
 import { Squad } from './squad';
 
@@ -27,8 +28,10 @@ export interface WorldStats {
   gold: number;
   bullets: number;
   enemies: number;
-  dmgBuff: number; // secondes de buff dégâts restantes (0 si inactif)
+  dmgBuff: number; // secondes de buff restantes (0 si inactif)
   shieldBuff: number;
+  droneBuff: number;
+  goldBuff: number;
 }
 
 export interface RunResult {
@@ -53,9 +56,11 @@ export class World {
   readonly bullets: BulletPool;
   readonly enemies: EnemyPool;
   readonly bosses: Bosses;
+  readonly bolts: ProjectilePool; // bolts des snipers (public : bot de test)
   private readonly gates: Gates;
   private readonly crates: Crates;
   private readonly missiles: Missiles;
+  private readonly droneSprite: Sprite;
   private readonly collisions = new Collisions();
   private spawner: Spawner | null = null;
   private level: LevelDef | null = null;
@@ -67,13 +72,17 @@ export class World {
   private time = 0;
   private dmgBuffUntil = 0;
   private shieldUntil = 0;
+  private droneUntil = 0;
+  private goldUntil = 0;
+  private droneFireAcc = 0;
   private gateMissileT = 0;
   private ambientMissileT = 0;
   private endTimer = 0;
   private fireworkT = 0;
   private pendingResult: RunResult | null = null;
   private readonly statsObj: WorldStats = {
-    squad: 0, kills: 0, dist: 0, gold: 0, bullets: 0, enemies: 0, dmgBuff: 0, shieldBuff: 0,
+    squad: 0, kills: 0, dist: 0, gold: 0, bullets: 0, enemies: 0,
+    dmgBuff: 0, shieldBuff: 0, droneBuff: 0, goldBuff: 0,
   };
 
   constructor(
@@ -89,7 +98,12 @@ export class World {
     this.gates = new Gates(layers.gates, atlas);
     this.crates = new Crates(layers.crates, layers.labels, atlas);
     this.bosses = new Bosses(layers.crates, atlas);
+    this.bolts = new ProjectilePool(B.MAX_BOLTS, layers.crates, atlas.bolt, B.BOLT_SPEED);
     this.missiles = new Missiles(layers.crates, atlas);
+    this.droneSprite = new Sprite(atlas.drone);
+    this.droneSprite.anchor.set(0.5);
+    this.droneSprite.visible = false;
+    layers.squad.addChild(this.droneSprite);
 
     // câblage du juice : chaque système remonte ses événements, le monde les traduit en fx/sfx
     this.squad.onLost = (n) => {
@@ -99,11 +113,18 @@ export class World {
     this.crates.onHit = () => this.sfx.crateHit();
     this.crates.onBreak = (crate, byBullet) => this.handleCrateBreak(crate, byBullet);
     this.collisions.onBossHit = () => this.sfx.bossHit();
+    this.collisions.onKamikaze = (x, y) => {
+      const kills = Math.min(
+        B.KAMIKAZE_KILLS_MAX,
+        Math.max(2, Math.ceil(this.squad.logical * B.KAMIKAZE_KILLS_RATIO)),
+      );
+      this.explode(x, y, B.KAMIKAZE_RADIUS, kills);
+    };
     this.bosses.onDeath = (boss, x, y) => {
       this.fx.burst(x, y, { count: 46, color: 0xef4444, speed: 340, life: 0.7, size: 1.7 });
       this.fx.shake(12);
       this.sfx.bossDie();
-      this.goldF += B.GOLD_PER_BOSS * this.playerStats.lootMul;
+      this.addGold(B.GOLD_PER_BOSS);
       this.kills++;
       if (boss.final) this.finalBossDown = true;
     };
@@ -147,6 +168,9 @@ export class World {
     this.time = 0;
     this.dmgBuffUntil = 0;
     this.shieldUntil = 0;
+    this.droneUntil = 0;
+    this.goldUntil = 0;
+    this.droneFireAcc = 0;
     this.gateMissileT = 0.4;
     this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
     this.endTimer = 0;
@@ -198,8 +222,12 @@ export class World {
 
     // buffs temporaires
     const dmgActive = this.time < this.dmgBuffUntil;
+    const droneActive = this.time < this.droneUntil;
+    const goldActive = this.time < this.goldUntil;
     this.squad.setShielded(this.time < this.shieldUntil);
-    this.squad.setBadge(`${dmgActive ? '🔥' : ''}${this.squad.shielded ? '🛡' : ''}`);
+    this.squad.setBadge(
+      `${dmgActive ? '🔥' : ''}${this.squad.shielded ? '🛡' : ''}${droneActive ? '✈' : ''}${goldActive ? '💰' : ''}`,
+    );
 
     this.squad.update(dt, this.input.consumeDX());
     spawner.update(this.dist);
@@ -209,13 +237,27 @@ export class World {
     ) {
       this.sfx.shoot();
     }
+    this.updateDrone(dt, droneActive, dpsMul);
     this.bullets.update(dt, -this.dist - B.CULL_AHEAD, -this.dist + B.CULL_BEHIND);
-    this.enemies.update(dt, this.squad.x, -this.dist + B.CULL_BEHIND);
+    this.enemies.update(dt, this.squad.x, -this.dist, -this.dist + B.CULL_BEHIND, (x, y, angle) => {
+      this.bolts.fire(x, y, angle);
+      this.sfx.boltFire();
+    });
+    this.bolts.update(dt, this.squad, this.dist, (x, y) => {
+      const losses = Math.max(
+        1,
+        Math.min(B.BOLT_KILLS_MAX, Math.ceil(this.squad.logical * B.BOLT_KILLS_RATIO)) -
+          this.playerStats.contactShield,
+      );
+      this.squad.loseSoldiers(losses);
+      this.fx.burst(x, y, { count: 10, color: 0xa855f7, speed: 180, life: 0.35 });
+      this.sfx.lanceHit();
+    });
     this.collisions.run(this.dist, this.bullets, this.enemies, this.squad, this.crates, this.bosses);
     this.updateMissiles(dt);
     this.enemies.sweepDead((x, y) => {
       this.kills++;
-      this.goldF += B.GOLD_PER_KILL * this.playerStats.lootMul;
+      this.addGold(B.GOLD_PER_KILL);
       this.fx.burst(x, y, { count: 5, color: 0xf87171, speed: 150, life: 0.3 });
       this.sfx.enemyDie();
     });
@@ -252,6 +294,7 @@ export class World {
     this.bullets.syncRender(alpha);
     this.enemies.syncRender(alpha);
     this.bosses.renderSync(alpha);
+    this.bolts.syncRender(alpha);
   }
 
   stats(): WorldStats {
@@ -264,6 +307,8 @@ export class World {
     s.enemies = this.enemies.count;
     s.dmgBuff = Math.max(0, this.dmgBuffUntil - this.time);
     s.shieldBuff = Math.max(0, this.shieldUntil - this.time);
+    s.droneBuff = Math.max(0, this.droneUntil - this.time);
+    s.goldBuff = Math.max(0, this.goldUntil - this.time);
     return s;
   }
 
@@ -318,11 +363,53 @@ export class World {
           this.sfx.powerup();
         }
         break;
+      case 'drone':
+        if (byBullet) {
+          this.droneUntil = this.time + B.BUFF_DRONE_DURATION;
+          this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0x38bdf8, speed: 240, life: 0.5, size: 1.4 });
+          this.sfx.powerup();
+        }
+        break;
+      case 'gold':
+        if (byBullet) {
+          this.goldUntil = this.time + B.BUFF_GOLD_DURATION;
+          this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0xfbbf24, speed: 240, life: 0.5, size: 1.4 });
+          this.sfx.powerup();
+        }
+        break;
       default:
         this.fx.burst(crate.cx, crate.cy, { count: 18, color: 0xb98a4a, speed: 220, life: 0.5, size: 1.3 });
         this.fx.shake(byBullet ? 4 : 7);
         this.sfx.crateBreak();
-        if (byBullet) this.goldF += B.GOLD_PER_CRATE * this.playerStats.lootMul;
+        if (byBullet) this.addGold(B.GOLD_PER_CRATE);
+    }
+  }
+
+  /** Tout l'or passe par ici : bonus Butin de la méta + buff or ×2 éventuel. */
+  private addGold(amount: number): void {
+    const goldMul = this.time < this.goldUntil ? B.BUFF_GOLD_MUL : 1;
+    this.goldF += amount * this.playerStats.lootMul * goldMul;
+  }
+
+  /** Drone allié : plane au-dessus de l'escouade et ajoute son propre tir visé. */
+  private updateDrone(dt: number, active: boolean, dpsMul: number): void {
+    this.droneSprite.visible = active;
+    if (!active) return;
+    const x = this.squad.x + Math.sin(this.time * 2.4) * 46;
+    const y = -this.dist - 64;
+    this.droneSprite.position.set(x, y);
+    const droneDps = this.squad.logical * B.SOLDIER_DPS * dpsMul * B.BUFF_DRONE_DPS_RATIO;
+    this.droneFireAcc += B.BUFF_DRONE_FIRE_RATE * dt;
+    while (this.droneFireAcc >= 1) {
+      this.droneFireAcc -= 1;
+      this.bullets.fireAimed(
+        x,
+        y - 10,
+        droneDps / B.BUFF_DRONE_FIRE_RATE,
+        this.enemies,
+        this.bosses,
+        this.crates,
+      );
     }
   }
 
@@ -409,10 +496,12 @@ export class World {
     this.gates.reset();
     this.crates.reset();
     this.bosses.reset();
+    this.bolts.clear();
     this.missiles.reset();
     this.fx.clear();
     this.squad.setShielded(false);
     this.squad.setBadge('');
+    this.droneSprite.visible = false;
     this.spawner = null;
   }
 

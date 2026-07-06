@@ -3,7 +3,14 @@ import type { EnemyKind, LevelDef, LevelEvent } from '../config/levels';
 import { clamp, rand } from '../core/math';
 import type { EnemyPool } from './enemies';
 
-const KIND_INDEX: Record<EnemyKind, number> = { grunt: 0, runner: 1, brute: 2 };
+const KIND_INDEX: Record<EnemyKind, number> = {
+  grunt: 0,
+  runner: 1,
+  brute: 2,
+  kamikaze: 3,
+  sniper: 4,
+  elite: 5,
+};
 
 export interface SpawnTargets {
   enemies: EnemyPool;
@@ -62,7 +69,7 @@ export class Spawner {
   private spawnHorde(ev: Extract<LevelEvent, { type: 'horde' }>): void {
     const kind = KIND_INDEX[ev.kind];
     const hpMul = ev.hpMul ?? this.level.hpMul ?? 1;
-    const spacing = kind === 2 ? 44 : 34;
+    const spacing = kind === 2 || kind === 5 ? 44 : 34;
     const width = ev.width ?? 300;
     const baseY = -ev.at;
     const cx = B.LANE_CENTER;

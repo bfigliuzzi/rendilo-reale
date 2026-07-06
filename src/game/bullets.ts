@@ -104,6 +104,18 @@ export class BulletPool {
     return fired;
   }
 
+  /** Tir unitaire avec aim-assist depuis un point arbitraire (drone allié…). */
+  fireAimed(
+    x: number,
+    y: number,
+    dmg: number,
+    enemies: EnemyPool,
+    bosses: Bosses,
+    crates: Crates,
+  ): void {
+    this.spawn(x, y, this.aimVX(x, y, enemies, bosses, crates), -B.BULLET_SPEED, dmg);
+  }
+
   /**
    * Aim-assist : vise l'ennemi (ou le boss) vivant le plus proche dans le cône
    * frontal — une horde large se fait balayer sur toute sa largeur au lieu de flanquer.

@@ -20,6 +20,7 @@ export class EnemyPool {
   readonly hp: Float32Array;
   readonly radius: Float32Array;
   readonly kind: Uint8Array;
+  private readonly fireT: Float32Array; // snipers : compte à rebours avant le prochain bolt
   private readonly particles: Particle[] = [];
 
   constructor(
@@ -35,6 +36,7 @@ export class EnemyPool {
     this.hp = new Float32Array(cap);
     this.radius = new Float32Array(cap);
     this.kind = new Uint8Array(cap);
+    this.fireT = new Float32Array(cap);
     for (let i = 0; i < cap; i++) {
       const p = new Particle({ texture: atlas.enemyByKind[0], x: PARK, y: PARK, anchorX: 0.5, anchorY: 0.5 });
       this.particles.push(p);
@@ -52,7 +54,8 @@ export class EnemyPool {
     this.hp[i] = def.hp * hpMul;
     this.radius[i] = def.radius;
     this.kind[i] = kind;
-    this.particles[i].texture = this.atlas.enemyByKind[kind as 0 | 1 | 2];
+    this.fireT[i] = 1 + Math.random() * 1.5;
+    this.particles[i].texture = this.atlas.enemyByKind[kind];
   }
 
   kill(i: number): void {
@@ -66,14 +69,21 @@ export class EnemyPool {
       this.hp[i] = this.hp[last];
       this.radius[i] = this.radius[last];
       this.kind[i] = this.kind[last];
-      this.particles[i].texture = this.atlas.enemyByKind[this.kind[last] as 0 | 1 | 2];
+      this.fireT[i] = this.fireT[last];
+      this.particles[i].texture = this.atlas.enemyByKind[this.kind[last]];
     }
     const p = this.particles[last];
     p.x = PARK;
     p.y = PARK;
   }
 
-  update(dt: number, squadX: number, bottomY: number): void {
+  update(
+    dt: number,
+    squadX: number,
+    squadY: number,
+    bottomY: number,
+    onSniperShot: (x: number, y: number, angle: number) => void,
+  ): void {
     for (let i = this.count - 1; i >= 0; i--) {
       const def = B.ENEMY_KINDS[this.kind[i]];
       this.prevX[i] = this.x[i];
@@ -83,6 +93,17 @@ export class EnemyPool {
       this.vx[i] += (desired - this.vx[i]) * Math.min(1, dt * 3);
       this.x[i] = clamp(this.x[i] + this.vx[i] * dt, B.LANE_MIN_X - 10, B.LANE_MAX_X + 10);
       this.y[i] += def.speed * dt;
+      if (this.kind[i] === B.KIND_SNIPER && squadY - this.y[i] < B.SNIPER_RANGE) {
+        this.fireT[i] -= dt;
+        if (this.fireT[i] <= 0) {
+          this.fireT[i] = B.SNIPER_INTERVAL[0] + Math.random() * (B.SNIPER_INTERVAL[1] - B.SNIPER_INTERVAL[0]);
+          onSniperShot(
+            this.x[i],
+            this.y[i] + this.radius[i],
+            Math.atan2(squadY - this.y[i], squadX - this.x[i]),
+          );
+        }
+      }
       if (this.y[i] > bottomY) this.kill(i); // passé derrière : cull silencieux
     }
   }

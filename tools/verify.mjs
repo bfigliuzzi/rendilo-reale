@@ -92,11 +92,12 @@ while (Date.now() - start < SECONDS * 1000) {
           lanceThreats.push({ x: b.x + Math.cos(b.aimAngle) * t, keep: 130 });
         }
       }
-      const lp = w.bosses?.lances;
-      for (let i = 0; i < (lp?.count ?? 0); i++) {
-        if (lp.vy[i] > 10) {
-          const t = (squadY - lp.y[i]) / lp.vy[i];
-          if (t > 0) lanceThreats.push({ x: lp.x[i] + lp.vx[i] * t, keep: 130 });
+      for (const lp of [w.bosses?.lances, w.bolts]) {
+        for (let i = 0; i < (lp?.count ?? 0); i++) {
+          if (lp.vy[i] > 10) {
+            const t = (squadY - lp.y[i]) / lp.vy[i];
+            if (t > 0) lanceThreats.push({ x: lp.x[i] + lp.vx[i] * t, keep: 130 });
+          }
         }
       }
       const dangers = strikes.concat(nearCrates, lanceThreats);

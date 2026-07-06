@@ -45,7 +45,9 @@ export class Hud {
     }
     const buffs =
       (stats.dmgBuff > 0 ? ` 🔥×2 ${Math.ceil(stats.dmgBuff)}s` : '') +
-      (stats.shieldBuff > 0 ? ` 🛡 ${Math.ceil(stats.shieldBuff)}s` : '');
+      (stats.shieldBuff > 0 ? ` 🛡 ${Math.ceil(stats.shieldBuff)}s` : '') +
+      (stats.droneBuff > 0 ? ` ✈ ${Math.ceil(stats.droneBuff)}s` : '') +
+      (stats.goldBuff > 0 ? ` 💰×2 ${Math.ceil(stats.goldBuff)}s` : '');
     this.statsEl.innerHTML = `<span class="big">⚔ ${stats.squad}</span><br>💰 ${stats.gold} · ☠ ${stats.kills}<br>${stats.dist} m${buffs ? `<br><span class="buffs">${buffs}</span>` : ''}`;
   }
 }

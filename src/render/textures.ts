@@ -8,10 +8,12 @@ import { Rectangle, Texture } from 'pixi.js';
 export interface Atlas {
   soldier: Texture;
   bullet: Texture;
-  enemyByKind: readonly [Texture, Texture, Texture]; // grunt, runner, brute
+  enemyByKind: readonly Texture[]; // indexé par ENEMY_KINDS : grunt, runner, brute, kamikaze, sniper, élite
   white: Texture; // rect blanc, à teinter (portes, bannières)
   spark: Texture; // disque blanc, à teinter (particules d'effets, marqueurs)
   lance: Texture; // projectile du boss
+  bolt: Texture; // projectile du sniper
+  drone: Texture; // drone allié (caisse bonus)
   crate: Texture; // bois (PV)
   crateExplosive: Texture;
   crateBonus: Texture;
@@ -87,6 +89,34 @@ export function buildAtlas(): Atlas {
   // brute (64,32,32,32) — rouge sombre, double cercle
   circle(ctx, 80, 48, 14.5, '#b91c1c', '#450a0a');
   circle(ctx, 80, 48, 8, '#7f1d1d', '#450a0a');
+  // kamikaze (48,0,20,20) — bombe orange, mèche
+  circle(ctx, 58, 11, 8, '#fb923c', '#9a3412');
+  ctx.fillStyle = '#fde68a';
+  ctx.fillRect(56.5, 1, 3, 5);
+  // sniper (72,0,20,20) — violet, capuche sombre
+  circle(ctx, 82, 10, 8, '#a855f7', '#581c87');
+  circle(ctx, 82, 8, 4.5, '#581c87', '#3b0764');
+  // élite (200,34,28,28) — acier bleuté, anneau blindé
+  circle(ctx, 214, 48, 12.5, '#64748b', '#1e293b');
+  circle(ctx, 214, 48, 7, '#334155', '#0f172a');
+  // bolt du sniper (232,0,10,20) — dard violet
+  ctx.fillStyle = '#a855f7';
+  ctx.beginPath();
+  ctx.roundRect(234, 1, 6, 17, 3);
+  ctx.fill();
+  ctx.fillStyle = '#e9d5ff';
+  ctx.fillRect(235.5, 12, 3, 5);
+  // drone allié (120,130,24,14) — aile bleue
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.moveTo(132, 130);
+  ctx.lineTo(144, 140);
+  ctx.lineTo(132, 137);
+  ctx.lineTo(120, 140);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#0ea5e9';
+  ctx.fillRect(130, 134, 4, 8);
   // blanc (112,0,12,12)
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(112, 0, 12, 12);
@@ -134,10 +164,19 @@ export function buildAtlas(): Atlas {
   return {
     soldier: frame(0, 0, 20, 20),
     bullet: frame(32, 0, 8, 16),
-    enemyByKind: [frame(0, 32, 20, 20), frame(32, 32, 18, 18), frame(64, 32, 32, 32)],
+    enemyByKind: [
+      frame(0, 32, 20, 20), // grunt
+      frame(32, 32, 18, 18), // runner
+      frame(64, 32, 32, 32), // brute
+      frame(48, 0, 20, 20), // kamikaze
+      frame(72, 0, 20, 20), // sniper
+      frame(200, 34, 28, 28), // élite
+    ],
     white: frame(113, 1, 10, 10),
     spark: frame(112, 16, 12, 12),
     lance: frame(200, 0, 12, 30),
+    bolt: frame(232, 0, 10, 20),
+    drone: frame(120, 130, 24, 14),
     crate: frame(0, 64, 96, 56),
     crateExplosive: frame(100, 64, 96, 56),
     crateBonus: frame(0, 124, 96, 56),

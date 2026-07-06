@@ -2,7 +2,7 @@
 // (en px logiques le long de la voie). Le spawner les consomme quand la caméra approche.
 // La campagne et l'endless sont générés dans campaign.ts ; ici : types + niveau stress.
 
-export type EnemyKind = 'grunt' | 'runner' | 'brute';
+export type EnemyKind = 'grunt' | 'runner' | 'brute' | 'kamikaze' | 'sniper' | 'elite';
 
 export interface GateModifier {
   op: 'add' | 'mul';
@@ -12,8 +12,8 @@ export interface GateModifier {
 export type HordePattern = 'grid' | 'blob' | 'stream';
 
 /** hp : bloque et blesse · explosive : souffle au sol (ennemis ET escouade) ·
- *  damage : dégâts ×2 temporaires si détruite · shield : bouclier temporaire si détruite. */
-export type CrateVariant = 'hp' | 'explosive' | 'damage' | 'shield';
+ *  damage/shield/drone/gold : bonus temporaire si détruite au tir (perdu au contact). */
+export type CrateVariant = 'hp' | 'explosive' | 'damage' | 'shield' | 'drone' | 'gold';
 
 export type LevelEvent =
   | {

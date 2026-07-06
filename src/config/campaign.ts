@@ -50,10 +50,12 @@ export function makeCampaignLevel(n: number): LevelDef {
     } else if (roll < 0.3) {
       const hp = Math.round((110 + progress * 280 + n * 60) * rangeOf(rand, 0.8, 1.2));
       const variant = pickWeighted(rand, [
-        ['hp', 0.4],
-        ['explosive', 0.28],
-        ['damage', 0.17],
-        ['shield', 0.15],
+        ['hp', 0.32],
+        ['explosive', 0.26],
+        ['damage', 0.14],
+        ['shield', 0.12],
+        ['drone', 0.09],
+        ['gold', 0.07],
       ] as const);
       if (rand() < 0.4) {
         // paire : une caisse utile flanquée d'une explosive — viser juste compte
@@ -64,17 +66,25 @@ export function makeCampaignLevel(n: number): LevelDef {
       }
     } else {
       const kind = pickWeighted<EnemyKind>(rand, [
-        ['grunt', 0.62],
-        ['runner', 0.28],
-        ['brute', n >= 2 ? 0.14 : 0],
+        ['grunt', 0.55],
+        ['runner', 0.24],
+        ['brute', n >= 2 ? 0.12 : 0],
+        ['kamikaze', n >= 2 ? 0.08 : 0],
+        ['sniper', n >= 3 ? 0.06 : 0],
+        ['elite', n >= 4 ? 0.05 : 0],
       ]);
-      // le poids du niveau porte surtout sur la fin : un début jouable, une fin apocalyptique
       // ×1,5 sur la masse totale, mais chargé vers la fin : début jouable, fin déluge
       const base = 14 + (n - 1) * 4 + progress * (64 + n * 16);
       const count =
         kind === 'brute'
           ? Math.round(4 + n + progress * 12)
-          : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
+          : kind === 'elite'
+            ? Math.round(2 + n * 0.6 + progress * 4)
+            : kind === 'sniper'
+              ? Math.round(2 + n * 0.7)
+              : kind === 'kamikaze'
+                ? Math.round(base * 0.35)
+                : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
       const pattern = pickWeighted(rand, [
         ['grid', 0.4],
         ['blob', 0.35],
@@ -132,22 +142,33 @@ export function makeEndlessLevel(): LevelDef {
       } else if (rand() < 0.15) {
         const hp = Math.round(120 + d / 14);
         const variant = pickWeighted(rand, [
-          ['hp', 0.4],
-          ['explosive', 0.28],
-          ['damage', 0.17],
-          ['shield', 0.15],
+          ['hp', 0.32],
+          ['explosive', 0.26],
+          ['damage', 0.14],
+          ['shield', 0.12],
+          ['drone', 0.09],
+          ['gold', 0.07],
         ] as const);
         evts.push({ at: genAt, type: 'crate', hp, xNorm: rangeOf(rand, 0.3, 0.7), variant });
       } else {
         const kind = pickWeighted<EnemyKind>(rand, [
-          ['grunt', 0.6],
-          ['runner', 0.25],
-          ['brute', d > 2000 ? 0.16 : 0],
+          ['grunt', 0.55],
+          ['runner', 0.22],
+          ['brute', d > 2000 ? 0.13 : 0],
+          ['kamikaze', d > 3000 ? 0.08 : 0],
+          ['sniper', d > 5000 ? 0.06 : 0],
+          ['elite', d > 7000 ? 0.05 : 0],
         ]);
         const count =
           kind === 'brute'
             ? Math.round(6 + d / 1000)
-            : Math.min(240, Math.round((22 + d / 130) * rangeOf(rand, 0.8, 1.25)));
+            : kind === 'elite'
+              ? Math.round(2 + d / 3000)
+              : kind === 'sniper'
+                ? Math.round(2 + d / 4000)
+                : kind === 'kamikaze'
+                  ? Math.round(8 + d / 400)
+                  : Math.min(240, Math.round((22 + d / 130) * rangeOf(rand, 0.8, 1.25)));
         const pattern = pickWeighted(rand, [
           ['grid', 0.4],
           ['blob', 0.35],

@@ -67,6 +67,11 @@ export const EXPLOSION_BOSS_DAMAGE = 120;
 export const BUFF_DMG_MUL = 2;
 export const BUFF_DMG_DURATION = 10;
 export const BUFF_SHIELD_DURATION = 8;
+export const BUFF_DRONE_DURATION = 12; // drone allié : +50 % du DPS d'escouade, tir autonome
+export const BUFF_DRONE_DPS_RATIO = 0.5;
+export const BUFF_DRONE_FIRE_RATE = 10;
+export const BUFF_GOLD_MUL = 2;
+export const BUFF_GOLD_DURATION = 15;
 
 // Missiles (urgence à l'approche des portes + frappes ambiantes)
 export const MISSILE_WARNING = 1.25; // délai marqueur → impact
@@ -113,4 +118,26 @@ export const ENEMY_KINDS: readonly EnemyKindDef[] = [
   { hp: 6, speed: 70, radius: 9, steer: 40 }, // 0: grunt
   { hp: 5, speed: 150, radius: 8, steer: 90 }, // 1: runner
   { hp: 50, speed: 45, radius: 15, steer: 25 }, // 2: brute
+  { hp: 9, speed: 185, radius: 9, steer: 140 }, // 3: kamikaze — fonce et explose au contact
+  { hp: 14, speed: 32, radius: 10, steer: 10 }, // 4: sniper — reste loin, tire des bolts
+  { hp: 130, speed: 50, radius: 13, steer: 35 }, // 5: élite — blindée, rapide pour sa taille
 ];
+export const KIND_KAMIKAZE = 3;
+export const KIND_SNIPER = 4;
+
+// Kamikaze : explosion au contact (rayon court, pertes proportionnelles)
+export const KAMIKAZE_RADIUS = 95;
+export const KAMIKAZE_KILLS_RATIO = 0.12;
+export const KAMIKAZE_KILLS_MAX = 8;
+
+// Sniper : bolts en ligne droite visant l'escouade
+export const SNIPER_RANGE = 700; // ne tire que si l'escouade est à portée
+export const SNIPER_INTERVAL: [number, number] = [1.6, 2.6];
+export const BOLT_SPEED = 300;
+export const BOLT_KILLS_RATIO = 0.08;
+export const BOLT_KILLS_MAX = 5;
+export const MAX_BOLTS = 48;
+
+// Boss : volée triple (éventail) quand il passe sous 50 % de PV
+export const LANCE_VOLLEY_HP = 0.5;
+export const LANCE_VOLLEY_SPREAD = 0.24; // rad

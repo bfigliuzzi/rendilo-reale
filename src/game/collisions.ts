@@ -16,6 +16,7 @@ export class Collisions {
   private readonly grid = new SpatialGrid(B.GRID_COLS, B.GRID_ROWS, B.GRID_CELL, B.GRID_MAX_PER_CELL);
 
   onBossHit: () => void = () => {};
+  onKamikaze: (x: number, y: number) => void = () => {};
 
   run(
     dist: number,
@@ -114,7 +115,11 @@ export class Collisions {
             const r = enemies.radius[e] + soldierR;
             if (dx * dx + dy * dy < r * r) {
               enemies.hp[e] = 0;
-              squad.loseSoldiers(1);
+              if (enemies.kind[e] === B.KIND_KAMIKAZE) {
+                this.onKamikaze(enemies.x[e], enemies.y[e]); // le souffle gère les pertes
+              } else {
+                squad.loseSoldiers(1);
+              }
               touched = true; // une seule perte par soldat et par tick
               break;
             }
