@@ -22,7 +22,8 @@ export class Layers {
     this.ground = new TilingSprite({ texture: atlas.grounds[0], width: DESIGN_W, height: DESIGN_H });
     // uv dynamique pour les ennemis : la frame change quand un slot du pool est réutilisé par un autre type
     this.enemies = new ParticleContainer({ dynamicProperties: { position: true, uv: true } });
-    this.bullets = new ParticleContainer({ dynamicProperties: { position: true } });
+    // uv dynamique : la frame d'une balle change quand le slot est réutilisé par une autre classe
+    this.bullets = new ParticleContainer({ dynamicProperties: { position: true, uv: true } });
     // particules d'effets : échelle et teinte/alpha varient pendant la vie
     this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 

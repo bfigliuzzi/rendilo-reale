@@ -14,9 +14,10 @@ import {
  */
 export function makeCampaignLevel(n: number): LevelDef {
   const rand = mulberry32(0xc0ffee + n * 7919);
-  const len = 6500 + n * 700;
-  // l'escalade vient surtout du NOMBRE (×1,5) ; les PV suivent plus doucement
-  const hpMul = 1 + 0.25 * (n - 1);
+  // campagne infinie : longueur plafonnée, pente des PV adoucie au-delà de N10
+  // (le grind de la boutique — coûts exponentiels — fait « galérer un peu plus »)
+  const len = Math.min(6500 + n * 700, 13500);
+  const hpMul = n <= 10 ? 1 + 0.25 * (n - 1) : 3.25 + 0.16 * (n - 10);
   const events: LevelEvent[] = [];
 
   // ouverture un peu plus généreuse : l'apocalypse exige un matelas de départ
@@ -90,19 +91,21 @@ export function makeCampaignLevel(n: number): LevelDef {
                 : Math.round(base * (kind === 'runner' ? 0.55 : 1) * rangeOf(rand, 0.8, 1.25));
       // garantie anti-loterie : pas de méga-horde dans le premier tiers, quel que soit le tirage
       if (progress < 0.33 && kind !== 'brute') count = Math.min(count, 16 + n * 4);
+      // plafond absolu : au-delà, le pool sature — les PV portent l'escalade
+      count = Math.min(count, kind === 'grunt' || kind === 'runner' || kind === 'kamikaze' ? 220 : 40);
       const pattern = pickWeighted(rand, [
         ['grid', 0.4],
         ['blob', 0.35],
         ['stream', 0.25],
       ] as const);
       events.push({ at, type: 'horde', kind, count, pattern, width: 260 + progress * 160 });
-      // seconde vague simultanée, de plus en plus fréquente
+      // seconde vague simultanée, de plus en plus fréquente (même plafond absolu)
       if (progress > 0.35 && rand() < 0.4) {
         events.push({
           at: at + 60,
           type: 'horde',
           kind: 'runner',
-          count: Math.round(base * 0.5),
+          count: Math.min(120, Math.round(base * 0.5)),
           pattern: 'stream',
         });
       }
@@ -110,7 +113,8 @@ export function makeCampaignLevel(n: number): LevelDef {
     at += 280 + rand() * 260;
   }
 
-  events.push({ at: len - 700, type: 'boss', hp: Math.round(500 * (1 + 0.7 * n)), final: true });
+  const bossHp = Math.round(500 * (1 + 0.7 * Math.min(n, 12) + 0.4 * Math.max(0, n - 12)));
+  events.push({ at: len - 700, type: 'boss', hp: bossHp, final: true });
   // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)
   events.push({ at: len + 400, type: 'finish' });
 

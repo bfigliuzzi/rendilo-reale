@@ -1,4 +1,4 @@
-import { type Container, Sprite, Text } from 'pixi.js';
+import { type Container, Sprite, Text, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
 import type { GateModifier } from '../config/levels';
 import { clamp, lerp } from '../core/math';
@@ -71,8 +71,11 @@ export class Squad {
   private muzzleIdx = 0;
 
   private startCount = B.START_SQUAD;
+  private comp = { rifle: 1, sniper: 0, art: 0 };
+  private readonly classTex: Texture[];
 
   constructor(container: Container, labels: Container, atlas: Atlas) {
+    this.classTex = [atlas.soldier, atlas.soldierSniper, atlas.soldierArt];
     for (let i = 0; i < B.SQUAD_RENDER_CAP; i++) {
       const s = new Sprite(atlas.soldier);
       s.anchor.set(0.5);
@@ -95,8 +98,9 @@ export class Squad {
     this.reset(this.startCount);
   }
 
-  reset(startCount: number): void {
+  reset(startCount: number, comp?: { rifle: number; sniper: number; art: number }): void {
     this.startCount = startCount;
+    if (comp) this.comp = comp;
     this.logical = startCount;
     this.x = this.prevX = B.LANE_CENTER;
     this.muzzleIdx = 0;
@@ -165,6 +169,7 @@ export class Squad {
         this.curX[i] = snap ? slots[i].dx : 0;
         this.curY[i] = snap ? slots[i].dy : 50;
       }
+      this.sprites[i].texture = this.classTex[this.classOf(i)];
       this.sprites[i].visible = true;
     }
     for (let i = r; i < B.SQUAD_RENDER_CAP; i++) this.sprites[i].visible = false;
@@ -177,6 +182,14 @@ export class Squad {
           )
         : 1;
     this.refreshLabel();
+  }
+
+  /** Classe visuelle du soldat i : hachage stable → la répartition suit la composition. */
+  private classOf(i: number): number {
+    const h = ((i * 37 + 11) % 100) / 100;
+    if (h < this.comp.rifle) return 0;
+    if (h < this.comp.rifle + this.comp.sniper) return 1;
+    return 2;
   }
 
   worldY(dist: number): number {

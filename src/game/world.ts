@@ -52,6 +52,7 @@ const DEFAULT_STATS: PlayerStats = {
   contactShield: 0,
   rateMul: 1,
   splash: 0,
+  composition: { rifle: 1, sniper: 0, art: 0 },
 };
 const FIREWORK_COLORS = [0xfbbf24, 0x4ade80, 0x60a5fa, 0xf87171, 0xffffff, 0xf472b6];
 
@@ -106,7 +107,7 @@ export class World {
     private readonly sfx: Sfx,
   ) {
     this.squad = new Squad(layers.squad, layers.labels, atlas);
-    this.bullets = new BulletPool(B.MAX_BULLETS, layers.bullets, atlas.bullet);
+    this.bullets = new BulletPool(B.MAX_BULLETS, layers.bullets, atlas);
     this.enemies = new EnemyPool(B.MAX_ENEMIES, layers.enemies, atlas);
     this.gates = new Gates(layers.gates, atlas);
     this.crates = new Crates(layers.crates, layers.labels, atlas);
@@ -201,7 +202,7 @@ export class World {
     this.pendingResult = null;
     this.layers.ground.texture = this.atlas.grounds[def.biome ?? 0];
     this.crates.contactKills = Math.max(1, B.CRATE_CONTACT_KILLS - playerStats.contactShield);
-    this.squad.reset(def.startSquad ?? playerStats.startSquad);
+    this.squad.reset(def.startSquad ?? playerStats.startSquad, playerStats.composition);
     this.spawner = new Spawner(def, {
       enemies: this.enemies,
       spawnGates: (ev) => this.gates.spawn(ev.at, ev.left, ev.right),
@@ -265,6 +266,8 @@ export class World {
         this.dist,
         dpsMul,
         this.playerStats.rateMul,
+        this.playerStats.composition,
+        this.playerStats.splash,
         this.enemies,
         this.bosses,
         this.crates,
@@ -288,15 +291,7 @@ export class World {
       this.fx.burst(x, y, { count: 10, color: 0xa855f7, speed: 180, life: 0.35 });
       this.sfx.lanceHit();
     });
-    this.collisions.run(
-      this.dist,
-      this.bullets,
-      this.enemies,
-      this.squad,
-      this.crates,
-      this.bosses,
-      this.playerStats.splash,
-    );
+    this.collisions.run(this.dist, this.bullets, this.enemies, this.squad, this.crates, this.bosses);
     this.updateMissiles(dt);
     this.enemies.sweepDead((x, y) => {
       this.kills++;

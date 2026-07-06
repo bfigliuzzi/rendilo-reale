@@ -21,7 +21,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     id: 'start',
     icon: '👥',
     name: 'Effectif de départ',
-    maxLevel: 15,
+    maxLevel: 60, // quasi déplafonné : la campagne est infinie, le coût exponentiel régule
     cost: (l) => Math.round(80 * Math.pow(1.7, l)),
     effectLabel: (l) => `${START_SQUAD + 2 * l} soldats`,
   },
@@ -29,7 +29,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     id: 'dps',
     icon: '🔥',
     name: 'Puissance de feu',
-    maxLevel: 25,
+    maxLevel: 999, // déplafonné : c'est le tapis roulant de la campagne infinie
     cost: (l) => Math.round(60 * Math.pow(1.6, l)),
     effectLabel: (l) => `+${l * 10} % de dégâts`,
   },
@@ -37,7 +37,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     id: 'loot',
     icon: '💰',
     name: 'Butin',
-    maxLevel: 10,
+    maxLevel: 30,
     cost: (l) => Math.round(90 * Math.pow(1.75, l)),
     effectLabel: (l) => `+${l * 15} % d'or`,
   },
@@ -59,11 +59,16 @@ export interface PlayerStats {
   contactShield: number; // réduit les pertes de contact caisse/boss
   rateMul: number; // cadence visuelle (arme)
   splash: number; // rayon de dégâts de zone des balles (arme, 0 = aucun)
+  composition: { rifle: number; sniper: number; art: number }; // fractions normalisées
 }
 
-export function computeStats(save: Pick<SaveData, 'upgrades' | 'weapons' | 'equipped'>): PlayerStats {
+export function computeStats(
+  save: Pick<SaveData, 'upgrades' | 'weapons' | 'equipped' | 'composition'>,
+): PlayerStats {
   const up = save.upgrades;
   const weapon = weaponStats(save.equipped, save.weapons[save.equipped] ?? 1);
+  const c = save.composition;
+  const total = Math.max(1, c.rifle + c.sniper + c.art);
   return {
     startSquad: START_SQUAD + 2 * (up.start ?? 0),
     dpsMul: (1 + 0.1 * (up.dps ?? 0)) * weapon.dpsMul,
@@ -71,5 +76,6 @@ export function computeStats(save: Pick<SaveData, 'upgrades' | 'weapons' | 'equi
     contactShield: 2 * (up.armor ?? 0), // pertes évitées par impact caisse/boss
     rateMul: weapon.rateMul,
     splash: weapon.splash,
+    composition: { rifle: c.rifle / total, sniper: c.sniper / total, art: c.art / total },
   };
 }

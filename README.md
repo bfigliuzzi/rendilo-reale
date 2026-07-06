@@ -27,9 +27,14 @@ npm run dev -- --host   # + accès depuis un téléphone sur le même réseau
 ```
 
 - **Contrôles** : glisser (doigt ou souris) pour déplacer l'escouade latéralement.
-- **Modes** : Campagne (niveaux seedés à difficulté croissante, boss final), Sans fin
+- **Modes** : Campagne **infinie** (niveaux seedés à difficulté croissante — PV, effectifs
+  et boss escaladent sans fin, la boutique déplafonnée est le tapis roulant), Sans fin
   (record de distance, mini-boss récurrents), et `?stress` dans l'URL pour le test de
   fluidité (escouade 500, hordes massives).
+- **Composition d'escouade** (débloquée au niveau 4) : répartis tes soldats entre
+  fusiliers (équilibrés), snipers (balles lourdes et lentes, +30 % DPS — anti-boss/élites)
+  et artilleurs (obus à dégâts de zone — anti-hordes). Réglable par pas de 10 % dans
+  l'Arsenal ; la bonne composition dépend du niveau.
 - **Métaprogression** : l'or gagné (kills, caisses, boss, bonus de fin) s'investit dans
   l'Arsenal — 3 **armes équipables à niveaux** (fusil, gatling, canon lourd à dégâts de
   zone) et 4 améliorations permanentes (effectif, puissance, butin, blindage).

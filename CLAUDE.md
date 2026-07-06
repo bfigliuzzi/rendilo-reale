@@ -53,8 +53,14 @@ escouades en début de niveau.
   dans le tick** — pas de littéraux/closures dans les `update()`.
 - **Morts d'ennemis différées** : les collisions marquent `hp <= 0`, `sweepDead()` fait le
   swap-remove après — les index de la grille spatiale restent valides toute la phase.
-- **DPS découplé des balles** : dégâts/balle = DPS escouade ÷ cadence plafonnée. Ne jamais
-  faire scaler le nombre de balles avec l'effectif.
+- **DPS découplé des balles** : dégâts/balle = DPS ÷ cadence plafonnée, par FLUX de classe
+  (fusiliers/snipers/artilleurs selon `save.composition`, défs dans `SOLDIER_CLASSES`).
+  Ne jamais faire scaler le nombre de balles avec l'effectif. Le splash est PAR BALLE
+  (`bullets.splash[i]`), pas global.
+- **Campagne infinie** : longueur cappée à 13 500, pente des PV adoucie après N10, hordes
+  plafonnées (le pool sature — les PV portent l'escalade), améliorations dps/start/loot
+  quasi déplafonnées (le coût exponentiel régule). Tout nouveau count de horde doit être
+  borné (`Math.min`) : à N50+ les formules linéaires explosent.
 - **Niveaux data-driven** : types dans `config/levels.ts`, générateurs dans
   `config/campaign.ts`. Campagne SEEDÉE par numéro de niveau (rejouable à l'identique,
   `core/rng.ts`) ; endless généré par tronçons via `LevelDef.extend`. Jamais de

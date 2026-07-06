@@ -49,7 +49,6 @@ export class Collisions {
     squad: Squad,
     crates: Crates,
     bosses: Bosses,
-    splash: number, // rayon de dégâts de zone des balles (arme canon lourd)
   ): void {
     const grid = this.grid;
     grid.setOrigin(0, -dist - B.GRID_AHEAD);
@@ -84,7 +83,10 @@ export class Collisions {
             const r = enemies.radius[e] + B.BULLET_RADIUS;
             if (dx * dx + dy * dy < r * r) {
               enemies.hp[e] -= bullets.dmg[b];
-              if (splash > 0) this.splashAround(enemies, e, bullets.dmg[b] * 0.5, splash);
+              // dégâts de zone par balle (obus d'artilleur, canon lourd)
+              if (bullets.splash[b] > 0) {
+                this.splashAround(enemies, e, bullets.dmg[b] * 0.5, bullets.splash[b]);
+              }
               hit = true;
               break;
             }

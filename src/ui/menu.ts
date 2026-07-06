@@ -1,3 +1,4 @@
+import { COMP_UNLOCK_LEVEL } from '../config/balance';
 import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
 import type { SaveData } from '../meta/save';
 import { UPGRADES, type UpgradeId } from '../meta/upgrades';
@@ -22,10 +23,17 @@ export interface MenuHandlers {
   buyUpgrade: (id: UpgradeId) => void;
   buyWeapon: (id: WeaponId) => void;
   equipWeapon: (id: WeaponId) => void;
+  adjustComposition: (cls: 'sniper' | 'art', delta: number) => void;
   claimAchievement: (id: string) => void;
   toggleMute: () => boolean;
   backToMenu: () => void;
 }
+
+const CLASS_INFO = [
+  { id: 'rifle', icon: '🪖', name: 'Fusiliers', desc: 'Équilibrés, cadence rapide.' },
+  { id: 'sniper', icon: '🎯', name: 'Snipers', desc: 'Balles lentes mais lourdes (+30 % DPS) — idéal contre brutes, élites et boss ; du gâchis contre les nuées.' },
+  { id: 'art', icon: '💥', name: 'Artilleurs', desc: 'Obus lents à dégâts de zone — fauchent les hordes, faibles en monocible.' },
+] as const;
 
 /**
  * Écrans DOM (menu, boutique, résultat) par-dessus le canvas. Reconstruits en
@@ -110,11 +118,32 @@ export class Menu {
           </div>
         </div>`;
     }).join('');
+    // composition : débloquée en cours de campagne
+    let compSection = `<div class="section-title">Composition</div>
+      <div class="card comp-locked">🔒 Débloquée au niveau ${COMP_UNLOCK_LEVEL} de campagne</div>`;
+    if (s.campaignLevel >= COMP_UNLOCK_LEVEL) {
+      const rows = CLASS_INFO.map((c) => {
+        const pct = s.composition[c.id as keyof typeof s.composition];
+        const controls =
+          c.id === 'rifle'
+            ? `<span class="comp-pct">${pct} %</span>`
+            : `<button class="btn stepper" data-action="comp" data-cls="${c.id}" data-delta="-10" ${pct <= 0 ? 'disabled' : ''}>−</button>
+               <span class="comp-pct">${pct} %</span>
+               <button class="btn stepper" data-action="comp" data-cls="${c.id}" data-delta="10" ${s.composition.rifle < 10 ? 'disabled' : ''}>+</button>`;
+        return `
+          <div class="card">
+            <div class="card-head">${c.icon} <b>${c.name}</b><span class="comp-controls">${controls}</span></div>
+            <div class="card-effect">${c.desc}</div>
+          </div>`;
+      }).join('');
+      compSection = `<div class="section-title">Composition</div><div class="cards">${rows}</div>`;
+    }
     this.show(`
       <h2>Arsenal</h2>
       <div class="gold-line">💰 ${s.gold}</div>
       <div class="section-title">Armes</div>
       <div class="cards">${weaponCards}</div>
+      ${compSection}
       <div class="section-title">Améliorations</div>
       <div class="cards">${upgradeCards}</div>
       <button class="btn small" data-action="menu">← Retour</button>
@@ -216,6 +245,10 @@ export class Menu {
         break;
       case 'wequip':
         h.equipWeapon(btn.dataset.id as WeaponId);
+        this.showShop();
+        break;
+      case 'comp':
+        h.adjustComposition(btn.dataset.cls as 'sniper' | 'art', Number(btn.dataset.delta));
         this.showShop();
         break;
       case 'claim':

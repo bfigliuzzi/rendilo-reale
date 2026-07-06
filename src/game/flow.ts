@@ -30,6 +30,7 @@ export class Flow {
       buyUpgrade: (id) => this.buyUpgrade(id),
       buyWeapon: (id) => this.buyWeapon(id),
       equipWeapon: (id) => this.equipWeapon(id),
+      adjustComposition: (cls, delta) => this.adjustComposition(cls, delta),
       claimAchievement: (id) => this.claimAchievement(id),
       toggleMute: () => this.toggleMute(),
       backToMenu: () => this.showMenu(),
@@ -128,6 +129,18 @@ export class Flow {
   private equipWeapon(id: WeaponId): void {
     if ((this.save.weapons[id] ?? 0) < 1) return;
     this.save.equipped = id;
+    persist(this.save);
+    this.sfx.buy();
+  }
+
+  /** Ajuste la part de snipers/artilleurs par pas de 10 % ; les fusiliers absorbent le reste. */
+  private adjustComposition(cls: 'sniper' | 'art', delta: number): void {
+    const c = this.save.composition;
+    const next = Math.max(0, Math.min(100, c[cls] + delta));
+    const rifle = 100 - next - (cls === 'sniper' ? c.art : c.sniper);
+    if (rifle < 0) return;
+    c[cls] = next;
+    c.rifle = rifle;
     persist(this.save);
     this.sfx.buy();
   }

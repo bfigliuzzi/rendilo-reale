@@ -36,7 +36,26 @@ export const DRAG_SENSITIVITY = 1.2;
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.
 export const SOLDIER_DPS = 10;
 export const FIRE_RATE_PER_SOLDIER = 5;
-export const FIRE_SOLDIER_CAP = 48; // cadence max = 48 × 5 = 240 balles/s
+export const FIRE_SOLDIER_CAP = 48; // cadence max fusiliers = 48 × 5 = 240 balles/s
+
+// Classes de soldats (composition d'escouade, débloquée en cours de campagne).
+// Chaque classe est un flux de tir indépendant : le DPS par classe = effectif
+// de la classe × SOLDIER_DPS × dpsMul ; la cadence sature à fireCap soldats.
+export interface SoldierClassDef {
+  id: 'rifle' | 'sniper' | 'art';
+  rate: number; // balles/s par soldat
+  fireCap: number; // soldats comptant pour la cadence max
+  dpsMul: number;
+  splash: number; // rayon de zone propre à la classe
+  bulletSpeed: number;
+  aimRange: number; // demi-largeur du cône d'aim-assist
+}
+export const SOLDIER_CLASSES: readonly SoldierClassDef[] = [
+  { id: 'rifle', rate: 5, fireCap: 48, dpsMul: 1, splash: 0, bulletSpeed: 760, aimRange: 170 },
+  { id: 'sniper', rate: 1.3, fireCap: 30, dpsMul: 1.3, splash: 0, bulletSpeed: 980, aimRange: 300 },
+  { id: 'art', rate: 0.9, fireCap: 22, dpsMul: 0.95, splash: 62, bulletSpeed: 520, aimRange: 170 },
+];
+export const COMP_UNLOCK_LEVEL = 4; // niveau de campagne qui débloque la composition
 export const BULLET_SPEED = 760;
 export const BULLET_RADIUS = 5;
 export const BULLET_X_JITTER = 60;

@@ -7,7 +7,11 @@ import { Rectangle, Texture } from 'pixi.js';
  */
 export interface Atlas {
   soldier: Texture;
+  soldierSniper: Texture;
+  soldierArt: Texture;
   bullet: Texture;
+  bulletSniper: Texture;
+  bulletShell: Texture;
   enemyByKind: readonly Texture[]; // indexé par ENEMY_KINDS : grunt, runner, brute, kamikaze, sniper, élite
   white: Texture; // rect blanc, à teinter (portes, bannières)
   spark: Texture; // disque blanc, à teinter (particules d'effets, marqueurs)
@@ -147,6 +151,26 @@ export function buildAtlas(): Atlas {
   ctx.lineTo(203, 16);
   ctx.closePath();
   ctx.fill();
+  // soldat sniper (200,90,20,20) — indigo, long canon fin
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(209, 90, 2, 8);
+  circle(ctx, 210, 101, 7.5, '#6366f1', '#3730a3');
+  circle(ctx, 210, 98, 4, '#c7d2fe', '#3730a3');
+  // soldat artilleur (224,90,20,20) — ambre, canon large
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(231, 90, 6, 8);
+  circle(ctx, 234, 101, 7.5, '#f59e0b', '#92400e');
+  circle(ctx, 234, 98, 4, '#fde68a', '#92400e');
+  // balle sniper (200,70,6,20) — trait cyan
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.roundRect(201, 70, 4, 19, 2);
+  ctx.fill();
+  ctx.fillStyle = '#cffafe';
+  ctx.fillRect(202, 71, 2, 8);
+  // obus artilleur (216,70,14,14) — boule sombre à lueur
+  circle(ctx, 223, 77, 6, '#475569', '#1e293b');
+  circle(ctx, 223, 75.5, 2.5, '#fbbf24', '#92400e');
   // mine (232,32,22,22) — disque sombre, picots, témoin rouge (le clignotement est fait en jeu)
   circle(ctx, 243, 43, 9, '#1f2937', '#0b1016');
   ctx.fillStyle = '#374151';
@@ -199,7 +223,11 @@ export function buildAtlas(): Atlas {
 
   return {
     soldier: frame(0, 0, 20, 20),
+    soldierSniper: frame(200, 90, 20, 20),
+    soldierArt: frame(224, 90, 20, 20),
     bullet: frame(32, 0, 8, 16),
+    bulletSniper: frame(200, 70, 6, 20),
+    bulletShell: frame(216, 70, 14, 14),
     enemyByKind: [
       frame(0, 32, 20, 20), // grunt
       frame(32, 32, 18, 18), // runner

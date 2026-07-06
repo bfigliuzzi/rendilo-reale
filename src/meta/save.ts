@@ -9,11 +9,18 @@ export interface SaveCounters {
   wins: number;
 }
 
+export interface Composition {
+  rifle: number; // pourcentages, somme = 100
+  sniper: number;
+  art: number;
+}
+
 export interface SaveData {
   gold: number;
   upgrades: Record<string, number>; // id d'amélioration → niveau acheté
   weapons: Record<string, number>; // id d'arme → niveau (absent = non possédée)
   equipped: string; // arme équipée
+  composition: Composition; // répartition des classes de soldats
   stars: Record<string, number>; // niveau de campagne → étoiles (1-3)
   counters: SaveCounters; // compteurs cumulés (succès)
   claimed: string[]; // succès déjà réclamés
@@ -29,6 +36,7 @@ const DEFAULTS: SaveData = {
   upgrades: {},
   weapons: { rifle: 1 },
   equipped: 'rifle',
+  composition: { rifle: 100, sniper: 0, art: 0 },
   stars: {},
   counters: DEFAULT_COUNTERS,
   claimed: [],
@@ -47,6 +55,7 @@ export function loadSave(): SaveData {
       ...parsed,
       upgrades: { ...(parsed.upgrades ?? {}) },
       weapons: { rifle: 1, ...(parsed.weapons ?? {}) },
+      composition: { rifle: 100, sniper: 0, art: 0, ...(parsed.composition ?? {}) },
       stars: { ...(parsed.stars ?? {}) },
       counters: { ...DEFAULT_COUNTERS, ...(parsed.counters ?? {}) },
       claimed: [...(parsed.claimed ?? [])],

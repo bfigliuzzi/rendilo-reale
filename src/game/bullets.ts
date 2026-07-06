@@ -1,6 +1,7 @@
 import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
 import { clamp, lerp } from '../core/math';
+import type { Atlas } from '../render/textures';
 import type { Bosses } from './boss';
 import type { Crates } from './crates';
 import type { EnemyPool } from './enemies';
@@ -11,6 +12,8 @@ const PARK = -9999; // les particules mortes sont garées hors écran (le PC ren
 /**
  * Pool struct-of-arrays : données chaudes en Float32Array, swap-remove, zéro allocation
  * au runtime. Les particules Pixi sont créées une fois et index-verrouillées aux données.
+ * Le tir est composé de trois flux indépendants (fusiliers/snipers/artilleurs) selon
+ * la composition d'escouade — chaque flux garde le modèle « DPS découplé des balles ».
  */
 export class BulletPool {
   count = 0;
@@ -21,14 +24,16 @@ export class BulletPool {
   readonly vx: Float32Array;
   readonly vy: Float32Array;
   readonly dmg: Float32Array;
+  readonly splash: Float32Array; // rayon de zone par balle (0 = aucun)
   private readonly particles: Particle[] = [];
-  private fireAcc = 0;
+  private readonly fireAcc = new Float32Array(B.SOLDIER_CLASSES.length);
+  private readonly classTextures: Texture[];
   private readonly muzzle = { x: 0, y: 0 };
 
   constructor(
     readonly cap: number,
     private readonly container: ParticleContainer,
-    texture: Texture,
+    atlas: Atlas,
   ) {
     this.x = new Float32Array(cap);
     this.y = new Float32Array(cap);
@@ -37,14 +42,16 @@ export class BulletPool {
     this.vx = new Float32Array(cap);
     this.vy = new Float32Array(cap);
     this.dmg = new Float32Array(cap);
+    this.splash = new Float32Array(cap);
+    this.classTextures = [atlas.bullet, atlas.bulletSniper, atlas.bulletShell];
     for (let i = 0; i < cap; i++) {
-      const p = new Particle({ texture, x: PARK, y: PARK, anchorX: 0.5, anchorY: 0.5 });
+      const p = new Particle({ texture: atlas.bullet, x: PARK, y: PARK, anchorX: 0.5, anchorY: 0.5 });
       this.particles.push(p);
       container.addParticle(p);
     }
   }
 
-  spawn(x: number, y: number, vx: number, vy: number, dmg: number): void {
+  spawn(x: number, y: number, vx: number, vy: number, dmg: number, splash: number, texture: Texture): void {
     if (this.count >= this.cap) return;
     const i = this.count++;
     this.x[i] = this.prevX[i] = x;
@@ -52,6 +59,8 @@ export class BulletPool {
     this.vx[i] = vx;
     this.vy[i] = vy;
     this.dmg[i] = dmg;
+    this.splash[i] = splash;
+    this.particles[i].texture = texture;
   }
 
   kill(i: number): void {
@@ -64,6 +73,8 @@ export class BulletPool {
       this.vx[i] = this.vx[last];
       this.vy[i] = this.vy[last];
       this.dmg[i] = this.dmg[last];
+      this.splash[i] = this.splash[last];
+      this.particles[i].texture = this.particles[last].texture;
     }
     const p = this.particles[last];
     p.x = PARK;
@@ -71,9 +82,10 @@ export class BulletPool {
   }
 
   /**
-   * Modèle de tir : DPS = effectif × SOLDIER_DPS × bonus méta (scale linéaire sans
-   * limite), cadence visuelle plafonnée, dégâts par balle = DPS / cadence réelle.
-   * Retourne le nombre de balles tirées ce tick (pour le son, throttlé en aval).
+   * Trois flux de tir selon la composition : par classe, DPS = effectif de la
+   * classe × SOLDIER_DPS × dpsMul de classe × bonus globaux ; cadence saturée
+   * par classe ; dégâts par balle = DPS / cadence réelle. Retourne le nombre de
+   * balles tirées ce tick (pour le son, throttlé en aval).
    */
   autoFire(
     dt: number,
@@ -81,26 +93,39 @@ export class BulletPool {
     dist: number,
     dpsMul: number,
     rateMul: number,
+    comp: { rifle: number; sniper: number; art: number },
+    weaponSplash: number,
     enemies: EnemyPool,
     bosses: Bosses,
     crates: Crates,
   ): number {
     if (squad.logical <= 0) return 0;
-    const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER * rateMul;
-    const dmg = (squad.logical * B.SOLDIER_DPS * dpsMul) / rate;
     let fired = 0;
-    this.fireAcc += rate * dt;
-    while (this.fireAcc >= 1) {
-      this.fireAcc -= 1;
-      fired++;
-      squad.nextMuzzle(dist, this.muzzle);
-      this.spawn(
-        this.muzzle.x,
-        this.muzzle.y,
-        this.aimVX(this.muzzle.x, this.muzzle.y, enemies, bosses, crates),
-        -B.BULLET_SPEED,
-        dmg,
-      );
+    for (let ci = 0; ci < B.SOLDIER_CLASSES.length; ci++) {
+      const def = B.SOLDIER_CLASSES[ci];
+      const soldiers = squad.logical * comp[def.id];
+      if (soldiers < 0.5) {
+        this.fireAcc[ci] = 0;
+        continue;
+      }
+      const rate = Math.min(soldiers, def.fireCap) * def.rate * rateMul;
+      const dmg = (soldiers * B.SOLDIER_DPS * def.dpsMul * dpsMul) / rate;
+      const splash = Math.max(def.splash, weaponSplash);
+      this.fireAcc[ci] += rate * dt;
+      while (this.fireAcc[ci] >= 1) {
+        this.fireAcc[ci] -= 1;
+        fired++;
+        squad.nextMuzzle(dist, this.muzzle);
+        this.spawn(
+          this.muzzle.x,
+          this.muzzle.y,
+          this.aimVX(this.muzzle.x, this.muzzle.y, def.aimRange, def.bulletSpeed, enemies, bosses, crates),
+          -def.bulletSpeed,
+          dmg,
+          splash,
+          this.classTextures[ci],
+        );
+      }
     }
     return fired;
   }
@@ -114,14 +139,30 @@ export class BulletPool {
     bosses: Bosses,
     crates: Crates,
   ): void {
-    this.spawn(x, y, this.aimVX(x, y, enemies, bosses, crates), -B.BULLET_SPEED, dmg);
+    this.spawn(
+      x,
+      y,
+      this.aimVX(x, y, B.BULLET_AIM_RANGE_X, B.BULLET_SPEED, enemies, bosses, crates),
+      -B.BULLET_SPEED,
+      dmg,
+      0,
+      this.classTextures[0],
+    );
   }
 
   /**
-   * Aim-assist : vise l'ennemi (ou le boss) vivant le plus proche dans le cône
-   * frontal — une horde large se fait balayer sur toute sa largeur au lieu de flanquer.
+   * Aim-assist : vise la menace vivante la plus proche dans le cône frontal —
+   * ennemis, boss ET caisses. Toute nouvelle entité tirable doit être ajoutée ici.
    */
-  private aimVX(mx: number, my: number, enemies: EnemyPool, bosses: Bosses, crates: Crates): number {
+  private aimVX(
+    mx: number,
+    my: number,
+    aimRange: number,
+    bulletSpeed: number,
+    enemies: EnemyPool,
+    bosses: Bosses,
+    crates: Crates,
+  ): number {
     let bestD2 = Infinity;
     let bestDX = 0;
     let bestDY = 0;
@@ -130,7 +171,7 @@ export class BulletPool {
       const dy = enemies.y[e] - my;
       if (dy >= -20) continue; // uniquement devant
       const dx = enemies.x[e] - mx;
-      if (dx > B.BULLET_AIM_RANGE_X || dx < -B.BULLET_AIM_RANGE_X) continue;
+      if (dx > aimRange || dx < -aimRange) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 < bestD2) {
         bestD2 = d2;
@@ -143,7 +184,7 @@ export class BulletPool {
       const dy = boss.y - my;
       if (dy >= -20) continue;
       const dx = boss.x - mx;
-      const range = B.BULLET_AIM_RANGE_X + B.BOSS_RADIUS; // grosse cible, grand cône
+      const range = aimRange + B.BOSS_RADIUS; // grosse cible, grand cône
       if (dx > range || dx < -range) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 < bestD2) {
@@ -161,7 +202,7 @@ export class BulletPool {
       // point visé : le bord de la caisse le plus proche du canon
       const tx = clamp(mx, crate.cx - B.CRATE_HALF_W + 8, crate.cx + B.CRATE_HALF_W - 8);
       const dx = tx - mx;
-      if (dx > B.BULLET_AIM_RANGE_X || dx < -B.BULLET_AIM_RANGE_X) continue;
+      if (dx > aimRange || dx < -aimRange) continue;
       const d2 = dx * dx + dy * dy;
       if (d2 < bestD2) {
         bestD2 = d2;
@@ -170,7 +211,7 @@ export class BulletPool {
       }
     }
     if (bestD2 === Infinity) return (Math.random() - 0.5) * B.BULLET_X_JITTER;
-    const t = -bestDY / B.BULLET_SPEED; // temps de vol jusqu'à la cible
+    const t = -bestDY / bulletSpeed; // temps de vol jusqu'à la cible
     return clamp(bestDX / Math.max(t, 0.05), -B.BULLET_AIM_MAX_VX, B.BULLET_AIM_MAX_VX);
   }
 
@@ -200,6 +241,6 @@ export class BulletPool {
       p.y = PARK;
     }
     this.count = 0;
-    this.fireAcc = 0;
+    this.fireAcc.fill(0);
   }
 }
