@@ -8,12 +8,13 @@ import {
 } from './levels';
 
 /**
- * Niveau de campagne n (1-based), généré procéduralement mais SEEDÉ par n :
- * un niveau raté se rejoue à l'identique. La difficulté monte via les PV
- * (hpMul), les effectifs, la part de runners/brutes et le boss final.
+ * Niveau de campagne n (1-based), généré procéduralement à partir d'un seed :
+ * même seed = niveau identique (le « rejouer ce tirage » du flow), seed
+ * différent = nouveau tirage. La difficulté monte via les PV (hpMul), les
+ * effectifs, la part de runners/brutes et le boss final.
  */
-export function makeCampaignLevel(n: number): LevelDef {
-  const rand = mulberry32(0xc0ffee + n * 7919);
+export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelDef {
+  const rand = mulberry32(seed);
   // campagne infinie : longueur plafonnée, pente des PV adoucie au-delà de N10
   // (le grind de la boutique — coûts exponentiels — fait « galérer un peu plus »)
   const len = Math.min(6500 + n * 700, 13500);

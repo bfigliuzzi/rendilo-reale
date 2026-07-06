@@ -5,7 +5,7 @@ import { weaponStats } from './weapons';
 // Améliorations permanentes, data-driven : la boutique et le calcul des stats
 // se dérivent entièrement de ces définitions.
 
-export type UpgradeId = 'start' | 'dps' | 'loot' | 'armor';
+export type UpgradeId = 'start' | 'dps' | 'loot' | 'armor' | 'vitality';
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -49,6 +49,14 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: (l) => Math.round(120 * Math.pow(1.8, l)),
     effectLabel: (l) => `−${l * 2} perte(s) par impact caisse/boss`,
   },
+  {
+    id: 'vitality',
+    icon: '❤️',
+    name: 'Endurance',
+    maxLevel: 6,
+    cost: (l) => Math.round(150 * Math.pow(1.9, l)),
+    effectLabel: (l) => `${1 + 0.5 * l} PV par soldat`,
+  },
 ];
 
 /** Stats effectives du joueur pour une run, dérivées de la méta (améliorations + arme). */
@@ -60,6 +68,7 @@ export interface PlayerStats {
   rateMul: number; // cadence visuelle (arme)
   splash: number; // rayon de dégâts de zone des balles (arme, 0 = aucun)
   composition: { rifle: number; sniper: number; art: number }; // fractions normalisées
+  soldierHp: number; // PV par soldat : toutes les pertes sont absorbées à ce taux
 }
 
 export function computeStats(
@@ -77,5 +86,6 @@ export function computeStats(
     rateMul: weapon.rateMul,
     splash: weapon.splash,
     composition: { rifle: c.rifle / total, sniper: c.sniper / total, art: c.art / total },
+    soldierHp: 1 + 0.5 * (up.vitality ?? 0),
   };
 }

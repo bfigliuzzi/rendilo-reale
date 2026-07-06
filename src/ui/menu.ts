@@ -13,12 +13,14 @@ export interface ResultView {
   squad: number;
   goldRun: number;
   goldBonus: number;
+  replayBonus: number; // bonus « même tirage » (+25 %)
   newRecord: boolean;
   stars: number; // 0 hors victoire de campagne
 }
 
 export interface MenuHandlers {
   startCampaign: (n: number) => void;
+  retrySameSeed: () => void; // rejouer exactement le même tirage (+25 % d'or)
   startEndless: () => void;
   buyUpgrade: (id: UpgradeId) => void;
   buyWeapon: (id: WeaponId) => void;
@@ -41,6 +43,7 @@ const CLASS_INFO = [
  */
 export class Menu {
   private handlers: MenuHandlers | null = null;
+  private lastScreen = ''; // anti-clignotement : n'animer qu'au changement d'écran
 
   constructor(
     private readonly root: HTMLElement,
@@ -54,6 +57,7 @@ export class Menu {
   }
 
   hideAll(): void {
+    this.lastScreen = '';
     this.root.innerHTML = '';
     this.root.classList.remove('visible');
   }
@@ -81,7 +85,7 @@ export class Menu {
       <button class="btn" data-action="shop">⬆&nbsp; Arsenal</button>
       <button class="btn" data-action="achievements">🏅&nbsp; Succès${claimables > 0 ? ` <span class="pill">${claimables}</span>` : ''}</button>
       <button class="btn small" data-action="mute">${s.muted ? '🔇 Son coupé' : '🔊 Son actif'}</button>
-    `);
+    `, 'home');
   }
 
   showShop(): void {
@@ -147,7 +151,7 @@ export class Menu {
       <div class="section-title">Améliorations</div>
       <div class="cards">${upgradeCards}</div>
       <button class="btn small" data-action="menu">← Retour</button>
-    `);
+    `, 'shop');
   }
 
   showAchievements(): void {
@@ -172,7 +176,7 @@ export class Menu {
       <div class="gold-line">💰 ${s.gold}</div>
       <div class="cards">${cards}</div>
       <button class="btn small" data-action="menu">← Retour</button>
-    `);
+    `, 'achievements');
   }
 
   showResult(r: ResultView): void {
@@ -185,17 +189,25 @@ export class Menu {
         : r.mode === 'endless'
           ? `${r.dist} m ${r.newRecord ? '· 🏆 nouveau record !' : ''}`
           : 'Mode stress';
+    const totalGold = r.goldRun + r.goldBonus + r.replayBonus;
+    const details = [
+      r.goldBonus > 0 ? `bonus ${r.goldBonus}` : '',
+      r.replayBonus > 0 ? `rejeu +${r.replayBonus}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
     const goldLine =
       r.mode === 'stress'
         ? ''
-        : `<div class="gold-line">+${r.goldRun + r.goldBonus} 💰${r.goldBonus > 0 ? ` <span class="dim">(dont bonus ${r.goldBonus})</span>` : ''}</div>`;
+        : `<div class="gold-line">+${totalGold} 💰${details ? ` <span class="dim">(${details})</span>` : ''}</div>`;
     const nextBtn =
       r.victory && r.mode === 'campaign'
         ? `<button class="btn primary" data-action="level" data-n="${r.levelN + 1}">Niveau suivant ▶</button>`
         : '';
     const retry =
       r.mode === 'campaign'
-        ? `<button class="btn" data-action="level" data-n="${r.levelN}">↻ Rejouer</button>`
+        ? `<button class="btn" data-action="retry-same">↻ Rejouer ce tirage <span class="dim">(+25 % 💰)</span></button>
+           <button class="btn" data-action="level" data-n="${r.levelN}">🎲 Nouveau tirage</button>`
         : `<button class="btn" data-action="${r.mode === 'endless' ? 'endless' : 'menu'}">↻ Rejouer</button>`;
     this.show(`
       <h2 class="${r.victory ? 'win' : 'lose'}">${title}</h2>
@@ -206,11 +218,19 @@ export class Menu {
       ${nextBtn}
       ${retry}
       <button class="btn small" data-action="menu">Menu</button>
-    `);
+    `, 'result');
   }
 
-  private show(html: string): void {
-    this.root.innerHTML = `<div class="panel">${html}</div>`;
+  private show(html: string, screen: string): void {
+    // re-render du même écran (achat, réglage…) : pas d'animation d'entrée, et on
+    // préserve la position de scroll — sinon chaque clic « clignote »
+    const sameScreen = screen === this.lastScreen;
+    const prevScroll = sameScreen ? (this.root.firstElementChild?.scrollTop ?? 0) : 0;
+    this.lastScreen = screen;
+    this.root.innerHTML = `<div class="panel${sameScreen ? ' no-anim' : ''}">${html}</div>`;
+    if (sameScreen && prevScroll > 0) {
+      (this.root.firstElementChild as HTMLElement).scrollTop = prevScroll;
+    }
     this.root.classList.add('visible');
   }
 
@@ -225,6 +245,9 @@ export class Menu {
         break;
       case 'level':
         h.startCampaign(Number(btn.dataset.n));
+        break;
+      case 'retry-same':
+        h.retrySameSeed();
         break;
       case 'endless':
         h.startEndless();

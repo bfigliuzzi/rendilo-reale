@@ -31,8 +31,10 @@ le N1 sans méta ~1 fois sur 3 (défaites tardives : déluge final ou boss, jama
 Le 5e argument de verify.mjs accepte un patch complet `{upgrades, weapons, equipped}` ou
 des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts,
 choisit les bonnes portes — c'est le proxy « bon joueur ».
-ATTENTION : modifier les tirages du générateur (poids, variantes) re-seed les niveaux —
-toujours re-vérifier le N1 après. L'intensité des missiles est un paramètre de niveau
+Les niveaux de campagne sont désormais RE-SEEDÉS à chaque tentative (seed aléatoire via
+`flow.startCampaign(n, seed?, replayBonus?)`) ; « Rejouer ce tirage » réutilise le seed
+courant avec +25 % d'or. La bande d'équilibrage se mesure donc en cross-seed (plusieurs
+runs). Pour un test reproductible : passer un seed fixe au flow. L'intensité des missiles est un paramètre de niveau
 (`missileMinDist`, `missileIntervalMul`) : le N1 épargne le début de partie.
 
 **Garanties d'équité du générateur** (à préserver) : une paire de caisses bloquante

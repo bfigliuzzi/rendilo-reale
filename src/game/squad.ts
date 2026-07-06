@@ -72,6 +72,8 @@ export class Squad {
 
   private startCount = B.START_SQUAD;
   private comp = { rifle: 1, sniper: 0, art: 0 };
+  private hpPerSoldier = 1;
+  private partialDamage = 0; // dégâts accumulés pas encore convertis en pertes
   private readonly classTex: Texture[];
 
   constructor(container: Container, labels: Container, atlas: Atlas) {
@@ -98,9 +100,15 @@ export class Squad {
     this.reset(this.startCount);
   }
 
-  reset(startCount: number, comp?: { rifle: number; sniper: number; art: number }): void {
+  reset(
+    startCount: number,
+    comp?: { rifle: number; sniper: number; art: number },
+    hpPerSoldier = 1,
+  ): void {
     this.startCount = startCount;
     if (comp) this.comp = comp;
+    this.hpPerSoldier = hpPerSoldier;
+    this.partialDamage = 0;
     this.logical = startCount;
     this.x = this.prevX = B.LANE_CENTER;
     this.muzzleIdx = 0;
@@ -126,11 +134,20 @@ export class Squad {
     this.setLogical(mod.op === 'mul' ? this.logical * mod.value : this.logical + mod.value);
   }
 
+  /**
+   * Toutes les sources de pertes passent ici, en « unités de dégâts » (1 = un
+   * contact). L'Endurance (PV par soldat) absorbe : à 2 PV, deux contacts
+   * coûtent un seul soldat. Le reliquat s'accumule entre les coups.
+   */
   loseSoldiers(n: number): void {
     if (n <= 0 || this.logical <= 0) return;
     if (this.shielded) return; // bouclier temporaire : aucune perte
-    this.setLogical(this.logical - n);
-    this.onLost(n);
+    this.partialDamage += n;
+    const lost = Math.floor(this.partialDamage / this.hpPerSoldier);
+    if (lost <= 0) return;
+    this.partialDamage -= lost * this.hpPerSoldier;
+    this.setLogical(this.logical - lost);
+    this.onLost(lost);
   }
 
   /** Bouclier actif : les pertes sont annulées et les soldats virent au bleu clair. */

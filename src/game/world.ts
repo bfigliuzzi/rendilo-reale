@@ -53,6 +53,7 @@ const DEFAULT_STATS: PlayerStats = {
   rateMul: 1,
   splash: 0,
   composition: { rifle: 1, sniper: 0, art: 0 },
+  soldierHp: 1,
 };
 const FIREWORK_COLORS = [0xfbbf24, 0x4ade80, 0x60a5fa, 0xf87171, 0xffffff, 0xf472b6];
 
@@ -202,7 +203,11 @@ export class World {
     this.pendingResult = null;
     this.layers.ground.texture = this.atlas.grounds[def.biome ?? 0];
     this.crates.contactKills = Math.max(1, B.CRATE_CONTACT_KILLS - playerStats.contactShield);
-    this.squad.reset(def.startSquad ?? playerStats.startSquad, playerStats.composition);
+    this.squad.reset(
+      def.startSquad ?? playerStats.startSquad,
+      playerStats.composition,
+      playerStats.soldierHp,
+    );
     this.spawner = new Spawner(def, {
       enemies: this.enemies,
       spawnGates: (ev) => this.gates.spawn(ev.at, ev.left, ev.right),

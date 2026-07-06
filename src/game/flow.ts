@@ -12,10 +12,14 @@ import type { RunResult, World } from './world';
 
 export type Mode = 'campaign' | 'endless' | 'stress';
 
+const REPLAY_BONUS = 0.25; // rejouer exactement le même tirage rapporte +25 % d'or
+
 /** Machine à états menu → jeu → résultat ; fait le lien méta (or, sauvegarde) ↔ monde. */
 export class Flow {
   mode: Mode = 'campaign';
   levelN = 1;
+  private currentSeed = 0;
+  private replayBonusActive = false;
 
   constructor(
     private readonly world: World,
@@ -26,6 +30,7 @@ export class Flow {
   ) {
     menu.bind({
       startCampaign: (n) => this.startCampaign(n),
+      retrySameSeed: () => this.startCampaign(this.levelN, this.currentSeed, true),
       startEndless: () => this.startEndless(),
       buyUpgrade: (id) => this.buyUpgrade(id),
       buyWeapon: (id) => this.buyWeapon(id),
@@ -44,10 +49,13 @@ export class Flow {
     this.menu.showHome();
   }
 
-  startCampaign(n: number = this.save.campaignLevel): void {
+  /** Sans seed explicite : nouveau tirage aléatoire (gains normaux). */
+  startCampaign(n: number = this.save.campaignLevel, seed?: number, replayBonus = false): void {
     this.mode = 'campaign';
     this.levelN = Math.max(1, Math.min(n, this.save.campaignLevel));
-    this.start(makeCampaignLevel(this.levelN));
+    this.currentSeed = seed ?? (Math.random() * 0x7fffffff) | 0;
+    this.replayBonusActive = replayBonus;
+    this.start(makeCampaignLevel(this.levelN, this.currentSeed));
   }
 
   startEndless(): void {
@@ -88,8 +96,13 @@ export class Flow {
         newRecord = true;
       }
     }
+    // bonus de rejeu : connaître le tirage par cœur paie un peu plus
+    const replayBonus =
+      this.mode === 'campaign' && this.replayBonusActive
+        ? Math.round((r.gold + bonus) * REPLAY_BONUS)
+        : 0;
     if (this.mode !== 'stress') {
-      this.save.gold += r.gold + bonus;
+      this.save.gold += r.gold + bonus + replayBonus;
       this.save.counters.kills += r.kills;
       this.save.counters.bossKills += r.bossKills;
       this.save.counters.bonusCrates += r.bonusCrates;
@@ -108,6 +121,7 @@ export class Flow {
       squad: r.squad,
       goldRun: r.gold,
       goldBonus: bonus,
+      replayBonus,
       newRecord,
       stars,
     });
