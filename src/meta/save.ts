@@ -2,17 +2,36 @@
 
 const KEY = 'rendilo-reale:save:v1';
 
+export interface SaveCounters {
+  kills: number;
+  bossKills: number;
+  bonusCrates: number;
+  wins: number;
+}
+
 export interface SaveData {
   gold: number;
   upgrades: Record<string, number>; // id d'amélioration → niveau acheté
+  weapons: Record<string, number>; // id d'arme → niveau (absent = non possédée)
+  equipped: string; // arme équipée
+  stars: Record<string, number>; // niveau de campagne → étoiles (1-3)
+  counters: SaveCounters; // compteurs cumulés (succès)
+  claimed: string[]; // succès déjà réclamés
   campaignLevel: number; // prochain niveau de campagne à battre (1-based)
   endlessBest: number; // meilleure distance endless, en mètres affichés
   muted: boolean;
 }
 
+const DEFAULT_COUNTERS: SaveCounters = { kills: 0, bossKills: 0, bonusCrates: 0, wins: 0 };
+
 const DEFAULTS: SaveData = {
   gold: 0,
   upgrades: {},
+  weapons: { rifle: 1 },
+  equipped: 'rifle',
+  stars: {},
+  counters: DEFAULT_COUNTERS,
+  claimed: [],
   campaignLevel: 1,
   endlessBest: 0,
   muted: false,
@@ -21,15 +40,19 @@ const DEFAULTS: SaveData = {
 export function loadSave(): SaveData {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULTS, upgrades: {} };
+    if (!raw) return structuredClone(DEFAULTS);
     const parsed = JSON.parse(raw) as Partial<SaveData>;
     return {
-      ...DEFAULTS,
+      ...structuredClone(DEFAULTS),
       ...parsed,
       upgrades: { ...(parsed.upgrades ?? {}) },
+      weapons: { rifle: 1, ...(parsed.weapons ?? {}) },
+      stars: { ...(parsed.stars ?? {}) },
+      counters: { ...DEFAULT_COUNTERS, ...(parsed.counters ?? {}) },
+      claimed: [...(parsed.claimed ?? [])],
     };
   } catch {
-    return { ...DEFAULTS, upgrades: {} };
+    return structuredClone(DEFAULTS);
   }
 }
 

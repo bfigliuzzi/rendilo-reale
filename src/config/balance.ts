@@ -34,7 +34,7 @@ export const DRAG_SENSITIVITY = 1.2;
 
 // Tir — le DPS est découplé du nombre de balles : la cadence visuelle sature,
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.
-export const SOLDIER_DPS = 9;
+export const SOLDIER_DPS = 10;
 export const FIRE_RATE_PER_SOLDIER = 5;
 export const FIRE_SOLDIER_CAP = 48; // cadence max = 48 × 5 = 240 balles/s
 export const BULLET_SPEED = 760;

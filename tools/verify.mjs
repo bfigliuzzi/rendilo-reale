@@ -32,9 +32,16 @@ await page.goto(URL, { waitUntil: 'networkidle0' });
 await page.waitForFunction('window.__game !== undefined', { timeout: 5000 });
 
 await page.evaluate(
-  (mode, upgrades) => {
+  (mode, patch) => {
     const g = window.__game;
-    Object.assign(g.save.upgrades, upgrades);
+    // patch complet ({upgrades, weapons, equipped}) ou raccourci « upgrades seuls »
+    if (patch.upgrades || patch.weapons || patch.equipped) {
+      Object.assign(g.save.upgrades, patch.upgrades ?? {});
+      Object.assign(g.save.weapons, patch.weapons ?? {});
+      if (patch.equipped) g.save.equipped = patch.equipped;
+    } else {
+      Object.assign(g.save.upgrades, patch);
+    }
     if (mode === 'stress') g.flow.startStress();
     else if (mode === 'endless') g.flow.startEndless();
     else {

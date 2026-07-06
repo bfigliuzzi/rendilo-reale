@@ -40,9 +40,18 @@ export interface RunResult {
   dist: number; // en mètres
   gold: number; // or gagné pendant la run (hors bonus de fin)
   squad: number;
+  bossKills: number;
+  bonusCrates: number; // caisses bonus effectivement récupérées (buff déclenché)
 }
 
-const DEFAULT_STATS: PlayerStats = { startSquad: B.START_SQUAD, dpsMul: 1, lootMul: 1, contactShield: 0 };
+const DEFAULT_STATS: PlayerStats = {
+  startSquad: B.START_SQUAD,
+  dpsMul: 1,
+  lootMul: 1,
+  contactShield: 0,
+  rateMul: 1,
+  splash: 0,
+};
 const FIREWORK_COLORS = [0xfbbf24, 0x4ade80, 0x60a5fa, 0xf87171, 0xffffff, 0xf472b6];
 
 export class World {
@@ -50,6 +59,8 @@ export class World {
   dist = 0;
   prevDist = 0;
   kills = 0;
+  bossKillsRun = 0;
+  bonusCratesRun = 0;
   onGameOver: (result: RunResult) => void = () => {};
 
   readonly squad: Squad;
@@ -126,6 +137,7 @@ export class World {
       this.sfx.bossDie();
       this.addGold(B.GOLD_PER_BOSS);
       this.kills++;
+      this.bossKillsRun++;
       if (boss.final) this.finalBossDown = true;
     };
     this.bosses.onContact = (kills) => {
@@ -162,6 +174,8 @@ export class World {
     this.dist = 0;
     this.prevDist = 0;
     this.kills = 0;
+    this.bossKillsRun = 0;
+    this.bonusCratesRun = 0;
     this.goldF = 0;
     this.finishLine = Infinity;
     this.finalBossDown = false;
@@ -234,7 +248,16 @@ export class World {
     spawner.update(this.dist);
     const dpsMul = this.playerStats.dpsMul * (dmgActive ? B.BUFF_DMG_MUL : 1);
     if (
-      this.bullets.autoFire(dt, this.squad, this.dist, dpsMul, this.enemies, this.bosses, this.crates) > 0
+      this.bullets.autoFire(
+        dt,
+        this.squad,
+        this.dist,
+        dpsMul,
+        this.playerStats.rateMul,
+        this.enemies,
+        this.bosses,
+        this.crates,
+      ) > 0
     ) {
       this.sfx.shoot();
     }
@@ -254,7 +277,15 @@ export class World {
       this.fx.burst(x, y, { count: 10, color: 0xa855f7, speed: 180, life: 0.35 });
       this.sfx.lanceHit();
     });
-    this.collisions.run(this.dist, this.bullets, this.enemies, this.squad, this.crates, this.bosses);
+    this.collisions.run(
+      this.dist,
+      this.bullets,
+      this.enemies,
+      this.squad,
+      this.crates,
+      this.bosses,
+      this.playerStats.splash,
+    );
     this.updateMissiles(dt);
     this.enemies.sweepDead((x, y) => {
       this.kills++;
@@ -352,6 +383,7 @@ export class World {
       }
       case 'damage':
         if (byBullet) {
+          this.bonusCratesRun++;
           this.dmgBuffUntil = this.time + B.BUFF_DMG_DURATION;
           this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0xfb923c, speed: 240, life: 0.5, size: 1.4 });
           this.sfx.powerup();
@@ -359,6 +391,7 @@ export class World {
         break;
       case 'shield':
         if (byBullet) {
+          this.bonusCratesRun++;
           this.shieldUntil = this.time + B.BUFF_SHIELD_DURATION;
           this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0x7dd3fc, speed: 240, life: 0.5, size: 1.4 });
           this.sfx.powerup();
@@ -366,6 +399,7 @@ export class World {
         break;
       case 'drone':
         if (byBullet) {
+          this.bonusCratesRun++;
           this.droneUntil = this.time + B.BUFF_DRONE_DURATION;
           this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0x38bdf8, speed: 240, life: 0.5, size: 1.4 });
           this.sfx.powerup();
@@ -373,6 +407,7 @@ export class World {
         break;
       case 'gold':
         if (byBullet) {
+          this.bonusCratesRun++;
           this.goldUntil = this.time + B.BUFF_GOLD_DURATION;
           this.fx.burst(crate.cx, crate.cy, { count: 24, color: 0xfbbf24, speed: 240, life: 0.5, size: 1.4 });
           this.sfx.powerup();
@@ -416,7 +451,7 @@ export class World {
 
   /** Barrage à l'approche des portes + frappes ambiantes : bouger ou mourir. */
   private updateMissiles(dt: number): void {
-    if (this.dist < B.MISSILE_MIN_DIST) {
+    if (this.dist < (this.level?.missileMinDist ?? B.MISSILE_MIN_DIST)) {
       this.missiles.update(dt);
       return;
     }
@@ -424,7 +459,7 @@ export class World {
     if (gateAhead !== null && gateAhead < B.MISSILE_GATE_RANGE) {
       this.gateMissileT -= dt;
       if (this.gateMissileT <= 0) {
-        this.gateMissileT = rand(...B.MISSILE_GATE_INTERVAL);
+        this.gateMissileT = rand(...B.MISSILE_GATE_INTERVAL) * (this.level?.missileIntervalMul ?? 1);
         // champ de mines devant la porte : positions fixes sur la voie, à traverser
         this.missiles.spawn(
           rand(B.LANE_MIN_X + 20, B.LANE_MAX_X - 20),
@@ -455,6 +490,8 @@ export class World {
       dist: Math.round(this.dist / 10),
       gold: this.gold,
       squad: this.squad.logical,
+      bossKills: this.bossKillsRun,
+      bonusCrates: this.bonusCratesRun,
     };
     this.endTimer = victory ? 1.8 : 0.7;
     this.fireworkT = 0;

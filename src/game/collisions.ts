@@ -15,6 +15,30 @@ import type { Squad } from './squad';
 export class Collisions {
   private readonly grid = new SpatialGrid(B.GRID_COLS, B.GRID_ROWS, B.GRID_CELL, B.GRID_MAX_PER_CELL);
 
+  /** Canon lourd : dégâts de zone autour de l'ennemi touché (via la grille, déjà à jour). */
+  private splashAround(enemies: EnemyPool, hitIndex: number, dmg: number, radius: number): void {
+    const grid = this.grid;
+    const cx = grid.cellX(enemies.x[hitIndex]);
+    const cy = grid.cellY(enemies.y[hitIndex]);
+    const reach = Math.ceil(radius / grid.cellSize);
+    for (let gy = cy - reach; gy <= cy + reach; gy++) {
+      if (gy < 0 || gy >= grid.rows) continue;
+      for (let gx = cx - reach; gx <= cx + reach; gx++) {
+        if (gx < 0 || gx >= grid.cols) continue;
+        const cell = gy * grid.cols + gx;
+        const n = grid.counts[cell];
+        const base = cell * grid.maxPerCell;
+        for (let k = 0; k < n; k++) {
+          const e = grid.items[base + k];
+          if (e === hitIndex || enemies.hp[e] <= 0) continue;
+          const dx = enemies.x[e] - enemies.x[hitIndex];
+          const dy = enemies.y[e] - enemies.y[hitIndex];
+          if (dx * dx + dy * dy < radius * radius) enemies.hp[e] -= dmg;
+        }
+      }
+    }
+  }
+
   onBossHit: () => void = () => {};
   onKamikaze: (x: number, y: number) => void = () => {};
 
@@ -25,6 +49,7 @@ export class Collisions {
     squad: Squad,
     crates: Crates,
     bosses: Bosses,
+    splash: number, // rayon de dégâts de zone des balles (arme canon lourd)
   ): void {
     const grid = this.grid;
     grid.setOrigin(0, -dist - B.GRID_AHEAD);
@@ -59,6 +84,7 @@ export class Collisions {
             const r = enemies.radius[e] + B.BULLET_RADIUS;
             if (dx * dx + dy * dy < r * r) {
               enemies.hp[e] -= bullets.dmg[b];
+              if (splash > 0) this.splashAround(enemies, e, bullets.dmg[b] * 0.5, splash);
               hit = true;
               break;
             }

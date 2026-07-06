@@ -80,12 +80,13 @@ export class BulletPool {
     squad: Squad,
     dist: number,
     dpsMul: number,
+    rateMul: number,
     enemies: EnemyPool,
     bosses: Bosses,
     crates: Crates,
   ): number {
     if (squad.logical <= 0) return 0;
-    const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER;
+    const rate = Math.min(squad.logical, B.FIRE_SOLDIER_CAP) * B.FIRE_RATE_PER_SOLDIER * rateMul;
     const dmg = (squad.logical * B.SOLDIER_DPS * dpsMul) / rate;
     let fired = 0;
     this.fireAcc += rate * dt;

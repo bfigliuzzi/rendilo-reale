@@ -18,11 +18,15 @@ d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance
 le test de perf (escouade 500).
 
 **Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
-le N1 sans méta ~3 fois sur 4, de justesse (~20-50 survivants sur ~480 kills, défaites
-contre les déluges de fin de niveau) ; N2 exige la méta de ~3 victoires N1
-(`{"dps":4,"start":3,"armor":1}` ≈ 1100 or) et se gagne à 20-35 survivants. Le bot casse
-les caisses de loin, esquive missiles et lances télégraphiées, choisit les bonnes portes —
-c'est le proxy « bon joueur ».
+le N1 sans méta ~1 fois sur 3 (défaites tardives : déluge final ou boss, jamais avant
+~480 m) ; N2 se gagne avec la méta de ~3 victoires
+(`'{"upgrades":{"dps":4,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`).
+Le 5e argument de verify.mjs accepte un patch complet `{upgrades, weapons, equipped}` ou
+des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts,
+choisit les bonnes portes — c'est le proxy « bon joueur ».
+ATTENTION : modifier les tirages du générateur (poids, variantes) re-seed les niveaux —
+toujours re-vérifier le N1 après. L'intensité des missiles est un paramètre de niveau
+(`missileMinDist`, `missileIntervalMul`) : le N1 épargne le début de partie.
 
 **Aim-assist** : les balles ciblent la menace la plus proche du cône frontal — ennemis,
 boss ET caisses (`bullets.aimVX`). Toute nouvelle entité tirable doit y être ajoutée,
@@ -51,8 +55,10 @@ escouades en début de niveau.
 - **Tout le tuning** vit dans `config/balance.ts`. Ne pas hardcoder de constantes de gameplay
   ailleurs.
 - **Méta** : `meta/save.ts` (schéma versionné `rendilo-reale:save:v1` — toute évolution =
-  migration), `meta/upgrades.ts` (défs data-driven, la boutique s'en dérive). Les stats d'une
-  run passent par `computeStats()` → `World.loadLevel(def, stats)`.
+  migration), `meta/upgrades.ts` + `meta/weapons.ts` + `meta/achievements.ts` (défs
+  data-driven, les écrans s'en dérivent). Les stats d'une run passent par
+  `computeStats(save)` → `World.loadLevel(def, stats)` (arme équipée incluse : cadence,
+  DPS, splash).
 - **Flow** : `game/flow.ts` est la machine à états menu → jeu → résultat et le seul endroit
   qui touche à la sauvegarde ; `World` ne connaît ni les modes ni la méta.
 - **Juice** : les systèmes remontent des callbacks (`onLost`, `onBreak`, `onDeath`…), `World`

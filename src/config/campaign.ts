@@ -109,7 +109,15 @@ export function makeCampaignLevel(n: number): LevelDef {
   // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)
   events.push({ at: len + 400, type: 'finish' });
 
-  return { scrollSpeed: 130 + Math.min(30, n * 2), hpMul, biome: (n - 1) % 4, events };
+  return {
+    scrollSpeed: 130 + Math.min(30, n * 2),
+    hpMul,
+    biome: (n - 1) % 4,
+    // le barrage monte en puissance avec les niveaux : au N1 il épargne le début de partie
+    missileMinDist: n === 1 ? 2200 : 700,
+    missileIntervalMul: Math.max(1, 1.5 - 0.25 * (n - 1)),
+    events,
+  };
 }
 
 /**
@@ -181,5 +189,11 @@ export function makeEndlessLevel(): LevelDef {
   };
 
   extend(events, 0);
-  return { scrollSpeed: 135, biome: Math.floor(rand() * 4), events, extend };
+  return {
+    scrollSpeed: 135,
+    biome: Math.floor(rand() * 4),
+    missileMinDist: 2000,
+    events,
+    extend,
+  };
 }

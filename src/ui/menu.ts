@@ -1,5 +1,7 @@
+import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
 import type { SaveData } from '../meta/save';
 import { UPGRADES, type UpgradeId } from '../meta/upgrades';
+import { WEAPONS, type WeaponId } from '../meta/weapons';
 
 export interface ResultView {
   victory: boolean;
@@ -11,12 +13,16 @@ export interface ResultView {
   goldRun: number;
   goldBonus: number;
   newRecord: boolean;
+  stars: number; // 0 hors victoire de campagne
 }
 
 export interface MenuHandlers {
   startCampaign: (n: number) => void;
   startEndless: () => void;
   buyUpgrade: (id: UpgradeId) => void;
+  buyWeapon: (id: WeaponId) => void;
+  equipWeapon: (id: WeaponId) => void;
+  claimAchievement: (id: string) => void;
   toggleMute: () => boolean;
   backToMenu: () => void;
 }
@@ -51,24 +57,28 @@ export class Menu {
     for (let n = from; n < s.campaignLevel + 3; n++) {
       const locked = n > s.campaignLevel;
       const done = n < s.campaignLevel;
+      const stars = s.stars[n] ?? 0;
+      const starsHtml = done || stars > 0 ? `<span class="chip-stars">${'★'.repeat(stars).padEnd(3, '☆')}</span>` : '';
       chips.push(
-        `<button class="chip ${locked ? 'locked' : done ? 'done' : 'next'}" ${locked ? 'disabled' : `data-action="level" data-n="${n}"`}>${locked ? '🔒' : done ? '✔' : ''} ${n}</button>`,
+        `<button class="chip ${locked ? 'locked' : done ? 'done' : 'next'}" ${locked ? 'disabled' : `data-action="level" data-n="${n}"`}>${locked ? '🔒' : ''} ${n}${starsHtml}</button>`,
       );
     }
+    const claimables = ACHIEVEMENTS.filter((a) => isClaimable(a, s)).length;
     this.show(`
       <h1>RENDILO<br>REALE</h1>
       <div class="gold-line">💰 ${s.gold}</div>
       <button class="btn primary" data-action="campaign">▶&nbsp; Campagne — Niveau ${s.campaignLevel}</button>
       <div class="chips">${chips.join('')}</div>
       <button class="btn" data-action="endless">∞&nbsp; Sans fin ${s.endlessBest > 0 ? `— Record ${s.endlessBest} m` : ''}</button>
-      <button class="btn" data-action="shop">⬆&nbsp; Améliorations</button>
+      <button class="btn" data-action="shop">⬆&nbsp; Arsenal</button>
+      <button class="btn" data-action="achievements">🏅&nbsp; Succès${claimables > 0 ? ` <span class="pill">${claimables}</span>` : ''}</button>
       <button class="btn small" data-action="mute">${s.muted ? '🔇 Son coupé' : '🔊 Son actif'}</button>
     `);
   }
 
   showShop(): void {
     const s = this.save;
-    const cards = UPGRADES.map((u) => {
+    const upgradeCards = UPGRADES.map((u) => {
       const lvl = s.upgrades[u.id] ?? 0;
       const maxed = lvl >= u.maxLevel;
       const cost = maxed ? 0 : u.cost(lvl);
@@ -82,8 +92,54 @@ export class Menu {
           </button>
         </div>`;
     }).join('');
+    const weaponCards = WEAPONS.map((w) => {
+      const lvl = s.weapons[w.id] ?? 0;
+      const owned = lvl >= 1;
+      const equipped = s.equipped === w.id;
+      const maxed = lvl >= w.maxLevel;
+      const cost = !owned ? w.unlockCost : maxed ? 0 : w.levelCost(lvl);
+      const canBuy = !maxed && s.gold >= cost;
+      const buyLabel = !owned ? `Débloquer — ${cost} 💰` : maxed ? 'MAX' : `Améliorer — ${cost} 💰`;
+      return `
+        <div class="card ${equipped ? 'equipped' : ''}">
+          <div class="card-head">${w.icon} <b>${w.name}</b><span class="lvl">${owned ? `niv. ${lvl}/${w.maxLevel}` : '🔒'}</span></div>
+          <div class="card-effect">${w.desc}</div>
+          <div class="card-row">
+            <button class="btn buy" data-action="wbuy" data-id="${w.id}" ${canBuy ? '' : 'disabled'}>${buyLabel}</button>
+            ${owned ? `<button class="btn buy alt" data-action="wequip" data-id="${w.id}" ${equipped ? 'disabled' : ''}>${equipped ? '✓ Équipée' : 'Équiper'}</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
     this.show(`
-      <h2>Améliorations</h2>
+      <h2>Arsenal</h2>
+      <div class="gold-line">💰 ${s.gold}</div>
+      <div class="section-title">Armes</div>
+      <div class="cards">${weaponCards}</div>
+      <div class="section-title">Améliorations</div>
+      <div class="cards">${upgradeCards}</div>
+      <button class="btn small" data-action="menu">← Retour</button>
+    `);
+  }
+
+  showAchievements(): void {
+    const s = this.save;
+    const cards = ACHIEVEMENTS.map((a) => {
+      const value = Math.min(a.value(s), a.target);
+      const claimed = s.claimed.includes(a.id);
+      const claimable = isClaimable(a, s);
+      const pct = Math.round((value / a.target) * 100);
+      return `
+        <div class="card ${claimed ? 'claimed' : ''}">
+          <div class="card-head">${a.icon} <b>${a.name}</b><span class="lvl">${value}/${a.target}</span></div>
+          <div class="card-effect">${a.desc}</div>
+          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <button class="btn buy" data-action="claim" data-id="${a.id}" ${claimable ? '' : 'disabled'}>
+            ${claimed ? '✓ Réclamé' : `Réclamer — ${a.reward} 💰`}
+          </button>
+        </div>`;
+    }).join('');
+    this.show(`
+      <h2>Succès</h2>
       <div class="gold-line">💰 ${s.gold}</div>
       <div class="cards">${cards}</div>
       <button class="btn small" data-action="menu">← Retour</button>
@@ -92,6 +148,8 @@ export class Menu {
 
   showResult(r: ResultView): void {
     const title = r.victory ? 'VICTOIRE' : 'DÉFAITE';
+    const starsLine =
+      r.stars > 0 ? `<div class="result-stars">${'★'.repeat(r.stars)}${'☆'.repeat(3 - r.stars)}</div>` : '';
     const sub =
       r.mode === 'campaign'
         ? `Niveau ${r.levelN}`
@@ -112,6 +170,7 @@ export class Menu {
         : `<button class="btn" data-action="${r.mode === 'endless' ? 'endless' : 'menu'}">↻ Rejouer</button>`;
     this.show(`
       <h2 class="${r.victory ? 'win' : 'lose'}">${title}</h2>
+      ${starsLine}
       <div class="sub">${sub}</div>
       <div class="result-stats">☠ ${r.kills} ennemis · ⚔ ${r.squad} survivants · ${r.dist} m</div>
       ${goldLine}
@@ -144,9 +203,24 @@ export class Menu {
       case 'shop':
         this.showShop();
         break;
+      case 'achievements':
+        this.showAchievements();
+        break;
       case 'buy':
         h.buyUpgrade(btn.dataset.id as UpgradeId);
         this.showShop(); // re-render : or et niveaux à jour
+        break;
+      case 'wbuy':
+        h.buyWeapon(btn.dataset.id as WeaponId);
+        this.showShop();
+        break;
+      case 'wequip':
+        h.equipWeapon(btn.dataset.id as WeaponId);
+        this.showShop();
+        break;
+      case 'claim':
+        h.claimAchievement(btn.dataset.id!);
+        this.showAchievements();
         break;
       case 'mute':
         h.toggleMute();

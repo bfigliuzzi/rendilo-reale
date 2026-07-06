@@ -2,8 +2,10 @@ import type { Sfx } from '../audio/sfx';
 import * as B from '../config/balance';
 import { makeCampaignLevel, makeEndlessLevel } from '../config/campaign';
 import { makeStressLevel } from '../config/levels';
+import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
 import { persist, type SaveData } from '../meta/save';
 import { computeStats, UPGRADES, type UpgradeId } from '../meta/upgrades';
+import { WEAPONS, type WeaponId } from '../meta/weapons';
 import type { Hud } from '../ui/hud';
 import type { Menu } from '../ui/menu';
 import type { RunResult, World } from './world';
@@ -26,6 +28,9 @@ export class Flow {
       startCampaign: (n) => this.startCampaign(n),
       startEndless: () => this.startEndless(),
       buyUpgrade: (id) => this.buyUpgrade(id),
+      buyWeapon: (id) => this.buyWeapon(id),
+      equipWeapon: (id) => this.equipWeapon(id),
+      claimAchievement: (id) => this.claimAchievement(id),
       toggleMute: () => this.toggleMute(),
       backToMenu: () => this.showMenu(),
     });
@@ -57,16 +62,24 @@ export class Flow {
   private start(def: Parameters<World['loadLevel']>[0]): void {
     this.menu.hideAll();
     this.hud.setInGame(true);
-    this.world.loadLevel(def, computeStats(this.save.upgrades));
+    this.world.loadLevel(def, computeStats(this.save));
   }
 
   private handleGameOver(r: RunResult): void {
-    const lootMul = computeStats(this.save.upgrades).lootMul;
+    const lootMul = computeStats(this.save).lootMul;
     let bonus = 0;
     let newRecord = false;
+    let stars = 0;
     if (this.mode === 'campaign' && r.victory) {
       bonus = Math.round((B.GOLD_VICTORY_BASE + B.GOLD_VICTORY_PER_LEVEL * this.levelN) * lootMul);
       if (this.levelN === this.save.campaignLevel) this.save.campaignLevel++;
+      // étoiles selon les survivants ; les nouvelles étoiles paient
+      stars = r.squad >= 100 ? 3 : r.squad >= 40 ? 2 : 1;
+      const prev = this.save.stars[this.levelN] ?? 0;
+      if (stars > prev) {
+        bonus += (stars - prev) * 40;
+        this.save.stars[this.levelN] = stars;
+      }
     } else if (this.mode === 'endless') {
       bonus = Math.round(Math.floor(r.dist / 100) * B.GOLD_ENDLESS_PER_100M * lootMul);
       if (r.dist > this.save.endlessBest) {
@@ -76,6 +89,10 @@ export class Flow {
     }
     if (this.mode !== 'stress') {
       this.save.gold += r.gold + bonus;
+      this.save.counters.kills += r.kills;
+      this.save.counters.bossKills += r.bossKills;
+      this.save.counters.bonusCrates += r.bonusCrates;
+      if (this.mode === 'campaign' && r.victory) this.save.counters.wins++;
       persist(this.save);
     }
     if (r.victory) this.sfx.victory();
@@ -91,7 +108,37 @@ export class Flow {
       goldRun: r.gold,
       goldBonus: bonus,
       newRecord,
+      stars,
     });
+  }
+
+  private buyWeapon(id: WeaponId): void {
+    const def = WEAPONS.find((w) => w.id === id);
+    if (!def) return;
+    const level = this.save.weapons[id] ?? 0;
+    const cost = level === 0 ? def.unlockCost : level >= def.maxLevel ? Infinity : def.levelCost(level);
+    if (this.save.gold < cost) return;
+    this.save.gold -= cost;
+    this.save.weapons[id] = level + 1;
+    if (level === 0) this.save.equipped = id; // débloquer = équiper, réflexe naturel
+    persist(this.save);
+    this.sfx.buy();
+  }
+
+  private equipWeapon(id: WeaponId): void {
+    if ((this.save.weapons[id] ?? 0) < 1) return;
+    this.save.equipped = id;
+    persist(this.save);
+    this.sfx.buy();
+  }
+
+  private claimAchievement(id: string): void {
+    const def = ACHIEVEMENTS.find((a) => a.id === id);
+    if (!def || !isClaimable(def, this.save)) return;
+    this.save.claimed.push(id);
+    this.save.gold += def.reward;
+    persist(this.save);
+    this.sfx.victory();
   }
 
   private buyUpgrade(id: UpgradeId): void {

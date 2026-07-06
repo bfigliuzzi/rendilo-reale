@@ -1,4 +1,6 @@
 import { START_SQUAD } from '../config/balance';
+import type { SaveData } from './save';
+import { weaponStats } from './weapons';
 
 // Améliorations permanentes, data-driven : la boutique et le calcul des stats
 // se dérivent entièrement de ces définitions.
@@ -49,19 +51,25 @@ export const UPGRADES: readonly UpgradeDef[] = [
   },
 ];
 
-/** Stats effectives du joueur pour une run, dérivées des niveaux d'amélioration. */
+/** Stats effectives du joueur pour une run, dérivées de la méta (améliorations + arme). */
 export interface PlayerStats {
   startSquad: number;
   dpsMul: number;
   lootMul: number;
   contactShield: number; // réduit les pertes de contact caisse/boss
+  rateMul: number; // cadence visuelle (arme)
+  splash: number; // rayon de dégâts de zone des balles (arme, 0 = aucun)
 }
 
-export function computeStats(upgrades: Record<string, number>): PlayerStats {
+export function computeStats(save: Pick<SaveData, 'upgrades' | 'weapons' | 'equipped'>): PlayerStats {
+  const up = save.upgrades;
+  const weapon = weaponStats(save.equipped, save.weapons[save.equipped] ?? 1);
   return {
-    startSquad: START_SQUAD + 2 * (upgrades.start ?? 0),
-    dpsMul: 1 + 0.1 * (upgrades.dps ?? 0),
-    lootMul: 1 + 0.15 * (upgrades.loot ?? 0),
-    contactShield: 2 * (upgrades.armor ?? 0), // pertes évitées par impact caisse/boss
+    startSquad: START_SQUAD + 2 * (up.start ?? 0),
+    dpsMul: (1 + 0.1 * (up.dps ?? 0)) * weapon.dpsMul,
+    lootMul: 1 + 0.15 * (up.loot ?? 0),
+    contactShield: 2 * (up.armor ?? 0), // pertes évitées par impact caisse/boss
+    rateMul: weapon.rateMul,
+    splash: weapon.splash,
   };
 }

@@ -27,8 +27,10 @@ npm run dev -- --host   # + accès depuis un téléphone sur le même réseau
   (record de distance, mini-boss récurrents), et `?stress` dans l'URL pour le test de
   fluidité (escouade 500, hordes massives).
 - **Métaprogression** : l'or gagné (kills, caisses, boss, bonus de fin) s'investit dans
-  la boutique — effectif de départ, puissance de feu, butin, blindage. Sauvegarde en
-  localStorage.
+  l'Arsenal — 3 **armes équipables à niveaux** (fusil, gatling, canon lourd à dégâts de
+  zone) et 4 améliorations permanentes (effectif, puissance, butin, blindage).
+  **Étoiles** (1-3) par niveau de campagne selon les survivants, **succès** cumulatifs à
+  réclamer en or. Sauvegarde en localStorage.
 - Le HUD affiche FPS, frame-time p95 et compteurs d'entités en haut à gauche.
 
 ## Stack

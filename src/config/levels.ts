@@ -35,6 +35,8 @@ export interface LevelDef {
   startSquad?: number; // défaut : effectif de départ du joueur (méta)
   hpMul?: number; // multiplicateur de PV ennemis (défaut 1)
   biome?: number; // index dans atlas.grounds (défaut 0)
+  missileMinDist?: number; // distance sans aucune frappe (défaut balance.MISSILE_MIN_DIST)
+  missileIntervalMul?: number; // étire l'intervalle du barrage de porte (défaut 1)
   events: LevelEvent[];
   /** Endless : appelé quand le spawner approche de la fin de `events` pour générer la suite. */
   extend?: (events: LevelEvent[], dist: number) => void;
