@@ -26,14 +26,21 @@ le test de perf (escouade 500).
 
 **Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
 le N1 sans méta ~1 fois sur 3 (défaites tardives : déluge final ou boss, jamais avant
-~480 m) ; N2 se gagne avec la méta de ~4-5 victoires
-(`'{"upgrades":{"dps":8,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`).
+~480 m) ; N2 avec la méta de ~4-5 victoires
+(`'{"upgrades":{"dps":8,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`)
+se gagne ~1 fois sur 2 en cross-seed, et les trois armes sont à parité à or équivalent
+(mesuré : gatling 2/6, fusil 4/6, canon 1/3 — différences dans le bruit statistique).
 Les paliers de boutique sont volontairement serrés (+5 % dégâts, +10 % or) avec une
 courbe de coût dps adoucie (40×1,28^l) — au net l'or achète ~1,6-2× moins de puissance
 qu'un tuning « généreux » ; ne pas re-buffer l'un sans retoucher l'autre.
+Le N5 (niveau boss ultra) se gagne ~2 fois sur 3 avec une méta plausible pour ce stade
+(`'{"upgrades":{"dps":22,"start":9,"armor":2,"rate":6,"vitality":3},"weapons":{"gatling":4},"equipped":"gatling"}'`),
+défaites en plein duel — `ULTRA_HP_MUL` 4 est calibré là-dessus (à 5 le bot mourait à 1 %
+des PV : pas de porte pour regonfler pendant le combat, l'usure plafonne la durée tenable).
 Le 5e argument de verify.mjs accepte un patch complet `{upgrades, weapons, equipped}` ou
-des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts,
-choisit les bonnes portes — c'est le proxy « bon joueur ».
+des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts et
+murs de pics (il lit `spikes.list` : `cx`/`halfW`), choisit les bonnes portes — c'est le
+proxy « bon joueur ».
 Les niveaux de campagne sont désormais RE-SEEDÉS à chaque tentative (seed aléatoire via
 `flow.startCampaign(n, seed?, replayBonus?)`) ; « Rejouer ce tirage » réutilise le seed
 courant avec +25 % d'or. La bande d'équilibrage se mesure donc en cross-seed (plusieurs
@@ -45,7 +52,15 @@ contient toujours au moins une caisse non explosive ; pas de méga-horde dans le
 tiers d'un niveau (cap déterministe) ; le filet continu d'ennemis (anti-temps-mort) et
 les mines sont ajoutés APRÈS la boucle principale puis `events.sort()` — le spawner
 exige des événements triés. Les mines ne sont ni tirables ni dans l'aim-assist :
-danger de positionnement pur.
+danger de positionnement pur. Leur zone se lit au sol : corps opaque (jupe hachurée
+jaune/noir), halo pointillé rotatif à `MINE_RADIUS` — le point ET la zone à éviter.
+Les murs de pics (dès N2, `game/spikes.ts`) ne couvrent JAMAIS toute la voie (centre
+collé à un bord, ≤ 50 % de largeur) et jamais à moins de 260 px d'une porte ou d'une
+caisse — pas de pince inesquivable. Indestructibles, hors aim-assist et collisions
+balles ; ils rognent les PV de tout ce qui les touche : la horde se dégrossit en les
+traversant (dégâts ×hpMul du niveau, PAS ×riposte — les gonfler sous pression serait
+un cadeau au joueur), l'escouade saigne en continu par le canal heavy (proportionnel
++ plancher/plafond).
 
 **Aim-assist** : les balles ciblent la menace la plus proche du cône frontal — ennemis,
 boss ET caisses (`bullets.aimVX`). Toute nouvelle entité tirable doit y être ajoutée,
@@ -66,16 +81,41 @@ SOUS-proportionnelle au DPS : grossir reste rentable, mais plus auto-win. Rien n
 sous la référence — la bande d'équilibrage N1/N2 n'est pas affectée. Toute nouvelle
 source de PV spawnés ou de pertes plafonnées doit passer par ces deux helpers. Affichée
 au HUD (`⚠️ riposte ×N`).
+**GIGA HORDE** (N ≥ `GIGA_FROM_LEVEL`, campagne) : le boss final arrive escorté d'une
+nuée massive — UNIQUEMENT si la riposte est active (`pressure > 0`) : c'est une réponse
+à la masse critique, jamais un mur pour les petites escouades. Placée ENTRE le boss et
+le joueur (elle fait écran : l'aim-assist tire au plus proche, il faut la mâcher pendant
+que le boss canonne), placement déterministe (pas de `Math.random` — seule la pression,
+état de jeu, module la taille), counts bornés (`GIGA_COUNT_CAP`).
+**Niveaux boss** (tous les `ULTRA_EVERY` niveaux) : phase normale jusqu'au bout, puis
+boss ULTRA — PV ×`ULTRA_HP_MUL`, lances ×`ULTRA_DMG_MUL` (via `world.ultraLanceMul`),
+ÉPINGLÉ en haut de l'écran (`ULTRA_PIN_AHEAD`) : aucun contact possible, PAS de ligne
+d'arrivée (seule sa mort libère — le scroll continue en arène). Son défi est distinct :
+volée permanente à 3 (5 enragé), cadence ×`ULTRA_LANCE_RATE`, frappes de missiles
+appelées sur le joueur et invocations qui détournent l'aim-assist. Marqué ☠ au menu.
 **Missiles en quatre calibres** (`MISSILE_KINDS`) : jaune (large/faible), orange
 (standard), rouge (chirurgical/punitif, télégraphe court), atomique (rare, RÉSERVÉ à la
-riposte adaptative, zone énorme + gros dégâts compensés par un long télégraphe). Le
-danger d'un calibre se lit à la couleur/taille du marqueur — préserver cette lisibilité.
-Le bot d'esquive lit `strike.radius` : toute nouvelle zone de danger doit exposer son
-rayon réel.
+riposte adaptative, zone énorme + gros dégâts compensés par un long télégraphe).
+**Lisibilité des dangers (WCAG, à préserver)** : un calibre ne se lit JAMAIS qu'à la
+couleur (1.4.1, daltonisme) — quatre signaux redondants : taille de l'anneau (= rayon
+réel du souffle), couleur, densité du cœur (`fillAlpha`), glyphe blanc (croix = rouge,
+trèfle = atomique). Les textures de marqueur (`ring`, `ringDashed`, `cross`, `trefoil`)
+ont un liseré noir INTÉGRÉ : la teinte porte sur les biomes sombres, le liseré sur les
+clairs — ≥ 3:1 partout (1.4.11 ; aucune couleur plate ne passe sur les 4 biomes, vérifié
+au calcul). Fin de télégraphe = strobe (`MISSILE_STROBE_TIME`) : signal de mouvement,
+indépendant de la vision des couleurs. Toute nouvelle zone de danger suit ce double
+codage ET expose son rayon réel (`strike.radius`, lu par le bot d'esquive).
 **Cadence de tir** : base ×0,75 (`RATE_BASE`, calibrée au bot — 0,70 sortait le N1 de
 la bande), remontée par l'amélioration méta `rate`
 et l'arme. Le DPS reste découplé du nombre de balles — la cadence ne joue que sur la
 répartition des dégâts (surplus gâché sur les petits ennemis).
+**Armes à budget de puissance** (`meta/weapons.ts`) : le `dpsBonus` d'une arme est
+DÉRIVÉ, jamais réglé à la main — utilité = (1 + 0,18·log2(cadence)) · (1 + 0,005·splash),
+puissance cible = 1 + 0,1·log2(1 + coût/400), dpsBonus = cible/utilité ; le coût des
+niveaux suit aussi la puissance cible. Une nouvelle arme ne définit QUE
+cadence/splash/coût de déblocage. C'est un `dpsBonus` libre qui avait rendu la gatling
+dominante (×1,15 de DPS ET ×1,7 de cadence = moins de surplus gâché, strictement
+meilleure partout) — une arme rapide doit payer sa cadence en dégâts bruts.
 
 ## Invariants d'architecture
 

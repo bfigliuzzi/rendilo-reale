@@ -1,4 +1,4 @@
-import { COMP_UNLOCK_LEVEL } from '../config/balance';
+import { COMP_UNLOCK_LEVEL, ULTRA_EVERY } from '../config/balance';
 import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
 import type { SaveData } from '../meta/save';
 import { UPGRADES, type UpgradeId } from '../meta/upgrades';
@@ -72,7 +72,7 @@ export class Menu {
       const stars = s.stars[n] ?? 0;
       const starsHtml = done || stars > 0 ? `<span class="chip-stars">${'★'.repeat(stars).padEnd(3, '☆')}</span>` : '';
       chips.push(
-        `<button class="chip ${locked ? 'locked' : done ? 'done' : 'next'}" ${locked ? 'disabled' : `data-action="level" data-n="${n}"`}>${locked ? '🔒' : ''} ${n}${starsHtml}</button>`,
+        `<button class="chip ${locked ? 'locked' : done ? 'done' : 'next'}" ${locked ? 'disabled' : `data-action="level" data-n="${n}"`}>${locked ? '🔒' : ''} ${n}${n % ULTRA_EVERY === 0 ? '☠' : ''}${starsHtml}</button>`,
       );
     }
     const claimables = ACHIEVEMENTS.filter((a) => isClaimable(a, s)).length;

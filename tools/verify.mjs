@@ -94,6 +94,11 @@ while (Date.now() - start < SECONDS * 1000) {
         .filter((m) => !m.dead && m.y > -w.dist - 300 && m.y < -w.dist + 20)
         .map((m) => ({ x: m.x, keep: 110 }));
       nearCrates.push(...mines);
+      // murs de pics : indestructibles, on passe par le trou (marge = demi-largeur + escouade)
+      const spikeWalls = (w.spikes?.list ?? [])
+        .filter((s) => !s.dead && s.y > -w.dist - 340 && s.y < -w.dist + 20)
+        .map((s) => ({ x: s.cx, keep: s.halfW + 90 }));
+      nearCrates.push(...spikeWalls);
       // lances du boss : projeter la ligne de visée / la trajectoire au niveau de l'escouade
       const squadY = -w.dist;
       const lanceThreats = [];

@@ -23,6 +23,13 @@ export interface Atlas {
   crateBonus: Texture;
   boss: Texture;
   mine: Texture;
+  // marqueurs de danger, blancs à teinter, LISERÉ NOIR INTÉGRÉ (le tint ne
+  // touche que le blanc) : contraste ≥ 3:1 garanti sur tout biome (WCAG 1.4.11)
+  ring: Texture; // limite de zone (frappes de missiles)
+  ringDashed: Texture; // périmètre pointillé (halo de mine — distinct des frappes)
+  cross: Texture; // glyphe « frappe chirurgicale »
+  trefoil: Texture; // glyphe radiologique (frappe atomique)
+  spikes: Texture; // bande de pics tuilable (source séparée, pour TilingSprite)
   grounds: readonly Texture[]; // un motif de voie par biome (sources séparées)
 }
 
@@ -83,7 +90,7 @@ function drawCrate(
 export function buildAtlas(): Atlas {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
-  canvas.height = 192;
+  canvas.height = 256; // bande y=192..256 : marqueurs de danger + mine
   const ctx = canvas.getContext('2d')!;
 
   // soldat (0,0,20,20) — bleu, casque clair, canon vers l'avant
@@ -171,14 +178,6 @@ export function buildAtlas(): Atlas {
   // obus artilleur (216,70,14,14) — boule sombre à lueur
   circle(ctx, 223, 77, 6, '#475569', '#1e293b');
   circle(ctx, 223, 75.5, 2.5, '#fbbf24', '#92400e');
-  // mine (232,32,22,22) — disque sombre, picots, témoin rouge (le clignotement est fait en jeu)
-  circle(ctx, 243, 43, 9, '#1f2937', '#0b1016');
-  ctx.fillStyle = '#374151';
-  for (let k = 0; k < 6; k++) {
-    const a = (k / 6) * Math.PI * 2;
-    ctx.fillRect(243 + Math.cos(a) * 8 - 1.5, 43 + Math.sin(a) * 8 - 1.5, 3, 3);
-  }
-  circle(ctx, 243, 43, 3, '#ef4444', '#7f1d1d');
   // spark : disque blanc doux (112,16,12,12)
   const grad = ctx.createRadialGradient(118, 22, 1, 118, 22, 6);
   grad.addColorStop(0, 'rgba(255,255,255,1)');
@@ -217,6 +216,73 @@ export function buildAtlas(): Atlas {
   circle(ctx, bx, by, 8.5, '#7f1d1d', '#450a0a');
   circle(ctx, bx, by, 4, '#fbbf24', '#92400e'); // œil
 
+  // --- bande y=192..256 : marqueurs de danger, blanc à teinter + liseré noir ---
+  // le tint Pixi multiplie : le blanc prend la couleur, le noir reste noir —
+  // c'est le liseré qui garantit la lecture sur les biomes clairs (désert, neige)
+  const outlined = (draw: (pass: 'edge' | 'body') => void): void => {
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 9;
+    draw('edge');
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    draw('body');
+  };
+  // anneau plein (0,192,64,64) — limite de zone des frappes
+  outlined(() => {
+    ctx.beginPath();
+    ctx.arc(32, 224, 26, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  // anneau pointillé (64,192,64,64) — halo de mine, distinct des frappes
+  ctx.setLineDash([9, 8]);
+  outlined(() => {
+    ctx.beginPath();
+    ctx.arc(96, 224, 26, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  // croix (128,192,32,32) — glyphe « frappe chirurgicale »
+  ctx.lineCap = 'round';
+  outlined(() => {
+    ctx.beginPath();
+    ctx.moveTo(134, 198);
+    ctx.lineTo(154, 218);
+    ctx.moveTo(154, 198);
+    ctx.lineTo(134, 218);
+    ctx.stroke();
+  });
+  ctx.lineCap = 'butt';
+  // trèfle radiologique (160,192,40,40) — trois pales + moyeu
+  const blade = (a: number, r0: number, r1: number, half: number, fill: string): void => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(180, 212, r1, a - half, a + half);
+    ctx.arc(180, 212, r0, a + half, a - half, true);
+    ctx.closePath();
+    ctx.fill();
+  };
+  for (let k = 0; k < 3; k++) {
+    const a = -Math.PI / 2 + (k / 3) * Math.PI * 2;
+    blade(a, 5.5, 19, 0.62, '#000000');
+    blade(a, 8, 17, 0.48, '#ffffff');
+  }
+  circle(ctx, 180, 212, 5.5, '#ffffff', '#000000');
+  // mine (208,192,28,28) — corps sombre, jupe hachurée jaune/noir (code danger
+  // universel : lisible quelle que soit la vision), témoin blanc à cœur rouge
+  circle(ctx, 222, 206, 12, '#111827', '#000000');
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 4.5;
+  ctx.setLineDash([5, 4.5]);
+  ctx.beginPath();
+  ctx.arc(222, 206, 9, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  circle(ctx, 222, 206, 5, '#ffffff', '#000000');
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(222, 206, 3, 0, Math.PI * 2);
+  ctx.fill();
+
   const source = Texture.from(canvas).source;
   const frame = (x: number, y: number, w: number, h: number): Texture =>
     new Texture({ source, frame: new Rectangle(x, y, w, h) });
@@ -245,9 +311,56 @@ export function buildAtlas(): Atlas {
     crateExplosive: frame(100, 64, 96, 56),
     crateBonus: frame(0, 124, 96, 56),
     boss: frame(150, 130, 44, 44),
-    mine: frame(232, 32, 22, 22),
+    mine: frame(208, 192, 28, 28),
+    ring: frame(0, 192, 64, 64),
+    ringDashed: frame(64, 192, 64, 64),
+    cross: frame(128, 192, 32, 32),
+    trefoil: frame(160, 192, 40, 40),
+    spikes: buildSpikesPattern(),
     grounds: BIOMES.map((b) => buildGroundPattern(b)),
   };
+}
+
+/**
+ * Bande de pics tuilable (TilingSprite) : socle sombre à hachures jaunes
+ * (code danger universel, comme les mines) + pointes acier à liseré noir —
+ * lisible sur les 4 biomes et quelle que soit la vision des couleurs.
+ */
+function buildSpikesPattern(): Texture {
+  const w = 96;
+  const h = 26;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  // socle : bande sombre bordée de noir, hachures jaunes
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, h - 10, w, 10);
+  ctx.fillStyle = '#1f2937';
+  ctx.fillRect(0, h - 8, w, 6);
+  ctx.fillStyle = '#facc15';
+  for (let x = 2; x < w; x += 12) ctx.fillRect(x, h - 7, 6, 4);
+  // pointes : triangles acier, contour noir épais
+  for (let x = 0; x < w; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, h - 8);
+    ctx.lineTo(x + 12, 2);
+    ctx.lineTo(x + 22, h - 8);
+    ctx.closePath();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
+    // arête claire : lecture du relief
+    ctx.beginPath();
+    ctx.moveTo(x + 12, 4);
+    ctx.lineTo(x + 8, h - 9);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#f8fafc';
+    ctx.stroke();
+  }
+  return Texture.from(canvas);
 }
 
 /** Motif de voie : bas-côtés, rambardes, chaussée avec joints réguliers. */

@@ -18,6 +18,7 @@ export interface SpawnTargets {
   spawnCrate: (ev: Extract<LevelEvent, { type: 'crate' }>) => void;
   spawnBoss: (ev: Extract<LevelEvent, { type: 'boss' }>) => void;
   spawnMine: (ev: Extract<LevelEvent, { type: 'mine' }>) => void;
+  spawnSpikes: (ev: Extract<LevelEvent, { type: 'spikes' }>, hpMul: number) => void;
   onFinishLine: (at: number) => void;
   pressureHpMul: () => number; // riposte adaptative : ×PV appliqué au moment du spawn
 }
@@ -64,6 +65,11 @@ export class Spawner {
         break;
       case 'mine':
         this.targets.spawnMine(ev);
+        break;
+      case 'spikes':
+        // les dégâts des pics suivent l'escalade des PV ennemis, PAS la riposte
+        // (les pics aident surtout le joueur — les gonfler sous pression serait un cadeau)
+        this.targets.spawnSpikes(ev, ev.hpMul ?? this.level.hpMul ?? 1);
         break;
       case 'finish':
         this.targets.onFinishLine(ev.at);

@@ -28,7 +28,11 @@ export type LevelEvent =
   | { at: number; type: 'gates'; left: GateModifier; right: GateModifier }
   | { at: number; type: 'crate'; hp: number; xNorm: number; variant?: CrateVariant } // xNorm ∈ [0,1]
   | { at: number; type: 'mine'; xNorm: number } // piège au sol : s'évite, ne se tire pas
-  | { at: number; type: 'boss'; hp: number; final?: boolean } // final : sa mort = victoire
+  // mur de pics indestructible : xNorm = centre, widthFrac = fraction de voie couverte
+  // (le générateur garantit TOUJOURS un passage libre) ; hpMul scale les dégâts aux ennemis
+  | { at: number; type: 'spikes'; xNorm: number; widthFrac: number; hpMul?: number }
+  // final : sa mort = victoire · ultra : épinglé en haut, PV/dégâts boostés (niveau boss)
+  | { at: number; type: 'boss'; hp: number; final?: boolean; ultra?: boolean }
   | { at: number; type: 'finish' };
 
 export interface LevelDef {
@@ -38,6 +42,7 @@ export interface LevelDef {
   biome?: number; // index dans atlas.grounds (défaut 0)
   missileMinDist?: number; // distance sans aucune frappe (défaut balance.MISSILE_MIN_DIST)
   missileIntervalMul?: number; // étire l'intervalle du barrage de porte (défaut 1)
+  gigaHorde?: boolean; // le boss final arrive escorté d'une nuée — si riposte active
   events: LevelEvent[];
   /** Endless : appelé quand le spawner approche de la fin de `events` pour générer la suite. */
   extend?: (events: LevelEvent[], dist: number) => void;

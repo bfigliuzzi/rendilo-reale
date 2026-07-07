@@ -119,24 +119,71 @@ export const MINE_RADIUS = 105; // souffle (tue aussi les ennemis proches)
 export const MINE_KILLS_RATIO = 0.18;
 export const MINE_KILLS_MAX = 8;
 
+// Murs de pics : obstacles INDESTRUCTIBLES (ni tirables, ni dans l'aim-assist),
+// à cheval sur une partie de la voie seulement — le générateur garantit toujours
+// un passage. Tout ce qui les touche perd des PV : ils dégrossissent la horde
+// qui les traverse, et saignent l'escouade mal positionnée (canal heavy,
+// proportionnel avec plancher/plafond — jamais un forfait).
+export const SPIKE_H = 26; // hauteur de la bande de pics (monde)
+export const SPIKE_ENEMY_DPS = 12; // dégâts/s aux ennemis, ×hpMul du niveau (suit l'escalade)
+export const SPIKE_SQUAD_RATIO = 0.22; // pertes/s = ratio × effectif…
+export const SPIKE_SQUAD_MIN = 3; // …avec plancher…
+export const SPIKE_SQUAD_MAX = 14; // …et plafond (étiré par heavyCap sous riposte)
+
+// GIGA HORDE : à partir de GIGA_FROM_LEVEL, le boss final arrive escorté d'une
+// nuée massive — UNIQUEMENT si la riposte adaptative est active (pressure > 0) :
+// c'est une réponse à la masse critique, pas un mur pour les petites escouades.
+export const GIGA_FROM_LEVEL = 6;
+export const GIGA_BASE_COUNT = 160; // gonflé par la pression, borné par le cap
+export const GIGA_COUNT_CAP = 380; // invariant : tout count de horde est borné
+export const GIGA_BRUTE_CAP = 18;
+
+// Niveaux boss (tous les ULTRA_EVERY niveaux) : phase normale jusqu'au bout,
+// puis boss ULTRA — PV et dégâts boostés, ÉPINGLÉ en haut de l'écran (aucun
+// contact possible : le défi est le déluge de lances, les frappes qu'il appelle
+// et ses invocations qui détournent l'aim-assist). Pas de ligne d'arrivée :
+// seule sa mort libère le niveau.
+export const ULTRA_EVERY = 5;
+// ×5 laissait le bot mourir à 1 % des PV avec une méta plausible : trop long —
+// le combat est une guerre d'usure sans porte pour regonfler l'escouade
+export const ULTRA_HP_MUL = 4;
+export const ULTRA_DMG_MUL = 1.6; // multiplicateur des pertes par lance
+export const ULTRA_PIN_AHEAD = 640; // distance d'épinglage devant l'escouade (écran)
+export const ULTRA_LANCE_RATE = 0.55; // intervalle de lances réduit (cadence accrue)
+export const ULTRA_VOLLEY_SPREAD = 0.24; // rad — volée permanente à 3, à 5 sous 50 % PV
+export const ULTRA_STRIKE_INTERVAL: [number, number] = [4.5, 7]; // frappes appelées sur le joueur
+export const ULTRA_SUMMON_INTERVAL: [number, number] = [6, 9];
+export const ULTRA_SUMMON_GRUNTS = 10;
+export const ULTRA_SUMMON_RUNNERS = 5;
+
 // Missiles (urgence à l'approche des portes + frappes ambiantes), en quatre
-// calibres lisibles à la couleur du marqueur : le jaune arrose large mais pique
-// peu, le rouge est chirurgical et punitif (télégraphe plus court), l'atomique
-// — rare, réservé à la riposte adaptative — combine zone énorme et gros dégâts,
-// compensé par un long télégraphe : il se fuit, mais il faut s'y mettre tôt.
+// calibres : le jaune arrose large mais pique peu, le rouge est chirurgical et
+// punitif (télégraphe plus court), l'atomique — rare, réservé à la riposte
+// adaptative — combine zone énorme et gros dégâts, compensé par un long
+// télégraphe : il se fuit, mais il faut s'y mettre tôt.
+// LISIBILITÉ (WCAG 1.4.1/1.4.11) : un calibre ne se lit JAMAIS qu'à la couleur —
+// taille + densité du cœur + glyphe le codent aussi (daltonisme). Les textures
+// de marqueur ont un liseré noir intégré : la teinte porte sur biomes sombres,
+// le liseré sur biomes clairs — ≥ 3:1 partout. Toute nouvelle zone de danger
+// doit suivre ce double codage ET exposer son rayon réel (bot d'esquive).
 export interface MissileKindDef {
   radius: number;
   killsRatio: number; // part de l'effectif perdue (plancher 2, plafond heavyCap(killsCap))
   killsCap: number;
   warning: number; // délai marqueur → impact
-  color: number; // teinte du marqueur d'alerte
+  color: number; // teinte du marqueur d'alerte (le liseré noir vient de la texture)
+  fillAlpha: number; // densité du cœur de remplissage — proportionnelle à la létalité
+  glyph?: 'cross' | 'trefoil'; // signature de forme des calibres les plus punitifs
 }
 export const MISSILE_KINDS = {
-  yellow: { radius: 200, killsRatio: 0.12, killsCap: 7, warning: 1.35, color: 0xfacc15 },
-  orange: { radius: 130, killsRatio: 0.25, killsCap: 12, warning: 1.25, color: 0xf97316 },
-  red: { radius: 80, killsRatio: 0.5, killsCap: 22, warning: 1.05, color: 0xef4444 },
-  nuke: { radius: 240, killsRatio: 0.65, killsCap: 45, warning: 2.2, color: 0x93c5fd },
+  yellow: { radius: 200, killsRatio: 0.12, killsCap: 7, warning: 1.35, color: 0xfacc15, fillAlpha: 0.14 },
+  orange: { radius: 130, killsRatio: 0.25, killsCap: 12, warning: 1.25, color: 0xfb923c, fillAlpha: 0.28 },
+  red: { radius: 80, killsRatio: 0.5, killsCap: 22, warning: 1.05, color: 0xef4444, fillAlpha: 0.34, glyph: 'cross' },
+  nuke: { radius: 240, killsRatio: 0.65, killsCap: 45, warning: 2.2, color: 0x93c5fd, fillAlpha: 0.3, glyph: 'trefoil' },
 } as const satisfies Record<string, MissileKindDef>;
+// dernier bout de télégraphe : les marqueurs strobent (signal de mouvement,
+// indépendant de la couleur et de la vision) — « c'est maintenant »
+export const MISSILE_STROBE_TIME = 0.45;
 export type MissileKind = keyof typeof MISSILE_KINDS;
 // tirage pondéré des frappes ordinaires — l'atomique a son propre timer, sous riposte
 export const MISSILE_KIND_WEIGHTS: readonly (readonly [MissileKind, number])[] = [

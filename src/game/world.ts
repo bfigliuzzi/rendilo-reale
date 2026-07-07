@@ -18,6 +18,7 @@ import { Mines } from './mines';
 import { Missiles } from './missiles';
 import { ProjectilePool } from './projectiles';
 import { Spawner } from './spawner';
+import { Spikes } from './spikes';
 import { Squad } from './squad';
 
 export type GameState = 'idle' | 'playing' | 'defeat' | 'victory';
@@ -76,6 +77,7 @@ export class World {
   private readonly crates: Crates;
   private readonly missiles: Missiles;
   readonly mines: Mines; // public : bot de test
+  readonly spikes: Spikes; // public : bot de test
   private readonly droneSprite: Sprite;
   private readonly collisions = new Collisions();
   private spawner: Spawner | null = null;
@@ -94,6 +96,12 @@ export class World {
   private gateMissileT = 0;
   private ambientMissileT = 0;
   private nukeT = 0;
+  private ultraStrikeT = 0;
+  private ultraSummonT = 0;
+  private ultraStrikeAlt = false;
+  private ultraLanceMul = 1; // ×ULTRA_DMG_MUL tant qu'un boss ultra est en vie
+  private spikeHurtT = 0; // throttle du feedback de contact pics (les pertes, elles, sont continues)
+  private gigaBanner: Container | null = null;
   private endTimer = 0;
   private fireworkT = 0;
   private pendingResult: RunResult | null = null;
@@ -119,6 +127,7 @@ export class World {
     this.bolts = new ProjectilePool(B.MAX_BOLTS, layers.crates, atlas.bolt, B.BOLT_SPEED);
     this.missiles = new Missiles(layers.crates, atlas);
     this.mines = new Mines(layers.gates, atlas); // sous les ennemis : elles sont au sol
+    this.spikes = new Spikes(layers.gates, atlas); // au sol aussi : la horde marche dessus
     this.droneSprite = new Sprite(atlas.drone);
     this.droneSprite.anchor.set(0.5);
     this.droneSprite.visible = false;
@@ -156,15 +165,35 @@ export class World {
     };
     this.bosses.onLanceFire = () => this.sfx.lanceFire();
     this.bosses.onLanceHit = (x, y) => {
+      // ultra boss : ses lances frappent plus fort (ULTRA_DMG_MUL) — c'est SA menace,
+      // le contact étant impossible par construction (épinglé hors de portée)
       const losses = Math.max(
         2,
-        Math.min(this.heavyCap(B.LANCE_KILLS_MAX), Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO)) -
-          this.playerStats.contactShield,
+        Math.min(
+          this.heavyCap(B.LANCE_KILLS_MAX * this.ultraLanceMul),
+          Math.ceil(this.squad.logical * B.LANCE_KILLS_RATIO * this.ultraLanceMul),
+        ) - this.playerStats.contactShield,
       );
       this.squad.loseSoldiers(losses, true);
       this.fx.burst(x, y, { count: 16, color: 0xef4444, speed: 220, life: 0.4, size: 1.3 });
       this.fx.shake(6);
       this.sfx.lanceHit();
+    };
+    this.spikes.onSquadContact = (x, y, dt) => {
+      // attrition continue, proportionnelle avec plancher/plafond (canal heavy) :
+      // traverser un mur coûte un pourcentage, pas un forfait ni une annihilation
+      const rate = Math.min(
+        this.heavyCap(B.SPIKE_SQUAD_MAX),
+        Math.max(B.SPIKE_SQUAD_MIN, this.squad.logical * B.SPIKE_SQUAD_RATIO),
+      );
+      this.squad.loseSoldiers(rate * dt, true);
+      this.spikeHurtT -= dt;
+      if (this.spikeHurtT <= 0) {
+        this.spikeHurtT = 0.15;
+        this.fx.burst(x, y, { count: 6, color: 0xcbd5e1, speed: 170, life: 0.3 });
+        this.fx.shake(3);
+        this.sfx.crateHit();
+      }
     };
     this.mines.onTrigger = (x, y) => {
       const kills = Math.min(
@@ -207,6 +236,10 @@ export class World {
     this.gateMissileT = 0.4;
     this.ambientMissileT = rand(...B.MISSILE_AMBIENT_INTERVAL);
     this.nukeT = rand(...B.NUKE_INTERVAL);
+    this.ultraStrikeT = rand(...B.ULTRA_STRIKE_INTERVAL);
+    this.ultraSummonT = rand(...B.ULTRA_SUMMON_INTERVAL);
+    this.ultraLanceMul = 1;
+    this.spikeHurtT = 0;
     this.endTimer = 0;
     this.pendingResult = null;
     this.pressure = 0;
@@ -222,8 +255,15 @@ export class World {
       spawnGates: (ev) => this.gates.spawn(ev.at, ev.left, ev.right),
       // la riposte adaptative gonfle aussi les PV des caisses et des boss au spawn
       spawnCrate: (ev) => this.crates.spawn(ev.at, ev.hp * this.pressureHpMul, ev.xNorm, ev.variant),
-      spawnBoss: (ev) => this.bosses.spawn(ev.at, ev.hp * this.pressureHpMul, ev.final ?? false),
+      spawnBoss: (ev) => {
+        this.bosses.spawn(ev.at, ev.hp * this.pressureHpMul, ev.final ?? false, ev.ultra ?? false);
+        // GIGA HORDE : escorte du boss final, seulement sous riposte adaptative
+        if (ev.final && (this.level?.gigaHorde ?? false) && this.pressure > 0) {
+          this.spawnGigaHorde(ev.at);
+        }
+      },
       spawnMine: (ev) => this.mines.spawn(ev.at, ev.xNorm),
+      spawnSpikes: (ev, hpMul) => this.spikes.spawn(ev.at, ev.xNorm, ev.widthFrac, hpMul),
       onFinishLine: (at) => this.placeFinishLine(at),
       pressureHpMul: () => this.pressureHpMul,
     });
@@ -318,7 +358,11 @@ export class World {
       this.sfx.lanceHit();
     });
     this.collisions.run(this.dist, this.bullets, this.enemies, this.squad, this.crates, this.bosses);
+    // après les collisions (indices de grille encore valides), avant sweepDead :
+    // les morts par pics sont ramassées — et payées — dans la même passe
+    this.spikes.update(dt, this.enemies, this.squad, this.dist);
     this.updateMissiles(dt);
+    this.updateUltra(dt);
     this.enemies.sweepDead((x, y) => {
       this.kills++;
       this.addGold(B.GOLD_PER_KILL);
@@ -544,6 +588,103 @@ export class World {
     this.missiles.update(dt);
   }
 
+  /**
+   * GIGA HORDE : nuée massive escortant le boss final (niveaux ≥ GIGA_FROM_LEVEL),
+   * déclenchée UNIQUEMENT sous riposte adaptative — c'est la réponse du monde à la
+   * masse critique, jamais un mur pour les petites escouades. Placement déterministe
+   * (pas de Math.random : seule la pression — état de jeu — module la taille),
+   * counts bornés (invariant : le pool sature, les PV portent l'escalade).
+   */
+  private spawnGigaHorde(at: number): void {
+    const hpMul = (this.level?.hpMul ?? 1) * this.pressureHpMul;
+    const count = Math.min(
+      B.GIGA_COUNT_CAP,
+      Math.round(B.GIGA_BASE_COUNT * (1 + 0.6 * this.pressure)),
+    );
+    const brutes = Math.min(B.GIGA_BRUTE_CAP, Math.round(count * 0.06));
+    const runners = Math.round(count * 0.22);
+    const grunts = count - brutes - runners;
+    const lane = B.LANE_MAX_X - B.LANE_MIN_X;
+    // masse étagée ENTRE le boss et l'escouade : elle fait écran (l'aim-assist
+    // tire au plus proche) — il faut mâcher la muraille pendant que le boss
+    // canonne derrière, au lieu de sniper le boss avant l'arrivée de la nuée
+    for (let i = 0; i < grunts; i++) {
+      const row = Math.floor(i / 14);
+      const x = B.LANE_MIN_X + (((i % 14) + 0.5 + (row % 2) * 0.5) / 15) * lane;
+      this.enemies.spawn(0, x, -at + 500 - row * 34, hpMul);
+    }
+    for (let i = 0; i < runners; i++) {
+      const x = B.LANE_CENTER + Math.sin(i * 1.7) * (lane / 2 - 30);
+      this.enemies.spawn(1, x, -at + 420 - i * 26, hpMul);
+    }
+    for (let i = 0; i < brutes; i++) {
+      const x = B.LANE_CENTER + Math.sin(i * 2.4) * 150;
+      this.enemies.spawn(2, x, -at + 300 - i * 110, hpMul);
+    }
+    // annonce : on voit et on entend arriver la muraille
+    this.gigaBanner?.destroy({ children: true });
+    const banner = new Container();
+    const label = new Text({
+      text: '☠ GIGA HORDE ☠',
+      style: {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: 30,
+        fontWeight: '900',
+        fill: 0xffffff,
+        stroke: { color: 0x7f1d1d, width: 6 },
+      },
+    });
+    label.anchor.set(0.5);
+    banner.addChild(label);
+    banner.position.set(B.LANE_CENTER, -at + 300);
+    this.layers.labels.addChild(banner);
+    this.gigaBanner = banner;
+    this.fx.shake(10);
+    this.sfx.missileWarn();
+  }
+
+  /**
+   * Pilote du boss ultra (niveau boss) : épinglé hors de portée, il attaque à
+   * distance — frappes de missiles appelées sur le joueur (rouge/orange en
+   * alternance) et invocations d'ennemis qui détournent l'aim-assist : percer
+   * le boss ou nettoyer les adds, il faut choisir. Ses lances frappent plus
+   * fort tant qu'il est en vie (ultraLanceMul).
+   */
+  private updateUltra(dt: number): void {
+    this.ultraLanceMul = 1;
+    for (const boss of this.bosses.list) {
+      if (!boss.ultra || !boss.alive) continue;
+      this.ultraLanceMul = B.ULTRA_DMG_MUL;
+      this.ultraStrikeT -= dt;
+      if (this.ultraStrikeT <= 0) {
+        this.ultraStrikeT = rand(...B.ULTRA_STRIKE_INTERVAL);
+        this.ultraStrikeAlt = !this.ultraStrikeAlt;
+        const x = clamp(this.squad.x + rand(-80, 80), B.LANE_MIN_X, B.LANE_MAX_X);
+        this.missiles.spawn(x, -this.dist - rand(60, 220), this.ultraStrikeAlt ? 'red' : 'orange');
+      }
+      this.ultraSummonT -= dt;
+      if (this.ultraSummonT <= 0) {
+        this.ultraSummonT = rand(...B.ULTRA_SUMMON_INTERVAL);
+        const hpMul = (this.level?.hpMul ?? 1) * this.pressureHpMul;
+        for (let i = 0; i < B.ULTRA_SUMMON_GRUNTS; i++) {
+          const x = clamp(
+            boss.x + (i - (B.ULTRA_SUMMON_GRUNTS - 1) / 2) * 36,
+            B.LANE_MIN_X,
+            B.LANE_MAX_X,
+          );
+          this.enemies.spawn(0, x, boss.y + 40 + (i % 3) * 30, hpMul);
+        }
+        for (let i = 0; i < B.ULTRA_SUMMON_RUNNERS; i++) {
+          const x = clamp(boss.x + Math.sin(i * 2.1) * 160, B.LANE_MIN_X, B.LANE_MAX_X);
+          this.enemies.spawn(1, x, boss.y + 70 + i * 40, hpMul);
+        }
+        this.fx.burst(boss.x, boss.y + 40, { count: 18, color: 0xd8b4fe, speed: 240, life: 0.45 });
+        this.sfx.bossContact();
+      }
+      break; // un seul ultra à la fois par construction
+    }
+  }
+
   /** Tirage pondéré du calibre des frappes ordinaires (l'atomique est à part). */
   private pickMissileKind(): B.MissileKind {
     let r = Math.random();
@@ -602,6 +743,9 @@ export class World {
   private resetEntities(): void {
     this.finishBanner?.destroy({ children: true });
     this.finishBanner = null;
+    this.gigaBanner?.destroy({ children: true });
+    this.gigaBanner = null;
+    this.spikes.reset();
     this.bullets.clear();
     this.enemies.clear();
     this.gates.reset();

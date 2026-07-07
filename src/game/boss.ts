@@ -19,6 +19,7 @@ export class Boss {
   private prevY: number;
   private vx = 0;
   private flash = 0;
+  private baseTint = 0xffffff;
   private lanceT = rand(...B.LANCE_INTERVAL);
   private readonly maxHp: number;
   private readonly root = new Container();
@@ -32,6 +33,7 @@ export class Boss {
     at: number,
     hp: number,
     readonly final: boolean,
+    readonly ultra: boolean,
     parent: Container,
     atlas: Atlas,
   ) {
@@ -49,7 +51,9 @@ export class Boss {
 
     this.body = new Sprite(atlas.boss);
     this.body.anchor.set(0.5);
-    this.body.width = this.body.height = B.BOSS_RADIUS * 2.2;
+    // l'ultra en impose : plus massif, teinte violacée (distincte du boss ordinaire)
+    this.body.width = this.body.height = B.BOSS_RADIUS * (ultra ? 3 : 2.2);
+    if (ultra) this.body.tint = this.baseTint = 0xd8b4fe;
 
     const barBg = new Sprite(atlas.white);
     barBg.anchor.set(0.5);
@@ -101,9 +105,15 @@ export class Boss {
     const desired = clamp((squad.x - this.x) * 1.2, -B.BOSS_STEER, B.BOSS_STEER);
     this.vx += (desired - this.vx) * Math.min(1, dt * 2.5);
     this.x = clamp(this.x + this.vx * dt, B.LANE_MIN_X, B.LANE_MAX_X);
-    this.y += B.BOSS_SPEED * dt;
+    if (this.ultra) {
+      // épinglé en haut de l'écran : il ne descend JAMAIS — glisse vers son perchoir
+      const pinY = -dist - B.ULTRA_PIN_AHEAD;
+      this.y += (pinY - this.y) * Math.min(1, dt * 2);
+    } else {
+      this.y += B.BOSS_SPEED * dt;
+    }
     this.flash = Math.max(0, this.flash - dt);
-    this.body.tint = this.flash > 0 ? 0xffb0b0 : 0xffffff;
+    this.body.tint = this.flash > 0 ? 0xffb0b0 : this.baseTint;
 
     // lances : télégraphe (trajectoire verrouillée) puis tir en ligne droite
     const onScreen = this.y > -dist - 820 && this.y < -dist + 40;
@@ -112,20 +122,28 @@ export class Boss {
       this.aimLine.alpha = 0.25 + 0.45 * Math.abs(Math.sin(this.telegraph * 22));
       if (this.telegraph <= 0) {
         this.aimLine.visible = false;
-        lances.fire(this.x, this.y + B.BOSS_RADIUS * 0.6, this.aimAngle);
-        // enragé sous 50 % de PV : volée en éventail
-        if (this.hp / this.maxHp < B.LANCE_VOLLEY_HP) {
-          lances.fire(this.x, this.y + B.BOSS_RADIUS * 0.6, this.aimAngle - B.LANCE_VOLLEY_SPREAD);
-          lances.fire(this.x, this.y + B.BOSS_RADIUS * 0.6, this.aimAngle + B.LANCE_VOLLEY_SPREAD);
+        const fireY = this.y + B.BOSS_RADIUS * 0.6;
+        lances.fire(this.x, fireY, this.aimAngle);
+        // ultra : volée permanente à 3 · ordinaire : éventail seulement enragé (< 50 % PV)
+        const enraged = this.hp / this.maxHp < B.LANCE_VOLLEY_HP;
+        if (this.ultra || enraged) {
+          const spread = this.ultra ? B.ULTRA_VOLLEY_SPREAD : B.LANCE_VOLLEY_SPREAD;
+          lances.fire(this.x, fireY, this.aimAngle - spread);
+          lances.fire(this.x, fireY, this.aimAngle + spread);
+          // ultra enragé : éventail à 5 — le bas de l'écran devient un slalom
+          if (this.ultra && enraged) {
+            lances.fire(this.x, fireY, this.aimAngle - spread * 2);
+            lances.fire(this.x, fireY, this.aimAngle + spread * 2);
+          }
         }
         onFire();
       }
     } else if (onScreen) {
       this.lanceT -= dt;
       if (this.lanceT <= 0) {
-        // blessé = enragé : cadence de tir accrue
+        // blessé = enragé : cadence de tir accrue ; l'ultra tire nettement plus vite
         const enrage = 0.55 + 0.45 * Math.max(0, this.hp / this.maxHp);
-        this.lanceT = rand(...B.LANCE_INTERVAL) * enrage;
+        this.lanceT = rand(...B.LANCE_INTERVAL) * enrage * (this.ultra ? B.ULTRA_LANCE_RATE : 1);
         this.aimAngle = Math.atan2(squad.worldY(dist) - this.y, squad.x - this.x);
         this.telegraph = B.LANCE_TELEGRAPH;
         this.aimLine.rotation = this.aimAngle;
@@ -133,8 +151,9 @@ export class Boss {
       }
     }
 
+    // l'ultra est épinglé hors de portée : aucun contact possible, par construction
     const frontY = squad.worldY(dist) - 20;
-    if (this.y + B.BOSS_RADIUS >= frontY && Math.abs(this.x - squad.x) < B.BOSS_RADIUS + 50) {
+    if (!this.ultra && this.y + B.BOSS_RADIUS >= frontY && Math.abs(this.x - squad.x) < B.BOSS_RADIUS + 50) {
       this.y -= B.BOSS_KNOCKBACK; // recule après l'impact : boucle de pression, pas un one-shot
       this.prevY = this.y;
       return B.BOSS_CONTACT_KILLS;
@@ -168,8 +187,8 @@ export class Bosses {
     this.lances = new ProjectilePool(B.MAX_LANCES, parent, atlas.lance, B.LANCE_SPEED);
   }
 
-  spawn(at: number, hp: number, final: boolean): void {
-    this.list.push(new Boss(at, hp, final, this.parent, this.atlas));
+  spawn(at: number, hp: number, final: boolean, ultra = false): void {
+    this.list.push(new Boss(at, hp, final, ultra, this.parent, this.atlas));
   }
 
   update(dt: number, squad: Squad, dist: number): void {

@@ -1,3 +1,4 @@
+import { GIGA_FROM_LEVEL, ULTRA_EVERY, ULTRA_HP_MUL } from './balance';
 import { mulberry32, pickWeighted, rangeOf } from '../core/rng';
 import {
   gateAdd,
@@ -114,10 +115,32 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
     at += 280 + rand() * 260;
   }
 
-  const bossHp = Math.round(500 * (1 + 0.7 * Math.min(n, 12) + 0.4 * Math.max(0, n - 12)));
-  events.push({ at: len - 700, type: 'boss', hp: bossHp, final: true });
-  // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)
-  events.push({ at: len + 400, type: 'finish' });
+  // murs de pics (dès N2) : dégrossissent la horde qui les traverse. Jamais
+  // toute la voie (le centre du mur est collé à un bord), et jamais à hauteur
+  // d'une porte ou d'une caisse — pas de pince inesquivable.
+  if (n >= 2) {
+    const wallCount = Math.min(4, 1 + Math.floor(n / 3));
+    for (let k = 0; k < wallCount; k++) {
+      const wallAt =
+        len * (0.3 + (0.5 * k) / Math.max(1, wallCount - 1 || 1)) + rangeOf(rand, -150, 150);
+      const nearBlocking = events.some(
+        (e) => (e.type === 'gates' || e.type === 'crate') && Math.abs(e.at - wallAt) < 260,
+      );
+      if (nearBlocking) continue;
+      const widthFrac = rangeOf(rand, 0.34, 0.5);
+      const xNorm = rand() < 0.5 ? widthFrac / 2 : 1 - widthFrac / 2;
+      events.push({ at: wallAt, type: 'spikes', xNorm, widthFrac });
+    }
+  }
+
+  const ultra = n % ULTRA_EVERY === 0; // niveau boss : l'arène finale remplace la ligne d'arrivée
+  const bossHp = Math.round(
+    500 * (1 + 0.7 * Math.min(n, 12) + 0.4 * Math.max(0, n - 12)) * (ultra ? ULTRA_HP_MUL : 1),
+  );
+  events.push({ at: len - 700, type: 'boss', hp: bossHp, final: true, ultra });
+  // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)…
+  // …sauf en niveau boss : l'ultra est épinglé en haut, seule sa mort libère
+  if (!ultra) events.push({ at: len + 400, type: 'finish' });
 
   // filet continu : de petits groupes en permanence — jamais plusieurs secondes sans danger
   for (let t = 750; t < len - 900; t += 190 + rand() * 190) {
@@ -147,6 +170,7 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
     // le barrage monte en puissance avec les niveaux : au N1 il épargne le début de partie
     missileMinDist: n === 1 ? 2200 : 700,
     missileIntervalMul: Math.max(1, 1.5 - 0.25 * (n - 1)),
+    gigaHorde: n >= GIGA_FROM_LEVEL,
     events,
   };
 }
@@ -226,6 +250,17 @@ export function makeEndlessLevel(): LevelDef {
       });
       if (d > 1500 && rand() < 0.22) {
         evts.push({ at: genAt + 150, type: 'mine', xNorm: rangeOf(rand, 0.12, 0.88) });
+      }
+      // murs de pics : même garantie qu'en campagne (un bord, jamais toute la voie)
+      if (d > 2200 && rand() < 0.11) {
+        const widthFrac = rangeOf(rand, 0.34, 0.5);
+        evts.push({
+          at: genAt + 200,
+          type: 'spikes',
+          xNorm: rand() < 0.5 ? widthFrac / 2 : 1 - widthFrac / 2,
+          widthFrac,
+          hpMul,
+        });
       }
       genAt += 260 + rand() * 240;
     }
