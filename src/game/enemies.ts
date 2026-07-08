@@ -121,11 +121,16 @@ export class EnemyPool {
   }
 
   syncRender(alpha: number): void {
+    const base = this.atlas.enemyByKind;
+    const alt = this.atlas.enemyAlt;
     for (let i = 0; i < this.count; i++) {
       const p = this.particles[i];
       // dandinement de marche : purement visuel (±1.5 px), les collisions restent exactes
       p.x = lerp(this.prevX[i], this.x[i], alpha) + Math.sin(this.y[i] * 0.09 + i * 0.7) * 1.5;
       p.y = lerp(this.prevY[i], this.y[i], alpha);
+      // cycle de marche à 2 frames : les membres alternent tous les ~22 px d'avancée
+      // (déphasé par index) — le canal uv du ParticleContainer est déjà dynamique
+      p.texture = (Math.floor(this.y[i] * 0.045) + i) % 2 === 0 ? base[this.kind[i]] : alt[this.kind[i]];
     }
     this.container.update();
   }

@@ -8,6 +8,10 @@ export const LANE_MIN_X = 60;
 export const LANE_MAX_X = 480;
 export const LANE_CENTER = 270;
 
+// Biomes : ville, désert, campagne, jungle, savane, sibérie — tirés au seed de
+// la run (palettes/props dans render/textures.ts, décor dans render/decor.ts)
+export const BIOME_COUNT = 6;
+
 // Défilement / caméra
 export const SCROLL_SPEED = 130;
 export const SPAWN_AHEAD = 900; // distance d'avance à laquelle le spawner déclenche les événements

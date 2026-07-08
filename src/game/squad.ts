@@ -259,6 +259,8 @@ export class Squad {
         cx + this.curX[i] * this.visualScale,
         -distI + this.curY[i] * this.visualScale + bob,
       );
+      // dandinement : le buste roule en opposition de phase avec le pas
+      s.rotation = Math.cos(phase + i * 1.31) * 0.09;
       s.scale.set(this.visualScale);
     }
     this.label.position.set(cx, -distI - 22);

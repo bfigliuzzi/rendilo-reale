@@ -5,6 +5,7 @@ import type { LevelDef } from '../config/levels';
 import { clamp, lerp, rand } from '../core/math';
 import type { PointerInput } from '../input/pointer';
 import type { PlayerStats } from '../meta/upgrades';
+import { Decor } from '../render/decor';
 import type { Fx } from '../render/fx';
 import type { Layers } from '../render/layers';
 import type { Atlas } from '../render/textures';
@@ -78,6 +79,7 @@ export class World {
   private readonly missiles: Missiles;
   readonly mines: Mines; // public : bot de test
   readonly spikes: Spikes; // public : bot de test
+  private readonly decor: Decor;
   private readonly droneSprite: Sprite;
   private readonly collisions = new Collisions();
   private spawner: Spawner | null = null;
@@ -128,6 +130,8 @@ export class World {
     this.missiles = new Missiles(layers.crates, atlas);
     this.mines = new Mines(layers.gates, atlas); // sous les ennemis : elles sont au sol
     this.spikes = new Spikes(layers.gates, atlas); // au sol aussi : la horde marche dessus
+    this.decor = new Decor(layers.decor, layers.weather, atlas);
+    this.decor.setup(0, 1); // le menu défile déjà sur un décor
     this.droneSprite = new Sprite(atlas.drone);
     this.droneSprite.anchor.set(0.5);
     this.droneSprite.visible = false;
@@ -244,6 +248,7 @@ export class World {
     this.pendingResult = null;
     this.pressure = 0;
     this.layers.ground.texture = this.atlas.grounds[def.biome ?? 0];
+    this.decor.setup(def.biome ?? 0, def.decorSeed ?? 1); // dist repart de 0 : décor rembobiné
     this.crates.contactKills = Math.max(1, B.CRATE_CONTACT_KILLS - playerStats.contactShield);
     this.squad.reset(
       def.startSquad ?? playerStats.startSquad,
@@ -286,11 +291,13 @@ export class World {
       // le décor défile doucement derrière le menu
       this.prevDist = this.dist;
       this.dist += 30 * dt;
+      this.decor.update(dt, this.dist);
       this.fx.update(dt);
       return;
     }
     if (this.state !== 'playing') {
       this.input.consumeDX();
+      this.decor.update(dt, this.dist);
       this.fx.update(dt);
       this.tickCelebration(dt);
       return;
@@ -381,9 +388,10 @@ export class World {
       if (positive) this.sfx.gateGood();
       else this.sfx.gateBad();
     }
-    this.crates.update(this.squad, this.dist);
+    this.crates.update(this.squad, this.dist, this.time, dt);
     this.mines.update(dt, this.squad, this.dist);
     this.bosses.update(dt, this.squad, this.dist);
+    this.decor.update(dt, this.dist);
     this.fx.update(dt);
 
     if (this.squad.logical <= 0) this.beginEnd(false);
@@ -404,6 +412,7 @@ export class World {
     this.enemies.syncRender(alpha);
     this.bosses.renderSync(alpha);
     this.bolts.syncRender(alpha);
+    this.decor.render(alpha);
   }
 
   stats(): WorldStats {

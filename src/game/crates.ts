@@ -36,6 +36,9 @@ export class Crate {
   onHit: () => void = () => {};
   onBreak: (crate: Crate, byBullet: boolean) => void = () => {};
   private shownHp: number;
+  private hitT = 0; // pop d'impact en cours (s)
+  private baseSX = 1;
+  private baseSY = 1;
   private readonly sprite: Sprite;
   private readonly label: Text;
 
@@ -54,6 +57,8 @@ export class Crate {
     this.sprite.anchor.set(0.5);
     this.sprite.width = B.CRATE_HALF_W * 2;
     this.sprite.height = B.CRATE_HALF_H * 2;
+    this.baseSX = this.sprite.scale.x;
+    this.baseSY = this.sprite.scale.y;
     this.sprite.position.set(cx, cy);
     spriteParent.addChild(this.sprite);
     // les bonus affichent leur récompense, les autres leurs PV
@@ -86,6 +91,7 @@ export class Crate {
       this.destroySelf();
       return;
     }
+    this.hitT = 0.09; // pop bref : la caisse encaisse visiblement
     this.onHit();
     const shown = Math.ceil(this.hp);
     if (shown !== this.shownHp) {
@@ -94,6 +100,17 @@ export class Crate {
       const bonusTag = BONUS_TAG[this.variant] ?? '';
       this.label.text = bonusTag ? `${shown} ${bonusTag}` : String(shown);
     }
+  }
+
+  /** Animation par tick : pulsation des bonus (« tire-moi dessus ») + pop d'impact. */
+  animate(time: number, dt: number): void {
+    this.hitT = Math.max(0, this.hitT - dt);
+    const pulse = BONUS_TAG[this.variant] ? 1 + 0.04 * Math.sin(time * 4 + this.cx * 0.05) : 1;
+    const squash = this.hitT * 12; // ~×1.1 à l'impact, retombe en 90 ms
+    this.sprite.scale.set(
+      this.baseSX * pulse * (1 + squash * 0.1),
+      this.baseSY * pulse * (1 - squash * 0.06),
+    );
   }
 
   destroySelf(): void {
@@ -124,7 +141,7 @@ export class Crates {
     this.list.push(crate);
   }
 
-  update(squad: Squad, dist: number): void {
+  update(squad: Squad, dist: number, time = 0, dt = 0): void {
     const frontY = squad.worldY(dist) - 30;
     let anyDead = false;
     for (const crate of this.list) {
@@ -132,6 +149,7 @@ export class Crates {
         anyDead = true;
         continue;
       }
+      crate.animate(time, dt);
       const inBand = frontY <= crate.cy + B.CRATE_HALF_H && frontY >= crate.cy - B.CRATE_HALF_H;
       if (inBand && Math.abs(squad.x - crate.cx) < B.CRATE_HALF_W + 30) {
         // contact : les caisses PV blessent, les bonus se perdent, l'explosive détone (géré par onBreak)

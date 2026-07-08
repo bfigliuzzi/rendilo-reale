@@ -39,7 +39,8 @@ export interface LevelDef {
   scrollSpeed: number;
   startSquad?: number; // défaut : effectif de départ du joueur (méta)
   hpMul?: number; // multiplicateur de PV ennemis (défaut 1)
-  biome?: number; // index dans atlas.grounds (défaut 0)
+  biome?: number; // index dans atlas.grounds/atlas.decor (défaut 0) — tiré au seed de la run
+  decorSeed?: number; // seed du décor non interactif (même seed = même décor)
   missileMinDist?: number; // distance sans aucune frappe (défaut balance.MISSILE_MIN_DIST)
   missileIntervalMul?: number; // étire l'intervalle du barrage de porte (défaut 1)
   gigaHorde?: boolean; // le boss final arrive escorté d'une nuée — si riposte active

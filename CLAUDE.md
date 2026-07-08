@@ -117,6 +117,28 @@ cadence/splash/coût de déblocage. C'est un `dpsBonus` libre qui avait rendu la
 dominante (×1,15 de DPS ET ×1,7 de cadence = moins de surplus gâché, strictement
 meilleure partout) — une arme rapide doit payer sa cadence en dégâts bruts.
 
+**Sprites de personnages** : dessinés dans la bande x ≥ 256 de l'atlas, en DEUX frames
+de marche par ennemi (`enemyByKind` + `enemyAlt`, membres alternés) — le cycle est un
+swap d'uv dans `enemies.syncRender` (canal uv déjà dynamique, coût nul). Tout nouveau
+type d'ennemi doit fournir ses deux frames et les enregistrer dans LES DEUX tableaux.
+Les ennemis regardent vers le bas (vers le joueur), les soldats vers le haut. Vie des
+entités : soldats = bob + roulis (`squad.renderSync`), boss = respiration/roulis
+accélérés par la rage (`boss.renderSync`), caisses = pop à l'impact + pulsation des
+bonus (`crate.animate`, appelé par `Crates.update(squad, dist, time, dt)`).
+
+**Biomes & décor** (`render/decor.ts`) : `BIOME_COUNT` (6) biomes — ville, désert,
+campagne, jungle, savane, sibérie — tirés au PREMIER tirage du seed de la run
+(campagne et endless ; « rejouer ce tirage » = même biome). Palettes, tuiles de sol
+et planche de props dans `render/textures.ts` (une seule source canvas → le décor se
+batche). Le décor est 100 % NON INTERACTIF : props des bas-côtés (x < LANE_MIN_X /
+> LANE_MAX_X, couche `layers.decor` sous tout le gameplay), détails de chaussée à
+alpha réduit, météo par biome en espace écran (`layers.weather`). Génération seedée
+par tranches (`LevelDef.decorSeed`), pool recyclé swap-remove, zéro alloc au tick ;
+la végétation oscille au rendu (sway, pivot au pied), la météo est interpolée
+(prev/cur). Interdit au décor : hachures jaune/noir, anneaux, glyphes blancs —
+codes réservés aux dangers réels (WCAG) ; les chaussées restent des tons
+moyens/sombres pour préserver la double lecture des marqueurs.
+
 ## Invariants d'architecture
 
 - **Boucle** : simulation à pas fixe 60 Hz (`core/loop.ts`), rendu interpolé (`prevX/prevY` +

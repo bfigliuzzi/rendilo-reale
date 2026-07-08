@@ -20,6 +20,8 @@ export class Boss {
   private vx = 0;
   private flash = 0;
   private baseTint = 0xffffff;
+  private baseScale = 1;
+  private time = rand(0, Math.PI * 2); // déphase la respiration entre boss
   private lanceT = rand(...B.LANCE_INTERVAL);
   private readonly maxHp: number;
   private readonly root = new Container();
@@ -53,6 +55,7 @@ export class Boss {
     this.body.anchor.set(0.5);
     // l'ultra en impose : plus massif, teinte violacée (distincte du boss ordinaire)
     this.body.width = this.body.height = B.BOSS_RADIUS * (ultra ? 3 : 2.2);
+    this.baseScale = this.body.scale.x;
     if (ultra) this.body.tint = this.baseTint = 0xd8b4fe;
 
     const barBg = new Sprite(atlas.white);
@@ -102,6 +105,7 @@ export class Boss {
   update(dt: number, squad: Squad, dist: number, lances: ProjectilePool, onFire: () => void): number {
     this.prevX = this.x;
     this.prevY = this.y;
+    this.time += dt;
     const desired = clamp((squad.x - this.x) * 1.2, -B.BOSS_STEER, B.BOSS_STEER);
     this.vx += (desired - this.vx) * Math.min(1, dt * 2.5);
     this.x = clamp(this.x + this.vx * dt, B.LANE_MIN_X, B.LANE_MAX_X);
@@ -163,6 +167,10 @@ export class Boss {
 
   renderSync(alpha: number): void {
     this.root.position.set(lerp(this.prevX, this.x, alpha), lerp(this.prevY, this.y, alpha));
+    // respiration + roulis : la masse vit, accélérée quand il est blessé (menace lisible)
+    const rage = 1 + 1.2 * (1 - Math.max(0, this.hp) / this.maxHp);
+    this.body.scale.set(this.baseScale * (1 + 0.035 * Math.sin(this.time * 2.2 * rage)));
+    this.body.rotation = Math.sin(this.time * 1.4 * rage) * 0.07;
   }
 
   destroySelf(): void {

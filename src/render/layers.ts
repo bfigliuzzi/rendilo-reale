@@ -10,6 +10,8 @@ import type { Atlas } from './textures';
 export class Layers {
   readonly ground: TilingSprite;
   readonly world = new Container();
+  readonly decor = new Container(); // props non interactifs, sous tout le gameplay
+  readonly weather = new Container(); // météo ambiante, espace écran, au-dessus du monde
   readonly gates = new Container();
   readonly crates = new Container();
   readonly enemies: ParticleContainer;
@@ -27,8 +29,9 @@ export class Layers {
     // particules d'effets : échelle et teinte/alpha varient pendant la vie
     this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 
-    stage.addChild(this.ground, this.world);
+    stage.addChild(this.ground, this.world, this.weather);
     this.world.addChild(
+      this.decor,
       this.gates,
       this.crates,
       this.enemies,

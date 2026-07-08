@@ -1,4 +1,4 @@
-import { GIGA_FROM_LEVEL, ULTRA_EVERY, ULTRA_HP_MUL } from './balance';
+import { BIOME_COUNT, GIGA_FROM_LEVEL, ULTRA_EVERY, ULTRA_HP_MUL } from './balance';
 import { mulberry32, pickWeighted, rangeOf } from '../core/rng';
 import {
   gateAdd,
@@ -16,6 +16,8 @@ import {
  */
 export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelDef {
   const rand = mulberry32(seed);
+  // le biome est tiré EN PREMIER : lié au seed de la run, indépendant du reste du tirage
+  const biome = Math.floor(rand() * BIOME_COUNT);
   // campagne infinie : longueur plafonnée, pente des PV adoucie au-delà de N10
   // (le grind de la boutique — coûts exponentiels — fait « galérer un peu plus »)
   const len = Math.min(6500 + n * 700, 13500);
@@ -166,7 +168,8 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
   return {
     scrollSpeed: 130 + Math.min(30, n * 2),
     hpMul,
-    biome: (n - 1) % 4,
+    biome,
+    decorSeed: seed,
     // le barrage monte en puissance avec les niveaux : au N1 il épargne le début de partie
     missileMinDist: n === 1 ? 2200 : 700,
     missileIntervalMul: Math.max(1, 1.5 - 0.25 * (n - 1)),
@@ -180,7 +183,8 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
  * — la difficulté (PV, effectifs, brutes, mini-boss) est fonction de la distance.
  */
 export function makeEndlessLevel(): LevelDef {
-  const rand = mulberry32((Math.random() * 0x7fffffff) | 0);
+  const seed = (Math.random() * 0x7fffffff) | 0;
+  const rand = mulberry32(seed);
   const events: LevelEvent[] = [{ at: 250, type: 'gates', left: gateAdd(8), right: gateMul(2) }];
   let genAt = 600;
   let sinceGates = 0;
@@ -270,7 +274,8 @@ export function makeEndlessLevel(): LevelDef {
   extend(events, 0);
   return {
     scrollSpeed: 135,
-    biome: Math.floor(rand() * 4),
+    biome: Math.floor(rand() * BIOME_COUNT),
+    decorSeed: seed,
     missileMinDist: 2000,
     events,
     extend,
