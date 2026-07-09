@@ -1,6 +1,6 @@
 import { type Container, Sprite } from 'pixi.js';
 import * as B from '../config/balance';
-import type { Atlas } from '../render/textures';
+import { MARKER_RING_MARGIN, type Atlas } from '../render/textures';
 
 /**
  * Frappes de missiles : un marqueur d'alerte pulse au sol pendant le télégraphe
@@ -33,13 +33,15 @@ class Strike {
     this.warning = def.warning;
     this.radius = def.radius;
     this.fillAlpha = def.fillAlpha;
-    this.zone = new Sprite(atlas.ring);
+    // anneau pré-rendu à la taille du calibre (net, aucun étirement) : la marge
+    // du canvas fait que l'anneau tombe exactement sur le rayon réel du souffle
+    this.zone = new Sprite(atlas.missileRing[kind]);
     this.zone.anchor.set(0.5);
     this.zone.tint = def.color;
     this.zone.alpha = 0.8;
-    this.zone.width = this.zone.height = def.radius * 2;
+    this.zone.width = this.zone.height = def.radius * 2 * MARKER_RING_MARGIN;
     this.zone.position.set(x, y);
-    this.fill = new Sprite(atlas.spark);
+    this.fill = new Sprite(atlas.glow);
     this.fill.anchor.set(0.5);
     this.fill.tint = def.color;
     this.fill.alpha = def.fillAlpha;

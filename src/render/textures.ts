@@ -1,5 +1,5 @@
 import { Rectangle, Texture } from 'pixi.js';
-import { BIOME_COUNT } from '../config/balance';
+import { BIOME_COUNT, MINE_RADIUS, MISSILE_KINDS, type MissileKind } from '../config/balance';
 import { mulberry32 } from '../core/rng';
 
 /**
@@ -27,11 +27,14 @@ export interface Atlas {
   boss: Texture;
   mine: Texture;
   // marqueurs de danger, blancs à teinter, LISERÉ NOIR INTÉGRÉ (le tint ne
-  // touche que le blanc) : contraste ≥ 3:1 garanti sur tout biome (WCAG 1.4.11)
-  ring: Texture; // limite de zone (frappes de missiles)
-  ringDashed: Texture; // périmètre pointillé (halo de mine — distinct des frappes)
+  // touche que le blanc) : contraste ≥ 3:1 garanti sur tout biome (WCAG 1.4.11).
+  // Sources séparées de l'atlas, dessinées à leur taille d'affichage réelle ×2
+  // (voir makeRingTexture) — une petite frame étirée rendait flou et crénelé.
+  missileRing: Record<MissileKind, Texture>; // anneau à la taille RÉELLE du souffle, par calibre
+  mineHalo: Texture; // périmètre pointillé à MINE_RADIUS (halo de mine — distinct des frappes)
   cross: Texture; // glyphe « frappe chirurgicale »
   trefoil: Texture; // glyphe radiologique (frappe atomique)
+  glow: Texture; // disque à dégradé radial doux (cœur des télégraphes)
   spikes: Texture; // bande de pics tuilable (source séparée, pour TilingSprite)
   grounds: readonly Texture[]; // un motif de voie par biome (sources séparées)
   leaf: Texture; // feuille à teinter (météo de la jungle)
@@ -171,11 +174,118 @@ function drawCrate(
   ctx.strokeRect(x + 1.5, y + 1.5, 93, 53);
 }
 
+// --- Marqueurs de danger haute résolution -----------------------------------
+// Chaque marqueur est dessiné sur son propre canvas À SA TAILLE D'AFFICHAGE
+// RÉELLE ×2 (supersampling : la resolution de l'app est plafonnée à 2), au lieu
+// d'étirer une petite frame d'atlas jusqu'à ×7 — c'était la cause du crénelage
+// et des contours flous des télégraphes. Le schéma de lisibilité est inchangé :
+// corps BLANC à teinter (le tint Pixi multiplie) + liseré noir INTÉGRÉ, ≥ 3:1
+// sur tout biome (WCAG 1.4.11).
+const MARKER_SS = 2; // supersampling des sources de marqueur
+// marge du canvas autour du rayon réel (trait + anti-aliasing) : un sprite
+// d'anneau s'affiche à `radius * 2 * MARKER_RING_MARGIN` pour que l'anneau
+// tombe EXACTEMENT sur le rayon du souffle
+export const MARKER_RING_MARGIN = 1.12;
+
+/** Anneau (plein ou pointillé) à la taille réelle du souffle donné. */
+function makeRingTexture(radius: number, dashed = false): Texture {
+  const half = Math.ceil(radius * MARKER_RING_MARGIN) * MARKER_SS;
+  const r = radius * MARKER_SS;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = half * 2;
+  const ctx = canvas.getContext('2d')!;
+  // trait légèrement croissant avec le rayon : les grosses zones restent bien
+  // marquées de loin, sans l'empâtement de l'ancien étirement
+  const edgeW = (9 + radius * 0.045) * MARKER_SS;
+  if (dashed) {
+    // ~12 tirets réguliers quel que soit le rayon (période calée sur le périmètre)
+    const seg = (Math.PI * 2 * r) / 12;
+    ctx.setLineDash([seg * 0.55, seg * 0.45]);
+  }
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = edgeW;
+  ctx.beginPath();
+  ctx.arc(half, half, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = edgeW * 0.55;
+  ctx.beginPath();
+  ctx.arc(half, half, r, 0, Math.PI * 2);
+  ctx.stroke();
+  return Texture.from(canvas);
+}
+
+// les glyphes s'affichent jusqu'à 72 px : source logique 80 px, ×MARKER_SS
+const GLYPH_SIZE = 80 * MARKER_SS;
+
+/** Croix « frappe chirurgicale » — mêmes proportions que l'ancienne frame. */
+function makeCrossTexture(): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = GLYPH_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  const [a, b] = [15 * MARKER_SS, 65 * MARKER_SS];
+  ctx.lineCap = 'round';
+  for (const [color, w] of [
+    ['#000000', 22 * MARKER_SS],
+    ['#ffffff', 12 * MARKER_SS],
+  ] as const) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(a, a);
+    ctx.lineTo(b, b);
+    ctx.moveTo(b, a);
+    ctx.lineTo(a, b);
+    ctx.stroke();
+  }
+  return Texture.from(canvas);
+}
+
+/** Trèfle radiologique (frappe atomique) — trois pales + moyeu. */
+function makeTrefoilTexture(): Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = GLYPH_SIZE;
+  const ctx = canvas.getContext('2d')!;
+  const c = GLYPH_SIZE / 2;
+  const blade = (a: number, r0: number, r1: number, half: number, fill: string): void => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(c, c, r1 * MARKER_SS, a - half, a + half);
+    ctx.arc(c, c, r0 * MARKER_SS, a + half, a - half, true);
+    ctx.closePath();
+    ctx.fill();
+  };
+  for (let k = 0; k < 3; k++) {
+    const a = -Math.PI / 2 + (k / 3) * Math.PI * 2;
+    blade(a, 11, 38, 0.62, '#000000');
+    blade(a, 16, 34, 0.48, '#ffffff');
+  }
+  circle(ctx, c, c, 11 * MARKER_SS, '#ffffff', '#000000', 5 * MARKER_SS);
+  return Texture.from(canvas);
+}
+
+/** Disque blanc à dégradé radial doux : le cœur des télégraphes, à teinter. */
+function makeGlowTexture(): Texture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.8, 'rgba(255,255,255,0.35)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  return Texture.from(canvas);
+}
+
 export function buildAtlas(): Atlas {
   if (BIOMES.length !== BIOME_COUNT) throw new Error('BIOMES désynchronisé de BIOME_COUNT');
   const canvas = document.createElement('canvas');
   canvas.width = 384; // bande x=256..384 : personnages (2 frames de marche) + boss
-  canvas.height = 256; // bande y=192..256 : marqueurs de danger + mine
+  canvas.height = 256; // bande y=192..256 : mine + feuille
   const ctx = canvas.getContext('2d')!;
 
   // balle (32,0,8,16) — traçante jaune
@@ -274,57 +384,8 @@ export function buildAtlas(): Atlas {
   ctx.fill();
   ctx.restore();
 
-  // --- bande y=192..256 : marqueurs de danger, blanc à teinter + liseré noir ---
-  // le tint Pixi multiplie : le blanc prend la couleur, le noir reste noir —
-  // c'est le liseré qui garantit la lecture sur les biomes clairs (désert, neige)
-  const outlined = (draw: (pass: 'edge' | 'body') => void): void => {
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 9;
-    draw('edge');
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 5;
-    draw('body');
-  };
-  // anneau plein (0,192,64,64) — limite de zone des frappes
-  outlined(() => {
-    ctx.beginPath();
-    ctx.arc(32, 224, 26, 0, Math.PI * 2);
-    ctx.stroke();
-  });
-  // anneau pointillé (64,192,64,64) — halo de mine, distinct des frappes
-  ctx.setLineDash([9, 8]);
-  outlined(() => {
-    ctx.beginPath();
-    ctx.arc(96, 224, 26, 0, Math.PI * 2);
-    ctx.stroke();
-  });
-  ctx.setLineDash([]);
-  // croix (128,192,32,32) — glyphe « frappe chirurgicale »
-  ctx.lineCap = 'round';
-  outlined(() => {
-    ctx.beginPath();
-    ctx.moveTo(134, 198);
-    ctx.lineTo(154, 218);
-    ctx.moveTo(154, 198);
-    ctx.lineTo(134, 218);
-    ctx.stroke();
-  });
-  ctx.lineCap = 'butt';
-  // trèfle radiologique (160,192,40,40) — trois pales + moyeu
-  const blade = (a: number, r0: number, r1: number, half: number, fill: string): void => {
-    ctx.fillStyle = fill;
-    ctx.beginPath();
-    ctx.arc(180, 212, r1, a - half, a + half);
-    ctx.arc(180, 212, r0, a + half, a - half, true);
-    ctx.closePath();
-    ctx.fill();
-  };
-  for (let k = 0; k < 3; k++) {
-    const a = -Math.PI / 2 + (k / 3) * Math.PI * 2;
-    blade(a, 5.5, 19, 0.62, '#000000');
-    blade(a, 8, 17, 0.48, '#ffffff');
-  }
-  circle(ctx, 180, 212, 5.5, '#ffffff', '#000000');
+  // --- bande y=192..256 : mine + feuille (les marqueurs de danger ont leurs
+  // propres sources haute résolution — voir makeRingTexture et compagnie) ---
   // mine (208,192,28,28) — corps sombre, jupe hachurée jaune/noir (code danger
   // universel : lisible quelle que soit la vision), témoin blanc à cœur rouge
   circle(ctx, 222, 206, 12, '#111827', '#000000');
@@ -396,10 +457,16 @@ export function buildAtlas(): Atlas {
     crateBonus: frame(0, 124, 96, 56),
     boss: frame(258, 168, 76, 76),
     mine: frame(208, 192, 28, 28),
-    ring: frame(0, 192, 64, 64),
-    ringDashed: frame(64, 192, 64, 64),
-    cross: frame(128, 192, 32, 32),
-    trefoil: frame(160, 192, 40, 40),
+    missileRing: Object.fromEntries(
+      (Object.keys(MISSILE_KINDS) as MissileKind[]).map((k) => [
+        k,
+        makeRingTexture(MISSILE_KINDS[k].radius),
+      ]),
+    ) as Record<MissileKind, Texture>,
+    mineHalo: makeRingTexture(MINE_RADIUS, true),
+    cross: makeCrossTexture(),
+    trefoil: makeTrefoilTexture(),
+    glow: makeGlowTexture(),
     spikes: buildSpikesPattern(),
     grounds: BIOMES.map((b, i) => buildGroundPattern(b, i)),
     leaf: frame(238, 226, 16, 16),

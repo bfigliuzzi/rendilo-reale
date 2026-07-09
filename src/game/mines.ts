@@ -1,6 +1,6 @@
 import { type Container, Sprite } from 'pixi.js';
 import * as B from '../config/balance';
-import type { Atlas } from '../render/textures';
+import { MARKER_RING_MARGIN, type Atlas } from '../render/textures';
 import type { Squad } from './squad';
 
 interface Mine {
@@ -32,11 +32,11 @@ export class Mines {
 
   spawn(at: number, xNorm: number): void {
     const x = B.LANE_MIN_X + xNorm * (B.LANE_MAX_X - B.LANE_MIN_X);
-    const halo = new Sprite(this.atlas.ringDashed);
+    const halo = new Sprite(this.atlas.mineHalo);
     halo.anchor.set(0.5);
     halo.tint = 0xfacc15; // jaune sécurité — liseré noir intégré à la texture
     halo.alpha = 0.3;
-    halo.width = halo.height = B.MINE_RADIUS * 2;
+    halo.width = halo.height = B.MINE_RADIUS * 2 * MARKER_RING_MARGIN;
     halo.position.set(x, -at);
     const sprite = new Sprite(this.atlas.mine);
     sprite.anchor.set(0.5);
