@@ -7,7 +7,8 @@
 //   upgradesJSON : ex. '{"dps":2,"start":1}' — améliorations méta injectées avant la run
 import puppeteer from 'puppeteer-core';
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME =
+  process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const URL = process.argv[2] ?? 'http://localhost:5173/';
 const MODE = process.argv[3] ?? 'campaign';
 const SECONDS = Number(process.argv[4] ?? 60);
@@ -17,7 +18,12 @@ const UPGRADES = process.argv[6] ? JSON.parse(process.argv[6]) : {};
 const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: 'new',
-  args: ['--window-size=560,1000', '--force-device-scale-factor=1'],
+  args: [
+    '--window-size=560,1000',
+    '--force-device-scale-factor=1',
+    // conteneurs/CI : Chromium refuse de tourner en root avec son sandbox
+    ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []),
+  ],
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 540, height: 960 });
@@ -28,8 +34,10 @@ page.on('console', (m) => {
 });
 page.on('pageerror', (e) => errors.push(String(e)));
 
-await page.goto(URL, { waitUntil: 'networkidle0' });
-await page.waitForFunction('window.__game !== undefined', { timeout: 5000 });
+// « load » plutôt que networkidle0 : le websocket HMR de Vite ne se stabilise
+// jamais — c'est le waitForFunction qui garantit que le jeu est prêt
+await page.goto(URL, { waitUntil: 'load' });
+await page.waitForFunction('window.__game !== undefined', { timeout: 15000 });
 
 await page.evaluate(
   (mode, patch) => {
