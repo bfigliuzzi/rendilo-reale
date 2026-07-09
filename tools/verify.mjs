@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer-core';
 
 const CHROME =
   process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const URL = process.argv[2] ?? 'http://localhost:5173/';
+const URL = process.argv[2] ?? 'http://localhost:5173/games/horde/';
 const MODE = process.argv[3] ?? 'campaign';
 const SECONDS = Number(process.argv[4] ?? 60);
 const SHOT = process.argv[5] ?? 'verify.png';

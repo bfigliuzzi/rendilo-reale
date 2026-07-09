@@ -1,7 +1,14 @@
-# Rendilo Reale — horde-shooter vertical
+# Rendilo Reale — hub de jeux web
 
 **▶ Jouer : [rendilo-reale.netlify.app](https://rendilo-reale.netlify.app)** — déployé
 automatiquement depuis `main` via Netlify.
+
+La racine du site est un **hub** : un menu principal qui liste les jeux, chacun vivant
+dans son dossier `games/<id>/` comme une page autonome (stack libre, build Vite commun).
+Ajouter un jeu = un dossier + une entrée dans `hub/games.ts` + une entrée dans
+`vite.config.ts`.
+
+## Horde (`/games/horde/`)
 
 Jeu web du gameplay « phase de tir » de *Last War: Survival* : une escouade en bas d'écran
 auto-tire vers le haut (avec aim-assist) pendant que la voie défile ; hordes d'ennemis,
@@ -25,14 +32,14 @@ niveau, et une bonne dose d'apocalypse :
 
 ```bash
 npm install
-npm run dev          # http://localhost:5173
+npm run dev          # hub : http://localhost:5173 — jeu : http://localhost:5173/games/horde/
 npm run dev -- --host   # + accès depuis un téléphone sur le même réseau
 ```
 
 - **Contrôles** : glisser (doigt ou souris) pour déplacer l'escouade latéralement.
 - **Modes** : Campagne **infinie** (niveaux seedés à difficulté croissante — PV, effectifs
   et boss escaladent sans fin, la boutique déplafonnée est le tapis roulant), Sans fin
-  (record de distance, mini-boss récurrents), et `?stress` dans l'URL pour le test de
+  (record de distance, mini-boss récurrents), et `/games/horde/?stress` pour le test de
   fluidité (escouade 500, hordes massives).
 - **Composition d'escouade** (débloquée au niveau 4) : répartis tes soldats entre
   fusiliers (équilibrés), snipers (balles lourdes et lentes, +30 % DPS — anti-boss/élites)
@@ -53,25 +60,28 @@ placeholder générés en code.
 
 ## Architecture (résumé)
 
-- `src/core/` — moteur générique : boucle à pas fixe 60 Hz + interpolation, grille
-  spatiale, PRNG seedé.
-- `src/game/` — systèmes : pools struct-of-arrays (balles/ennemis, zéro allocation au
-  tick), escouade/formation, portes, caisses, boss, spawner, collisions, `flow.ts`
-  (machine à états menu → jeu → résultat).
-- `src/config/` — **tout le tuning** (`balance.ts`), les types de niveaux (`levels.ts`)
-  et les générateurs campagne/endless (`campaign.ts`).
-- `src/meta/` — sauvegarde versionnée + améliorations data-driven.
-- `src/render/` — atlas généré, layers, particules d'effets + screen shake.
-- `src/audio/` — effets synthétisés WebAudio (mute persisté).
-- `src/ui/` — HUD (DOM, 4 Hz) et écrans menu/boutique/résultat (DOM).
+- `index.html` + `hub/` — le hub : menu de sélection des jeux (DOM pur, registre typé
+  `hub/games.ts`), enregistrement du service worker PWA (unique, à la racine).
+- `games/horde/` — le jeu, page autonome (`index.html` + `src/`) :
+  - `src/core/` — moteur générique : boucle à pas fixe 60 Hz + interpolation, grille
+    spatiale, PRNG seedé.
+  - `src/game/` — systèmes : pools struct-of-arrays (balles/ennemis, zéro allocation au
+    tick), escouade/formation, portes, caisses, boss, spawner, collisions, `flow.ts`
+    (machine à états menu → jeu → résultat).
+  - `src/config/` — **tout le tuning** (`balance.ts`), les types de niveaux (`levels.ts`)
+    et les générateurs campagne/endless (`campaign.ts`).
+  - `src/meta/` — sauvegarde versionnée + améliorations data-driven.
+  - `src/render/` — atlas généré, layers, particules d'effets + screen shake.
+  - `src/audio/` — effets synthétisés WebAudio (mute persisté).
+  - `src/ui/` — HUD (DOM, 4 Hz) et écrans menu/boutique/résultat (DOM).
 
 ## Vérification automatisée
 
 ```bash
 npm run dev -- --port 5199 &
-node tools/verify.mjs http://localhost:5199/ campaign 90 shot.png
-node tools/verify.mjs http://localhost:5199/ endless 120 shot2.png
-node tools/verify.mjs http://localhost:5199/ stress 30 shot3.png
+node tools/verify.mjs http://localhost:5199/games/horde/ campaign 90 shot.png
+node tools/verify.mjs http://localhost:5199/games/horde/ endless 120 shot2.png
+node tools/verify.mjs http://localhost:5199/games/horde/ stress 30 shot3.png
 ```
 
 Le script pilote une partie en Chrome headless (un bot tient le centre et choisit les

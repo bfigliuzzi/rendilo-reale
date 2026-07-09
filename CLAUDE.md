@@ -1,8 +1,31 @@
-# Rendilo Reale — horde-shooter (style Last War)
+# Rendilo Reale — hub de jeux web
 
-Jeu web vertical : escouade auto-tir en bas, hordes qui descendent, portes x2/+N, caisses HP,
-boss. Campagne + endless + métaprogression (or, boutique, localStorage).
-PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
+Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
+dans `games/<id>/` avec son propre `index.html` + `src/`. Premier jeu : **Horde**
+(`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
+hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
+métaprogression (or, boutique, localStorage). PixiJS v8 + TypeScript strict + Vite.
+Aucune autre dépendance runtime.
+
+## Hub & multi-jeux
+
+- **Ajouter un jeu** = un dossier `games/<id>/{index.html, src/}` + une entrée dans
+  `hub/games.ts` (registre affiché par le menu) ET dans `build.rollupOptions.input`
+  (`vite.config.ts`) — deux listes à garder synchrones. Stack runtime libre (le build
+  reste Vite), page isolée : CSS/globals propres, navigation = rechargement, pas de
+  teardown à écrire.
+- **Le hub** (`index.html` + `hub/`) est du DOM pur, sans framework. Son CSS
+  (`hub/style.css`) est une copie locale de la palette du jeu horde — rien n'est partagé
+  tant qu'un module n'a pas DEUX consommateurs ; le jour où un 2e jeu veut `core/rng.ts`
+  ou `core/loop.ts`, créer `shared/` + alias `@shared` et migrer à ce moment-là.
+- **PWA : UN SEUL service worker, à la racine** (manifest hub, `scope: '/'`), précache
+  intégral hub + jeux. INVARIANT : `/sw.js` ne doit JAMAIS répondre du HTML (pas de
+  fallback `/*` dans `netlify.toml` — un 404 devenu HTML empoisonnerait le SW installé
+  chez les joueurs, qui serviraient l'ancienne app à vie). `registerSW` est appelé par
+  le hub ET par chaque jeu (même SW, idempotent).
+- **Save** : chaque jeu garde sa clé localStorage namespacée (`rendilo-reale:save:v1`
+  pour horde — clé historique des joueurs, ne pas la renommer).
+- `appType: 'mpa'` : URL inconnue → 404 franc en dev comme en prod.
 
 ## Déploiement
 
@@ -17,12 +40,12 @@ PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 npm run dev              # serveur de dev (-- --host pour tester sur mobile)
 npm run typecheck        # tsc --noEmit
 npm run build            # typecheck + vite build
-node tools/verify.mjs http://localhost:5199/ campaign 90 shot.png   # partie pilotée headless
+node tools/verify.mjs http://localhost:5199/games/horde/ campaign 90 shot.png   # partie pilotée headless
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON
-d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance directement
-le test de perf (escouade 500). Env : `CHROME_PATH` surcharge le binaire Chrome (Linux/CI :
+d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `/games/horde/?stress` lance
+directement le test de perf (escouade 500). Env : `CHROME_PATH` surcharge le binaire Chrome (Linux/CI :
 `/opt/pw-browsers/chromium` ; `--no-sandbox` est ajouté automatiquement en root) ; en
 conteneur, lancer node SANS les variables proxy (`env -u HTTP_PROXY -u HTTPS_PROXY …`),
 sinon Chromium proxifie localhost.

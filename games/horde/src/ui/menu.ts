@@ -92,6 +92,7 @@ export class Menu {
       <button class="btn" data-action="shop">⬆&nbsp; Arsenal</button>
       <button class="btn" data-action="achievements">🏅&nbsp; Succès${claimables > 0 ? ` <span class="pill">${claimables}</span>` : ''}</button>
       <button class="btn small" data-action="mute">${s.muted ? '🔇 Son coupé' : '🔊 Son actif'}</button>
+      <a class="btn small hub-link" href="/">⌂ Autres jeux</a>
     `, 'home');
   }
 

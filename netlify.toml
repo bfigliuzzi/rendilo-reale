@@ -1,13 +1,10 @@
 # Déploiement continu Netlify : build Vite, publication du dossier dist.
+# Pas de fallback SPA : le site est multi-page (hub + un dossier par jeu) et un
+# fallback /* → /index.html transformerait tout 404 en HTML — y compris /sw.js
+# s'il venait à manquer, ce qui empoisonnerait le service worker des joueurs.
 [build]
   command = "npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
-
-# SPA : toute route sert index.html (utile si des routes apparaissent plus tard)
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200

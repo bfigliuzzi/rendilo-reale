@@ -1,21 +1,32 @@
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   server: { host: true },
-  build: { target: 'es2022' },
+  appType: 'mpa', // pas de fallback SPA : URL inconnue → 404 franc
+  build: {
+    target: 'es2022',
+    rollupOptions: {
+      // Une entrée par page. Tout nouveau jeu s'ajoute ici ET dans hub/games.ts.
+      input: {
+        hub: resolve(__dirname, 'index.html'),
+        horde: resolve(__dirname, 'games/horde/index.html'),
+      },
+    },
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate', // le SW se met à jour seul à chaque déploiement
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
-        name: 'Rendilo Reale — Horde Shooter',
+        name: 'Rendilo Reale',
         short_name: 'Rendilo',
-        description:
-          'Horde-shooter vertical : fais grossir ton escouade, survis à l’apocalypse.',
+        description: 'Une collection de jeux d’arcade jouables hors ligne.',
         lang: 'fr',
         display: 'standalone',
-        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         theme_color: '#0b1016',
         background_color: '#0b1016',
         icons: [
@@ -25,7 +36,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // tout le jeu est statique et généré en code : précache intégral = offline complet
+        // tout est statique et généré en code : précache intégral = offline complet
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
         navigateFallback: '/index.html',
       },

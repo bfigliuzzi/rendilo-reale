@@ -14,5 +14,5 @@
     "noUnusedParameters": true,
     "types": ["vite-plugin-pwa/client"]
   },
-  "include": ["src"]
+  "include": ["hub", "games"]
 }
