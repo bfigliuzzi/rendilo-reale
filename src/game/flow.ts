@@ -2,7 +2,7 @@ import type { Sfx } from '../audio/sfx';
 import * as B from '../config/balance';
 import { makeCampaignLevel, makeEndlessLevel } from '../config/campaign';
 import { makeStressLevel } from '../config/levels';
-import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
+import { ACHIEVEMENTS, claimableGold, reachedTiers } from '../meta/achievements';
 import { persist, type SaveData } from '../meta/save';
 import { computeStats, UPGRADES, type UpgradeId } from '../meta/upgrades';
 import { WEAPONS, type WeaponId } from '../meta/weapons';
@@ -107,6 +107,7 @@ export class Flow {
         : 0;
     if (this.mode !== 'stress') {
       this.save.gold += r.gold + bonus + replayBonus;
+      this.save.counters.goldEarned += r.gold + bonus + replayBonus;
       this.save.counters.kills += r.kills;
       this.save.counters.bossKills += r.bossKills;
       this.save.counters.bonusCrates += r.bonusCrates;
@@ -163,11 +164,14 @@ export class Flow {
     this.sfx.buy();
   }
 
+  /** Verse d'un coup tous les paliers atteints non réclamés de la famille. */
   private claimAchievement(id: string): void {
     const def = ACHIEVEMENTS.find((a) => a.id === id);
-    if (!def || !isClaimable(def, this.save)) return;
-    this.save.claimed.push(id);
-    this.save.gold += def.reward;
+    if (!def) return;
+    const gold = claimableGold(def, this.save);
+    if (gold <= 0) return;
+    this.save.claimedTiers[id] = reachedTiers(def, this.save);
+    this.save.gold += gold;
     persist(this.save);
     this.sfx.victory();
   }

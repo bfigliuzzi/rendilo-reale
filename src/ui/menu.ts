@@ -1,5 +1,12 @@
 import { COMP_UNLOCK_LEVEL, ULTRA_EVERY } from '../config/balance';
-import { ACHIEVEMENTS, isClaimable } from '../meta/achievements';
+import {
+  ACHIEVEMENTS,
+  claimableGold,
+  isClaimable,
+  reachedTiers,
+  rewardOf,
+  targetOf,
+} from '../meta/achievements';
 import type { SaveData } from '../meta/save';
 import { UPGRADES, type UpgradeId } from '../meta/upgrades';
 import { WEAPONS, type WeaponId } from '../meta/weapons';
@@ -160,18 +167,27 @@ export class Menu {
 
   showAchievements(): void {
     const s = this.save;
+    const fmt = (n: number): string => n.toLocaleString('fr-FR');
     const cards = ACHIEVEMENTS.map((a) => {
-      const value = Math.min(a.value(s), a.target);
-      const claimed = s.claimed.includes(a.id);
-      const claimable = isClaimable(a, s);
-      const pct = Math.round((value / a.target) * 100);
+      // paliers sans fin : progression affichée vers la PROCHAINE cible non
+      // atteinte, bouton = somme de tous les paliers atteints non réclamés
+      const value = a.value(s);
+      const claimed = s.claimedTiers[a.id] ?? 0;
+      const reached = reachedTiers(a, s);
+      const gold = claimableGold(a, s);
+      const nextTarget = targetOf(a, reached);
+      const prevTarget = reached > 0 ? targetOf(a, reached - 1) : 0;
+      const pct = Math.round(((value - prevTarget) / (nextTarget - prevTarget)) * 100);
+      const pending = reached - claimed;
       return `
-        <div class="card ${claimed ? 'claimed' : ''}">
-          <div class="card-head">${a.icon} <b>${a.name}</b><span class="lvl">${value}/${a.target}</span></div>
+        <div class="card">
+          <div class="card-head">${a.icon} <b>${a.name}</b><span class="lvl">palier ${reached} · ${fmt(value)}/${fmt(nextTarget)}</span></div>
           <div class="card-effect">${a.desc}</div>
-          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <button class="btn buy" data-action="claim" data-id="${a.id}" ${claimable ? '' : 'disabled'}>
-            ${claimed ? '✓ Réclamé' : `Réclamer — ${a.reward} 💰`}
+          <div class="bar" role="progressbar" aria-label="${a.name} — progression vers le palier ${reached + 1}"
+            aria-valuemin="${prevTarget}" aria-valuemax="${nextTarget}" aria-valuenow="${value}"
+            aria-valuetext="${fmt(value)} sur ${fmt(nextTarget)}"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <button class="btn buy" data-action="claim" data-id="${a.id}" ${gold > 0 ? '' : 'disabled'}>
+            ${gold > 0 ? `Réclamer${pending > 1 ? ` ${pending} paliers` : ''} — ${gold} 💰` : `Prochain palier : ${rewardOf(a, claimed)} 💰`}
           </button>
         </div>`;
     }).join('');
