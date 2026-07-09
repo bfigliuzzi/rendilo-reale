@@ -22,21 +22,34 @@ node tools/verify.mjs http://localhost:5199/ campaign 90 shot.png   # partie pil
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON
 d'améliorations méta (ex. `'{"dps":2,"start":1}'`). `?stress` dans l'URL lance directement
-le test de perf (escouade 500).
+le test de perf (escouade 500). Env : `CHROME_PATH` surcharge le binaire Chrome (Linux/CI :
+`/opt/pw-browsers/chromium` ; `--no-sandbox` est ajouté automatiquement en root) ; en
+conteneur, lancer node SANS les variables proxy (`env -u HTTP_PROXY -u HTTPS_PROXY …`),
+sinon Chromium proxifie localhost.
 
-**Référence d'équilibrage** (à re-vérifier après tout changement de balance) : le bot gagne
-le N1 sans méta ~1 fois sur 3 (défaites tardives : déluge final ou boss, jamais avant
-~480 m) ; N2 avec la méta de ~4-5 victoires
-(`'{"upgrades":{"dps":8,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`)
-se gagne ~1 fois sur 2 en cross-seed, et les trois armes sont à parité à or équivalent
-(mesuré : gatling 2/6, fusil 4/6, canon 1/3 — différences dans le bruit statistique).
+**Référence d'équilibrage** (à re-vérifier après tout changement de balance). ATTENTION :
+les taux absolus du bot dépendent de la machine (rendu logiciel ~27 fps en conteneur vs
+Mac 60 fps : le bot y est plus fort sur N1 mais sature dès N4 quel que soit le tuning —
+0/6 à N4 méta modeste MÊME sur l'ancien tuning jugé trop facile par un humain). Toujours
+mesurer en RELATIF sur la même machine, avec un batch de contrôle sur l'ancien tuning en
+cas de doute. Bandes historiques (Mac) : N1 sans méta ~1/3 ; N2 avec la méta de ~4-5
+victoires (`'{"upgrades":{"dps":8,"start":3,"armor":1},"weapons":{"gatling":2},"equipped":"gatling"}'`)
+~1/2 ; armes à parité à or équivalent. Mesures conteneur (2026-07) : N1 sans méta 5/6,
+N3 sans méta 0/6 (identique avant/après la cassure — N1-N3 inchangés), N4 sans méta 0/6,
+N5 ultra avec méta documentée 5/6.
+**Cassure de difficulté à N4** (vision produit : N1-N3 fun à la skill pure, mur N4-N5,
+boutique obligatoire ~tous les 2 niveaux ensuite) : `hpMul` passe à `1.5 + 0.4·(n-3)`
+dès N4 (N4 1,9 · N5 2,3 · N6 2,7, adouci `4.3 + 0.2·(n-10)` après N10), masse de horde
++2/niveau dès N4, `missileIntervalMul` plancher 0,8 atteint à N4 (au lieu de saturer à
+1,0 dès N3), boss ×`(1 + 0.06·(n-3))` plafonné ×1,6. N1-N3 sont STRICTEMENT inchangés.
 Les paliers de boutique sont volontairement serrés (+5 % dégâts, +10 % or) avec une
 courbe de coût dps adoucie (40×1,28^l) — au net l'or achète ~1,6-2× moins de puissance
 qu'un tuning « généreux » ; ne pas re-buffer l'un sans retoucher l'autre.
 Le N5 (niveau boss ultra) se gagne ~2 fois sur 3 avec une méta plausible pour ce stade
 (`'{"upgrades":{"dps":22,"start":9,"armor":2,"rate":6,"vitality":3},"weapons":{"gatling":4},"equipped":"gatling"}'`),
 défaites en plein duel — `ULTRA_HP_MUL` 4 est calibré là-dessus (à 5 le bot mourait à 1 %
-des PV : pas de porte pour regonfler pendant le combat, l'usure plafonne la durée tenable).
+des PV : pas de porte pour regonfler pendant le combat, l'usure plafonne la durée tenable) ;
+re-mesuré 5/6 en conteneur après la cassure N4 et la riposte renforcée.
 Le 5e argument de verify.mjs accepte un patch complet `{upgrades, weapons, equipped}` ou
 des upgrades seuls. Le bot casse les caisses de loin, esquive missiles/lances/bolts et
 murs de pics (il lit `spikes.list` : `cx`/`halfW`), choisit les bonnes portes — c'est le
@@ -75,9 +88,11 @@ lances, bolts, contacts boss/caisse) : les dangers esquivables doivent rester de
 menaces à tout niveau de méta. Toute nouvelle source de dégâts doit choisir son canal.
 **Riposte adaptative** (anti-steamroll) : au-delà de `PRESSURE_SQUAD_REF` (130) soldats,
 `world.pressure = log2(effectif/réf)` fait monter les PV ennemis/boss/caisses au spawn
-(`pressureHpMul`, +45 %/doublement, plafonné ×2,6), rend les plafonds de pertes lourdes
-proportionnels à la masse (`world.heavyCap`) et accélère les missiles. Volontairement
-SOUS-proportionnelle au DPS : grossir reste rentable, mais plus auto-win. Rien ne change
+(`pressureHpMul`, +60 %/doublement, plafonné ×3,2), rend les plafonds de pertes lourdes
+proportionnels à la masse (`world.heavyCap`) et accélère les missiles (+75 %/doublement).
+Volontairement SOUS-proportionnelle au DPS : grossir reste rentable, mais plus auto-win.
+C'est le frein principal contre le « bon joueur » qui steamrolle avec une grosse escouade
+(renforcée de +45 %/×2,6/+55 % après le retour « 5 niveaux sans boutique »). Rien ne change
 sous la référence — la bande d'équilibrage N1/N2 n'est pas affectée. Toute nouvelle
 source de PV spawnés ou de pertes plafonnées doit passer par ces deux helpers. Affichée
 au HUD (`⚠️ riposte ×N`).
@@ -96,15 +111,19 @@ appelées sur le joueur et invocations qui détournent l'aim-assist. Marqué ☠
 **Missiles en quatre calibres** (`MISSILE_KINDS`) : jaune (large/faible), orange
 (standard), rouge (chirurgical/punitif, télégraphe court), atomique (rare, RÉSERVÉ à la
 riposte adaptative, zone énorme + gros dégâts compensés par un long télégraphe).
-**Lisibilité des dangers (WCAG, à préserver)** : un calibre ne se lit JAMAIS qu'à la
+**Lisibilité des dangers (WCAG/RGAA, à préserver)** : un calibre ne se lit JAMAIS qu'à la
 couleur (1.4.1, daltonisme) — quatre signaux redondants : taille de l'anneau (= rayon
 réel du souffle), couleur, densité du cœur (`fillAlpha`), glyphe blanc (croix = rouge,
-trèfle = atomique). Les textures de marqueur (`ring`, `ringDashed`, `cross`, `trefoil`)
-ont un liseré noir INTÉGRÉ : la teinte porte sur les biomes sombres, le liseré sur les
-clairs — ≥ 3:1 partout (1.4.11 ; aucune couleur plate ne passe sur les 4 biomes, vérifié
-au calcul). Fin de télégraphe = strobe (`MISSILE_STROBE_TIME`) : signal de mouvement,
-indépendant de la vision des couleurs. Toute nouvelle zone de danger suit ce double
-codage ET expose son rayon réel (`strike.radius`, lu par le bot d'esquive).
+trèfle = atomique). Les textures de marqueur (`missileRing[kind]`, `mineHalo`, `cross`,
+`trefoil`, `glow` — sources dédiées HAUTE RÉSOLUTION dans `render/textures.ts`, dessinées
+à la taille d'affichage réelle ×2 via `makeRingTexture` et compagnie ; ne JAMAIS revenir
+à une petite frame d'atlas étirée, c'était la cause du crénelage/flou) ont un liseré noir
+INTÉGRÉ : la teinte porte sur les biomes sombres, le liseré sur les clairs — ≥ 3:1 partout
+(1.4.11 ; aucune couleur plate ne passe sur les 4 biomes, vérifié au calcul). Un sprite
+d'anneau s'affiche à `radius * 2 * MARKER_RING_MARGIN` pour que l'anneau tombe exactement
+sur le rayon du souffle. Fin de télégraphe = strobe (`MISSILE_STROBE_TIME`) : signal de
+mouvement, indépendant de la vision des couleurs. Toute nouvelle zone de danger suit ce
+double codage ET expose son rayon réel (`strike.radius`, lu par le bot d'esquive).
 **Cadence de tir** : base ×0,75 (`RATE_BASE`, calibrée au bot — 0,70 sortait le N1 de
 la bande), remontée par l'amélioration méta `rate`
 et l'arme. Le DPS reste découplé du nombre de balles — la cadence ne joue que sur la
@@ -169,6 +188,13 @@ moyens/sombres pour préserver la double lecture des marqueurs.
   data-driven, les écrans s'en dérivent). Les stats d'une run passent par
   `computeStats(save)` → `World.loadLevel(def, stats)` (arme équipée incluse : cadence,
   DPS, splash).
+- **Succès à paliers SANS FIN** (`meta/achievements.ts`) : cible du palier t =
+  `base·growth^t` (growth ≥ ×1,6), récompense = `rewardBase·1,35^t` plafonnée à 400 —
+  le ratio or/effort DÉCROÎT par construction : un succès reste un bonus, jamais une
+  pompe à or ; ne pas ajouter de famille au reward proportionnel à la cible. Réclamation
+  par famille (tous les paliers atteints d'un coup, `claimedTiers` dans le save ; l'ancien
+  `claimed: string[]` est migré au chargement sans re-verser l'or). L'écran expose la
+  progression en texte + `role="progressbar"`/`aria-value*` (RGAA).
 - **Flow** : `game/flow.ts` est la machine à états menu → jeu → résultat et le seul endroit
   qui touche à la sauvegarde ; `World` ne connaît ni les modes ni la méta.
 - **Juice** : les systèmes remontent des callbacks (`onLost`, `onBreak`, `onDeath`…), `World`

@@ -45,12 +45,12 @@ export const VITALITY_HEAVY_CAP = 1.5;
 // Pression adaptative : au-delà de la masse critique, le monde riposte — PV des
 // ennemis/boss/caisses et plafonds de pertes lourdes suivent l'effectif (en log),
 // sinon une grosse escouade roule sur tout. Volontairement SOUS-proportionnel au
-// DPS : doubler l'effectif double les dégâts mais n'ajoute que +45 % de PV —
+// DPS : doubler l'effectif double les dégâts mais n'ajoute que +60 % de PV —
 // grossir reste toujours rentable, ça cesse juste d'être une victoire automatique.
 export const PRESSURE_SQUAD_REF = 130; // effectif de référence — aucune pression en deçà
-export const PRESSURE_HP_PER_DOUBLING = 0.45; // +45 % de PV ennemis par doublement au-delà
-export const PRESSURE_HP_MAX = 2.6; // plafond du multiplicateur de PV (≈ 1300 soldats)
-export const PRESSURE_MISSILE_RATE = 0.55; // accélération des frappes par doublement
+export const PRESSURE_HP_PER_DOUBLING = 0.6; // +60 % de PV ennemis par doublement au-delà
+export const PRESSURE_HP_MAX = 3.2; // plafond du multiplicateur de PV (≈ 1650 soldats)
+export const PRESSURE_MISSILE_RATE = 0.75; // accélération des frappes par doublement
 
 // Tir — le DPS est découplé du nombre de balles : la cadence visuelle sature,
 // les dégâts par balle compensent. « x2 » double donc exactement la vitesse de kill.

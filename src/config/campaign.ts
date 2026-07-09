@@ -19,9 +19,11 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
   // le biome est tiré EN PREMIER : lié au seed de la run, indépendant du reste du tirage
   const biome = Math.floor(rand() * BIOME_COUNT);
   // campagne infinie : longueur plafonnée, pente des PV adoucie au-delà de N10
-  // (le grind de la boutique — coûts exponentiels — fait « galérer un peu plus »)
+  // (le grind de la boutique — coûts exponentiels — fait « galérer un peu plus »).
+  // La pente CASSE à N4 : N1-N3 se franchissent à la skill pure, ensuite le mur —
+  // la boutique doit devenir un passage obligé tous les 2 niveaux au maximum.
   const len = Math.min(6500 + n * 700, 13500);
-  const hpMul = n <= 10 ? 1 + 0.25 * (n - 1) : 3.25 + 0.16 * (n - 10);
+  const hpMul = n <= 3 ? 1 + 0.25 * (n - 1) : n <= 10 ? 1.5 + 0.4 * (n - 3) : 4.3 + 0.2 * (n - 10);
   const events: LevelEvent[] = [];
 
   // ouverture un peu plus généreuse : l'apocalypse exige un matelas de départ
@@ -82,7 +84,8 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
         ['elite', n >= 4 ? 0.05 : 0],
       ]);
       // ×1,5 sur la masse totale, mais chargé vers la fin : début jouable, fin déluge
-      const base = 14 + (n - 1) * 4 + progress * (64 + n * 16);
+      // (surcroît de masse à partir de N4 — la cassure de difficulté de hpMul)
+      const base = 14 + (n - 1) * 4 + Math.max(0, n - 3) * 2 + progress * (64 + n * 16);
       let count =
         kind === 'brute'
           ? Math.round(4 + n + progress * 12)
@@ -136,8 +139,12 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
   }
 
   const ultra = n % ULTRA_EVERY === 0; // niveau boss : l'arène finale remplace la ligne d'arrivée
+  // surcroît N4+ borné (les niveaux ultra ont déjà leur ×ULTRA_HP_MUL serré)
   const bossHp = Math.round(
-    500 * (1 + 0.7 * Math.min(n, 12) + 0.4 * Math.max(0, n - 12)) * (ultra ? ULTRA_HP_MUL : 1),
+    500 *
+      (1 + 0.7 * Math.min(n, 12) + 0.4 * Math.max(0, n - 12)) *
+      (ultra ? ULTRA_HP_MUL : 1) *
+      Math.min(1.6, 1 + 0.06 * Math.max(0, n - 3)),
   );
   events.push({ at: len - 700, type: 'boss', hp: bossHp, final: true, ultra });
   // filet de sécurité : distancer le boss vaut aussi victoire (il punit au contact)…
@@ -172,7 +179,9 @@ export function makeCampaignLevel(n: number, seed = 0xc0ffee + n * 7919): LevelD
     decorSeed: seed,
     // le barrage monte en puissance avec les niveaux : au N1 il épargne le début de partie
     missileMinDist: n === 1 ? 2200 : 700,
-    missileIntervalMul: Math.max(1, 1.5 - 0.25 * (n - 1)),
+    // le barrage continue de s'intensifier à N4+ (plancher 0,8) au lieu de
+    // saturer dès N3 — il participe à la cassure de difficulté
+    missileIntervalMul: Math.max(0.8, 1.5 - 0.25 * (n - 1)),
     gigaHorde: n >= GIGA_FROM_LEVEL,
     events,
   };
