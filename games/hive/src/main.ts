@@ -2,6 +2,7 @@ import { Application } from 'pixi.js';
 import { registerSW } from 'virtual:pwa-register';
 import { startLoop } from '@shared/loop';
 import { DESIGN_H, DESIGN_W } from './config/balance';
+import { Ai } from './game/ai';
 import { Flow } from './game/flow';
 import { World } from './game/world';
 import { Gestures } from './input/gestures';
@@ -48,8 +49,9 @@ async function boot(): Promise<void> {
   if (new URLSearchParams(location.search).has('stress')) flow.startStress();
   else flow.showMenu();
 
-  // hook de debug pour les tests automatisés et la console
-  (window as unknown as Record<string, unknown>).__game = { world, flow, app };
+  // hook de debug pour les tests automatisés et la console. Ai est exposée pour
+  // le scénario miroir de tools/verify-hive.mjs (mêmes heuristiques côté joueur).
+  (window as unknown as Record<string, unknown>).__game = { world, flow, app, Ai };
 
   startLoop(
     (dt) => world.update(dt),

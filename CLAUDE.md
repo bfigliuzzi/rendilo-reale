@@ -55,11 +55,17 @@ tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié)
   groupée des `waveNodes` nids les PLUS PROCHES de la cible (les borner est vital :
   mobiliser toute l'économie écrasait le joueur), sinon accumulation. Paramètres par
   carte dans `LevelDef.ai` ; passe par la même API `emitter.send` que le joueur.
-- **Équilibrage mesuré au bot** (même méthode que horde, scripts éphémères pilotant
-  `window.__game` — `{world, flow, app}`, `world.postSend/sendOrder` scriptables) :
-  bot passif ou dispersé = défaite en 45-85 s ; bot all-in persistant (marteler LE nid
-  le plus faible) = victoire 3/3 en 44-74 s ; IA miroir contre elle-même = impasse
-  (timeout) — l'équilibre de tortue est un connu du genre, c'est l'action qui paie.
+- **Équilibrage mesuré au bot** : `node tools/verify-hive.mjs <url> <scenario>` —
+  scénarios `win` (bot all-in, ATTEND une victoire), `idle` (passif, ATTEND une
+  défaite), `mirror[:N]` (camp abeilles piloté par la MÊME classe `Ai`, exposée sur
+  `window.__game` — pas de duplication d'heuristiques ; garder `MIRROR_PARAMS`
+  alignés sur la carte testée), `stress` (fps à ~600 unités). Exit ≠ 0 si erreur
+  console ou issue inattendue → utilisable en CI. Bande de référence (Mac, 2026-07) :
+  win ~45-75 s, idle = défaite ~45-85 s, mirror = impasse (l'équilibre de tortue à
+  niveau égal est un connu du genre — c'est l'action qui paie), stress 120 fps.
+  À re-mesurer en RELATIF après tout changement de balance (mêmes précautions
+  machine que horde). `window.__game = {world, flow, app, Ai}`,
+  `world.postSend/sendOrder` scriptables.
 - Accessibilité : faction = FORME (hexagone/goutte/cercle) + glyphe + silhouette
   d'unité distincte, jamais la couleur seule. `?stress` = les deux camps canonnent
   (~600 unités, mesuré 120 fps desktop). Pas de save (clé réservée
