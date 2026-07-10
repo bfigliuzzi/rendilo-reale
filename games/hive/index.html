@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Rendilo Reale — Essaim</title>
+  <meta name="theme-color" content="#171208" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="/pwa-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #171208;
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #stage { position: fixed; left: 50%; top: 50%; }
+    #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+    .hud-box {
+      position: absolute; top: max(8px, env(safe-area-inset-top));
+      font-size: 12px; line-height: 1.5;
+      background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 6px 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    #hud-perf { left: 8px; color: #9fe0a0; font-family: ui-monospace, monospace; }
+    #hud-stats { right: 8px; text-align: right; display: none; font-size: 14px; }
+    #hud.in-game #hud-stats { display: block; }
+
+    /* Écrans (accueil, résultat) */
+    #ui {
+      position: fixed; inset: 0; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(12, 8, 2, 0.78);
+      color: #fff;
+    }
+    #ui.visible { display: flex; }
+    .panel {
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      width: min(86vw, 380px); max-height: 92vh; overflow-y: auto;
+      text-align: center; padding: 12px;
+      animation: panel-in 0.28s cubic-bezier(0.2, 1.2, 0.4, 1);
+    }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(26px) scale(0.96); } to { opacity: 1; transform: none; } }
+    .panel h1 {
+      margin: 0 0 6px; font-size: 46px; font-weight: 900; letter-spacing: 4px;
+      line-height: 1.05; color: #f6b93b; text-shadow: 0 3px 0 #8a5f13;
+    }
+    .panel h2 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: 1px; }
+    .panel h2.win {
+      color: #4ade80;
+      text-shadow: 0 0 24px rgba(74, 222, 128, 0.55);
+      animation: pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1);
+    }
+    .panel h2.lose { color: #f87171; animation: slam 0.35s ease-out; }
+    @keyframes pop { 0% { transform: scale(0.2); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes slam { 0% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .sub { font-size: 15px; opacity: 0.85; margin: 0; }
+    .rules { font-size: 14px; line-height: 2; opacity: 0.9; margin: 0; }
+    .result-stats { font-size: 14px; opacity: 0.85; margin: 0; }
+    .btn {
+      width: 100%; padding: 14px 18px; border: 0; border-radius: 12px;
+      font: inherit; font-size: 17px; font-weight: 700; color: #fff;
+      background: #3d2f14; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .btn.primary { background: #b07d1e; box-shadow: 0 3px 0 #6e4c0e; }
+    a.hub-link { display: inline-block; text-decoration: none; color: #e8d5a8; opacity: 0.8; }
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .panel h2.win, .panel h2.lose { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <div id="hud-perf" class="hud-box"></div>
+    <div id="hud-stats" class="hud-box"></div>
+  </div>
+  <div id="ui"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

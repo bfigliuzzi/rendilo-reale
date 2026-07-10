@@ -17,4 +17,11 @@ export const GAMES: GameEntry[] = [
     path: '/games/horde/',
     emoji: '🪖',
   },
+  {
+    id: 'hive',
+    title: 'Essaim',
+    tagline: 'Abeilles contre cafards : submerge la ruche adverse.',
+    path: '/games/hive/',
+    emoji: '🐝',
+  },
 ];

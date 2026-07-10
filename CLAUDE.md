@@ -1,10 +1,11 @@
 # Rendilo Reale — hub de jeux web
 
 Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
-dans `games/<id>/` avec son propre `index.html` + `src/`. Premier jeu : **Horde**
+dans `games/<id>/` avec son propre `index.html` + `src/`. Deux jeux : **Horde**
 (`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
 hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
-métaprogression (or, boutique, localStorage). PixiJS v8 + TypeScript strict + Vite.
+métaprogression (or, boutique, localStorage). Et **Essaim** (`/games/hive/`), conquête
+de nœuds façon Auralux (voir section dédiée). PixiJS v8 + TypeScript strict + Vite.
 Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
@@ -16,8 +17,12 @@ Aucune autre dépendance runtime.
   teardown à écrire.
 - **Le hub** (`index.html` + `hub/`) est du DOM pur, sans framework. Son CSS
   (`hub/style.css`) est une copie locale de la palette du jeu horde — rien n'est partagé
-  tant qu'un module n'a pas DEUX consommateurs ; le jour où un 2e jeu veut `core/rng.ts`
-  ou `core/loop.ts`, créer `shared/` + alias `@shared` et migrer à ce moment-là.
+  tant qu'un module n'a pas DEUX consommateurs.
+- **`shared/`** (alias `@shared`, déclaré dans `vite.config.ts` + `tsconfig.json` paths) :
+  modules communs aux jeux — `loop.ts` (boucle 60 Hz), `rng.ts` (mulberry32),
+  `math.ts`, `spatialGrid.ts`. Y migrer un module dès qu'il gagne son 2e consommateur,
+  jamais avant ; un module qui divergerait par jeu (ex. `render/fx.ts`) reste une copie
+  locale tant que les contrats diffèrent.
 - **PWA : UN SEUL service worker, à la racine** (manifest hub, `scope: '/'`), précache
   intégral hub + jeux. INVARIANT : `/sw.js` ne doit JAMAIS répondre du HTML (pas de
   fallback `/*` dans `netlify.toml` — un 404 devenu HTML empoisonnerait le SW installé
@@ -26,6 +31,39 @@ Aucune autre dépendance runtime.
 - **Save** : chaque jeu garde sa clé localStorage namespacée (`rendilo-reale:save:v1`
   pour horde — clé historique des joueurs, ne pas la renommer).
 - `appType: 'mpa'` : URL inconnue → 404 franc en dev comme en prod.
+
+## Essaim (`games/hive/`) — conquête de nœuds façon Auralux
+
+POC jouable : 1 carte skirmish (`config/maps.ts`, données `LevelDef` dans
+`config/levels.ts`) — abeilles (joueur, faction 1) vs cafards (IA, faction 2) +
+neutres. Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par
+niveau d'upgrade — l'upgrade est câblé dans la donnée mais pas exposé) ; le stock est
+visualisé en nuée orbitale (`orbitView`, purement rendu, plafond 60 points) + compteur.
+Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sélection,
+tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié).
+
+- **Un envoi = `SEND_FRAC` (50 %) du stock, jamais 100 %** : le stock EST la défense
+  (capture dès que < 0) — le 100 % rendait chaque envoi suicidaire (un éclaireur
+  retournait le nœud vidé). Re-taper envoie la moitié suivante. Mesuré au bot.
+- Un envoi = rafale étalée (`EMIT_INTERVAL`), `remaining` figé à l'ordre ; flux annulé
+  si la source tombe ou se vide. Arrivée résolue contre la faction COURANTE du nœud.
+- Combat = annihilation 1:1 en vol via `@shared/spatialGrid` (cafards insérés, abeilles
+  interrogent 3×3) ; morts marquées `dead=1`, `sweepDead()` APRÈS la phase grille.
+- Fin de partie : une faction est éliminée quand nœuds == 0 ET unités en vol == 0 ET
+  flux == 0 (une nuée en vol peut encore reprendre un nœud).
+- **IA** (`game/ai.ts`) : décision toutes `decisionInterval` s — défense, sinon vague
+  groupée des `waveNodes` nids les PLUS PROCHES de la cible (les borner est vital :
+  mobiliser toute l'économie écrasait le joueur), sinon accumulation. Paramètres par
+  carte dans `LevelDef.ai` ; passe par la même API `emitter.send` que le joueur.
+- **Équilibrage mesuré au bot** (même méthode que horde, scripts éphémères pilotant
+  `window.__game` — `{world, flow, app}`, `world.postSend/sendOrder` scriptables) :
+  bot passif ou dispersé = défaite en 45-85 s ; bot all-in persistant (marteler LE nid
+  le plus faible) = victoire 3/3 en 44-74 s ; IA miroir contre elle-même = impasse
+  (timeout) — l'équilibre de tortue est un connu du genre, c'est l'action qui paie.
+- Accessibilité : faction = FORME (hexagone/goutte/cercle) + glyphe + silhouette
+  d'unité distincte, jamais la couleur seule. `?stress` = les deux camps canonnent
+  (~600 unités, mesuré 120 fps desktop). Pas de save (clé réservée
+  `rendilo-reale:hive:save:v1`, à ne créer que via `game/flow.ts`).
 
 ## Déploiement
 
