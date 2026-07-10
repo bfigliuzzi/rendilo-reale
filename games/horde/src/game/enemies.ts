@@ -1,6 +1,6 @@
 import { Particle, type ParticleContainer } from 'pixi.js';
 import * as B from '../config/balance';
-import { clamp, lerp } from '../core/math';
+import { clamp, lerp } from '@shared/math';
 import type { Atlas } from '../render/textures';
 
 const PARK = -9999;

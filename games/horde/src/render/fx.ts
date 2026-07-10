@@ -1,5 +1,5 @@
 import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
-import { lerp, rand } from '../core/math';
+import { lerp, rand } from '@shared/math';
 
 const PARK = -9999;
 const CAP = 1024;

@@ -12,7 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["vite-plugin-pwa/client"]
+    "types": ["vite-plugin-pwa/client"],
+    "paths": { "@shared/*": ["./shared/*"] }
   },
-  "include": ["hub", "games"]
+  "include": ["hub", "games", "shared"]
 }

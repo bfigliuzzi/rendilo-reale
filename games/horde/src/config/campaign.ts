@@ -1,5 +1,5 @@
 import { BIOME_COUNT, GIGA_FROM_LEVEL, ULTRA_EVERY, ULTRA_HP_MUL } from './balance';
-import { mulberry32, pickWeighted, rangeOf } from '../core/rng';
+import { mulberry32, pickWeighted, rangeOf } from '@shared/rng';
 import {
   gateAdd,
   gateMul,

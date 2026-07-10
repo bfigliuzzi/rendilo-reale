@@ -1,6 +1,6 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { BIOME_COUNT, MINE_RADIUS, MISSILE_KINDS, type MissileKind } from '../config/balance';
-import { mulberry32 } from '../core/rng';
+import { mulberry32 } from '@shared/rng';
 
 /**
  * Atlas placeholder généré en code : un seul canvas source → toutes les frames

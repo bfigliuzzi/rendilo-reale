@@ -1,6 +1,6 @@
 import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
-import { clamp, lerp } from '../core/math';
+import { clamp, lerp } from '@shared/math';
 import type { Atlas } from '../render/textures';
 import type { Bosses } from './boss';
 import type { Crates } from './crates';

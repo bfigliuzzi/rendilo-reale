@@ -1,6 +1,6 @@
 import { type Container, Sprite, type Texture } from 'pixi.js';
 import * as B from '../config/balance';
-import { lerp } from '../core/math';
+import { lerp } from '@shared/math';
 import type { Squad } from './squad';
 
 /**

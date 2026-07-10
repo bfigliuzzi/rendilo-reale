@@ -1,6 +1,6 @@
 import * as B from '../config/balance';
 import type { EnemyKind, LevelDef, LevelEvent } from '../config/levels';
-import { clamp, rand } from '../core/math';
+import { clamp, rand } from '@shared/math';
 import type { EnemyPool } from './enemies';
 
 const KIND_INDEX: Record<EnemyKind, number> = {

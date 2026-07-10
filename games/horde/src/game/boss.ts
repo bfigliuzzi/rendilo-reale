@@ -1,6 +1,6 @@
 import { Container, Sprite, Text } from 'pixi.js';
 import * as B from '../config/balance';
-import { clamp, lerp, rand } from '../core/math';
+import { clamp, lerp, rand } from '@shared/math';
 import type { Atlas } from '../render/textures';
 import { ProjectilePool } from './projectiles';
 import type { Squad } from './squad';

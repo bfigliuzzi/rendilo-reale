@@ -5,6 +5,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   server: { host: true },
   appType: 'mpa', // pas de fallback SPA : URL inconnue → 404 franc
+  resolve: {
+    // modules communs aux jeux (loop, rng, math, spatialGrid) — voir shared/
+    alias: { '@shared': resolve(__dirname, 'shared') },
+  },
   build: {
     target: 'es2022',
     rollupOptions: {
@@ -12,6 +16,7 @@ export default defineConfig({
       input: {
         hub: resolve(__dirname, 'index.html'),
         horde: resolve(__dirname, 'games/horde/index.html'),
+        hive: resolve(__dirname, 'games/hive/index.html'),
       },
     },
   },

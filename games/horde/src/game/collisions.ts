@@ -1,5 +1,5 @@
 import * as B from '../config/balance';
-import { SpatialGrid } from '../core/spatialGrid';
+import { SpatialGrid } from '@shared/spatialGrid';
 import type { Bosses } from './boss';
 import type { BulletPool } from './bullets';
 import type { Crates } from './crates';

@@ -2,7 +2,7 @@ import { Application } from 'pixi.js';
 import { registerSW } from 'virtual:pwa-register';
 import { Sfx } from './audio/sfx';
 import { DESIGN_H, DESIGN_W } from './config/balance';
-import { startLoop } from './core/loop';
+import { startLoop } from '@shared/loop';
 import { Flow } from './game/flow';
 import { World } from './game/world';
 import { PointerInput } from './input/pointer';

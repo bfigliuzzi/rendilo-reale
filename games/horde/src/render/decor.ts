@@ -1,6 +1,6 @@
 import { Container, Sprite } from 'pixi.js';
 import * as B from '../config/balance';
-import { lerp } from '../core/math';
+import { lerp } from '@shared/math';
 import type { Atlas, DecorProp } from './textures';
 
 const PARK = -9999;

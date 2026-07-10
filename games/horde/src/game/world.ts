@@ -2,7 +2,7 @@ import { Container, Sprite, Text } from 'pixi.js';
 import type { Sfx } from '../audio/sfx';
 import * as B from '../config/balance';
 import type { LevelDef } from '../config/levels';
-import { clamp, lerp, rand } from '../core/math';
+import { clamp, lerp, rand } from '@shared/math';
 import type { PointerInput } from '../input/pointer';
 import type { PlayerStats } from '../meta/upgrades';
 import { Decor } from '../render/decor';
