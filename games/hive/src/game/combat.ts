@@ -1,4 +1,5 @@
 import { SpatialGrid } from '@shared/spatialGrid';
+import type { Sfx } from '../audio/sfx';
 import { COLLIDE_R, GRID_CELL, GRID_COLS, GRID_MAX_PER_CELL, GRID_ROWS } from '../config/balance';
 import { ENEMY, PLAYER } from '../config/levels';
 import type { Fx } from '../render/fx';
@@ -18,7 +19,7 @@ const MAX_BURSTS_PER_TICK = 6; // au-delà, les impacts restent sans particules 
 export class Combat {
   private readonly grid = new SpatialGrid(GRID_COLS, GRID_ROWS, GRID_CELL, GRID_MAX_PER_CELL);
 
-  update(units: Units, fx: Fx): void {
+  update(units: Units, fx: Fx, sfx: Sfx): void {
     if (units.byFaction[PLAYER] === 0 || units.byFaction[ENEMY] === 0) return;
     const grid = this.grid;
     grid.clear();
@@ -45,6 +46,7 @@ export class Combat {
             if (dx * dx + dy * dy > R2) continue;
             units.markDead(i);
             units.markDead(j);
+            sfx.annihilate(); // throttlé en interne
             if (bursts < MAX_BURSTS_PER_TICK) {
               bursts++;
               fx.burst((units.x[i] + units.x[j]) / 2, (units.y[i] + units.y[j]) / 2, {

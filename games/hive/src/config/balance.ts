@@ -5,11 +5,18 @@ import type { AiParams } from './levels';
 export const DESIGN_W = 540;
 export const DESIGN_H = 960;
 
-// Nœuds — table par niveau d'upgrade. POC : une seule entrée ; le futur upgrade
-// incrémentera NodeDef.level et tout (production, cap, rayon) sera dérivé d'ici.
+// Nœuds — table par niveau d'upgrade : production, cap et rayon sont TOUS
+// dérivés d'ici via NodeDef.level / Nodes.level.
 export const NODE_LEVELS: readonly { prodPerSec: number; cap: number; radius: number }[] = [
   { prodPerSec: 1.2, cap: 60, radius: 30 },
+  { prodPerSec: 1.9, cap: 90, radius: 36 },
+  { prodPerSec: 2.8, cap: 120, radius: 42 },
 ];
+// Coût de montée au niveau suivant (unités NOURRIES dans un nid allié déjà au
+// cap — le surplus devient investissement au lieu d'être perdu, geste Auralux).
+// La capture CONSERVE le niveau (les gros nids sont des prises stratégiques)
+// mais remet la progression en cours à zéro.
+export const UPGRADE_COSTS: readonly number[] = [25, 50];
 export const MAX_NODES = 16;
 export const ARRIVE_FRAC = 0.5; // rayon d'arrivée = fraction du rayon du nœud
 

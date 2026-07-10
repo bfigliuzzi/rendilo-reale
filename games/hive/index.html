@@ -72,6 +72,12 @@
     }
     .btn:active { transform: translateY(2px); box-shadow: none; }
     .btn.primary { background: #b07d1e; box-shadow: 0 3px 0 #6e4c0e; }
+    .levels { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .btn.level { display: flex; align-items: center; gap: 8px; text-align: left; font-size: 15px; padding: 12px 14px; }
+    .btn.level .best { margin-left: auto; font-size: 12px; font-weight: 400; opacity: 0.85; }
+    .btn.level.done { background: #2e4022; box-shadow: 0 3px 0 #1a2613; }
+    .btn.level.locked { opacity: 0.45; cursor: default; }
+    .btn.small { width: auto; padding: 8px 16px; font-size: 13px; background: #241b0c; }
     a.hub-link { display: inline-block; text-decoration: none; color: #e8d5a8; opacity: 0.8; }
     @media (prefers-reduced-motion: reduce) {
       .panel, .panel h2.win, .panel h2.lose { animation: none; }

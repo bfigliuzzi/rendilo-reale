@@ -34,13 +34,20 @@ Aucune autre dépendance runtime.
 
 ## Essaim (`games/hive/`) — conquête de nœuds façon Auralux
 
-POC jouable : 1 carte skirmish (`config/maps.ts`, données `LevelDef` dans
-`config/levels.ts`) — abeilles (joueur, faction 1) vs cafards (IA, faction 2) +
-neutres. Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par
-niveau d'upgrade — l'upgrade est câblé dans la donnée mais pas exposé) ; le stock est
+Campagne de 5 cartes en données (`config/maps.ts`, types `LevelDef` dans
+`config/levels.ts`) — la difficulté monte par les DONNÉES : AiParams (tempo,
+agressivité, `waveNodes`, `grace` = délai avant la première décision IA, vital dès
+que l'IA part multi-nids), nids de départ et leurs niveaux, richesse des neutres —
+abeilles (joueur, faction 1) vs cafards (IA, faction 2) + neutres. Les nœuds
+produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par niveau) ; le stock est
 visualisé en nuée orbitale (`orbitView`, purement rendu, plafond 60 points) + compteur.
 Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sélection,
 tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié).
+**Upgrade de nœuds** : nourrir un nid allié DÉJÀ PLEIN investit le surplus vers le
+niveau suivant (`UPGRADE_COSTS`, arc de progression au rendu, ▲ au label, taille du
+nid dérivée du niveau) — aucun geste dédié. La capture CONSERVE le niveau (gros nid
+= prise stratégique) mais remet l'investissement en cours à zéro ; l'IA investit
+dans ses temps calmes (`Ai.invest`).
 
 - **Un envoi = `SEND_FRAC` (50 %) du stock, jamais 100 %** : le stock EST la défense
   (capture dès que < 0) — le 100 % rendait chaque envoi suicidaire (un éclaireur
@@ -56,20 +63,28 @@ tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié)
   mobiliser toute l'économie écrasait le joueur), sinon accumulation. Paramètres par
   carte dans `LevelDef.ai` ; passe par la même API `emitter.send` que le joueur.
 - **Équilibrage mesuré au bot** : `node tools/verify-hive.mjs <url> <scenario>` —
-  scénarios `win` (bot all-in, ATTEND une victoire), `idle` (passif, ATTEND une
-  défaite), `mirror[:N]` (camp abeilles piloté par la MÊME classe `Ai`, exposée sur
-  `window.__game` — pas de duplication d'heuristiques ; garder `MIRROR_PARAMS`
-  alignés sur la carte testée), `stress` (fps à ~600 unités). Exit ≠ 0 si erreur
-  console ou issue inattendue → utilisable en CI. Bande de référence (Mac, 2026-07) :
-  win ~45-75 s, idle = défaite ~45-85 s, mirror = impasse (l'équilibre de tortue à
-  niveau égal est un connu du genre — c'est l'action qui paie), stress 120 fps.
-  À re-mesurer en RELATIF après tout changement de balance (mêmes précautions
-  machine que horde). `window.__game = {world, flow, app, Ai}`,
-  `world.postSend/sendOrder` scriptables.
+  scénarios `win[:carte]` (bot all-in, ATTEND une victoire), `idle[:carte]` (passif,
+  ATTEND une défaite), `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`,
+  exposée sur `window.__game` — pas de duplication d'heuristiques ; garder
+  `MIRROR_PARAMS` alignés sur la carte testée), `stress` (fps à ~600 unités).
+  Exit ≠ 0 si erreur console ou issue inattendue → utilisable en CI. Bande de
+  référence (Mac, 2026-07) : cartes 1-2 bot-win ~50-75 s, carte 3 ~1/3 (borderline
+  voulu, l'humain a les upgrades en plus), cartes 4-5 bot-lose (défi humain,
+  survie > 30-55 s grâce à `grace`), idle carte 1 = défaite ~110 s, mirror =
+  impasse (l'équilibre de tortue à niveau égal est un connu du genre — c'est
+  l'action qui paie), stress 120 fps. À re-mesurer en RELATIF après tout changement
+  de balance (mêmes précautions machine que horde).
+  `window.__game = {world, flow, app, Ai, save}`, `world.postSend/sendOrder`
+  scriptables.
+- Sons : `audio/sfx.ts`, 100 % WebAudio synthétisé (pattern horde), throttlés en
+  interne (annihilations surtout) ; l'IA est muette (seuls `World.sendOrder` et les
+  événements sonorisent — `Emitter.send` direct ne fait aucun bruit). Mute persistant
+  (bouton menu, `save.muted`).
 - Accessibilité : faction = FORME (hexagone/goutte/cercle) + glyphe + silhouette
   d'unité distincte, jamais la couleur seule. `?stress` = les deux camps canonnent
-  (~600 unités, mesuré 120 fps desktop). Pas de save (clé réservée
-  `rendilo-reale:hive:save:v1`, à ne créer que via `game/flow.ts`).
+  (~600 unités, mesuré 120 fps desktop). Save `rendilo-reale:hive:save:v1`
+  (`meta/save.ts`, schéma versionné + merge sur défauts) : déverrouillage de
+  campagne + records par carte — écrite UNIQUEMENT par `game/flow.ts`.
 
 ## Déploiement
 

@@ -1,11 +1,13 @@
 import { Application } from 'pixi.js';
 import { registerSW } from 'virtual:pwa-register';
 import { startLoop } from '@shared/loop';
+import { Sfx } from './audio/sfx';
 import { DESIGN_H, DESIGN_W } from './config/balance';
 import { Ai } from './game/ai';
 import { Flow } from './game/flow';
 import { World } from './game/world';
 import { Gestures } from './input/gestures';
+import { loadSave } from './meta/save';
 import { Fx } from './render/fx';
 import { Layers } from './render/layers';
 import { buildAtlas, PALETTE } from './render/textures';
@@ -40,18 +42,20 @@ async function boot(): Promise<void> {
   const atlas = buildAtlas();
   const layers = new Layers(app.stage, atlas);
   const fx = new Fx(layers.fx, atlas.spark);
-  const world = new World(layers, atlas, fx);
-  const gestures = new Gestures(app.canvas, world);
+  const save = loadSave();
+  const sfx = new Sfx(save.muted);
+  const world = new World(layers, atlas, fx, sfx);
+  const gestures = new Gestures(app.canvas, world, sfx);
   const hud = new Hud();
   const screens = new Screens(document.getElementById('ui')!);
-  const flow = new Flow(world, screens, gestures, hud);
+  const flow = new Flow(world, screens, gestures, hud, save, sfx);
 
   if (new URLSearchParams(location.search).has('stress')) flow.startStress();
   else flow.showMenu();
 
   // hook de debug pour les tests automatisés et la console. Ai est exposée pour
   // le scénario miroir de tools/verify-hive.mjs (mêmes heuristiques côté joueur).
-  (window as unknown as Record<string, unknown>).__game = { world, flow, app, Ai };
+  (window as unknown as Record<string, unknown>).__game = { world, flow, app, Ai, save };
 
   startLoop(
     (dt) => world.update(dt),

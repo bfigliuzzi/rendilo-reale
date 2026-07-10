@@ -3,11 +3,12 @@
 //
 // Usage : node tools/verify-hive.mjs [url] [scenario] [secondes] [capture.png]
 //   scenario :
-//     win        bot « bon joueur » (expansion, défense, all-in persistant) — ATTEND une victoire
-//     idle       bot passif — ATTEND une défaite (l'IA doit punir l'inaction)
-//     mirror[:N] N parties (défaut 3) où le camp abeilles est piloté par la MÊME
-//                classe Ai que les cafards (exposée sur __game) — rapport win/lose/timeout,
-//                aucune attente stricte (l'impasse est un résultat valide à niveau égal)
+//     win[:N]    bot « bon joueur » (expansion, défense, all-in persistant) sur la
+//                carte N (1-based, défaut 1) — ATTEND une victoire
+//     idle[:N]   bot passif sur la carte N — ATTEND une défaite (l'IA punit l'inaction)
+//     mirror[:R] R parties (défaut 3, carte 1) où le camp abeilles est piloté par la
+//                MÊME classe Ai que les cafards (exposée sur __game) — rapport
+//                win/lose/timeout, aucune attente stricte (l'impasse est valide à niveau égal)
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
 //
 // Env : CHROME_PATH surcharge le binaire Chrome ; --no-sandbox ajouté en root ;
@@ -31,8 +32,9 @@ const MIRROR_PARAMS = {
   waveNodes: 2,
 };
 
-const [kind, countStr] = SCENARIO.split(':');
-const MIRROR_RUNS = Number(countStr ?? 3);
+const [kind, suffixStr] = SCENARIO.split(':');
+const MIRROR_RUNS = kind === 'mirror' ? Number(suffixStr ?? 3) : 3;
+const LEVEL = kind === 'win' || kind === 'idle' ? Number(suffixStr ?? 1) : 1;
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -157,10 +159,11 @@ const snapshot = () =>
 
 /** Joue une partie jusqu'au résultat (ou timeout). Retourne 'win'|'lose'|'timeout'. */
 async function playOne(drive, timeoutSec, samples) {
-  await page.evaluate(() => {
+  await page.evaluate((levelIdx) => {
     window.__botTarget = -1;
-    window.__game.flow.startGame();
-  });
+    window.__game.save.unlocked = 99; // headless : toutes les cartes accessibles
+    window.__game.flow.startGame(levelIdx);
+  }, LEVEL - 1);
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutSec * 1000) {
     await new Promise((r) => setTimeout(r, 1500));

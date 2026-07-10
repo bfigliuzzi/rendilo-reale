@@ -21,6 +21,7 @@ export interface AiParams {
   distWeight: number; // pénalité de distance dans le score des cibles
   defendBias: number; // multiplicateur de priorité de la défense
   waveNodes: number; // contributeurs max d'une vague (les plus proches de la cible)
+  grace?: number; // s avant la PREMIÈRE décision (le joueur s'oriente) — défaut decisionInterval
 }
 
 export interface LevelDef {

@@ -1,25 +1,30 @@
-import { Sprite, Text } from 'pixi.js';
-import { MAX_NODES } from '../config/balance';
+import { type Graphics, Sprite, Text } from 'pixi.js';
+import { MAX_NODES, NODE_LEVELS } from '../config/balance';
 import type { Nodes } from '../game/nodes';
 import type { Layers } from './layers';
 import { PALETTE, type Atlas } from './textures';
 
+const BASE_RADIUS = NODE_LEVELS[0].radius;
+
 /**
- * Sprites des nœuds : corps (texture par faction, swap à la capture), anneau
- * (sélection pulsante OU flash blanc de capture) et compteur de stock.
+ * Sprites des nœuds : corps (texture par faction, swap à la capture ; taille
+ * selon le niveau d'upgrade), anneau (sélection pulsante OU flash blanc),
+ * arc de progression d'upgrade et compteur de stock (+ ▲ par niveau).
  * Le Text n'est mis à jour que quand la valeur AFFICHÉE change (invariant repo).
  */
 export class NodesView {
   private readonly bodies: Sprite[] = [];
   private readonly rings: Sprite[] = [];
   private readonly labels: Text[] = [];
-  private readonly lastShown = new Int16Array(MAX_NODES);
+  private readonly arcs: Graphics;
+  private readonly lastShown = new Int32Array(MAX_NODES);
   private readonly lastFaction = new Uint8Array(MAX_NODES);
 
   constructor(
     layers: Layers,
     private readonly atlas: Atlas,
   ) {
+    this.arcs = layers.arcs;
     for (let i = 0; i < MAX_NODES; i++) {
       const body = new Sprite(atlas.nodeBody[0]);
       body.anchor.set(0.5);
@@ -66,6 +71,7 @@ export class NodesView {
   }
 
   sync(nodes: Nodes, time: number): void {
+    this.arcs.clear();
     for (let i = 0; i < nodes.count; i++) {
       const body = this.bodies[i];
       const f = nodes.faction[i];
@@ -73,8 +79,9 @@ export class NodesView {
         this.lastFaction[i] = f;
         body.texture = this.atlas.nodeBody[f];
       }
-      // respiration légère, calculée au rendu
-      const pulse = 0.5 * (1 + 0.04 * Math.sin(time * 2.2 + i * 1.7));
+      // taille selon le niveau + respiration légère, calculées au rendu
+      const sizeMul = nodes.radius(i) / BASE_RADIUS;
+      const pulse = 0.5 * sizeMul * (1 + 0.04 * Math.sin(time * 2.2 + i * 1.7));
       body.scale.set(pulse);
 
       const ring = this.rings[i];
@@ -82,20 +89,30 @@ export class NodesView {
         ring.visible = true;
         ring.tint = PALETTE.select;
         ring.alpha = 0.85 + 0.15 * Math.sin(time * 6);
-        ring.scale.set(0.5 + 0.02 * Math.sin(time * 6));
+        ring.scale.set(sizeMul * (0.5 + 0.02 * Math.sin(time * 6)));
       } else if (nodes.flash[i] > 0) {
         ring.visible = true;
         ring.tint = 0xffffff;
         ring.alpha = nodes.flash[i];
-        ring.scale.set(0.5 + (1 - nodes.flash[i]) * 0.25);
+        ring.scale.set(sizeMul * (0.5 + (1 - nodes.flash[i]) * 0.25));
       } else {
         ring.visible = false;
       }
 
-      const shown = Math.floor(nodes.stock[i]);
+      // arc de progression d'upgrade (investissement en cours vers le niveau suivant)
+      const cost = nodes.upgradeCost(i);
+      if (cost > 0 && nodes.upgradeProgress[i] > 0) {
+        const frac = nodes.upgradeProgress[i] / cost;
+        this.arcs.arc(nodes.x[i], nodes.y[i], nodes.radius(i) + 7, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+        this.arcs.stroke({ width: 4, color: PALETTE.select, alpha: 0.9 });
+      }
+
+      // label = stock (+ ▲ par niveau) ; maj seulement quand l'affiché change
+      const shown = Math.floor(nodes.stock[i]) + nodes.level[i] * 100000;
       if (shown !== this.lastShown[i]) {
         this.lastShown[i] = shown;
-        this.labels[i].text = String(shown);
+        this.labels[i].text = `${Math.floor(nodes.stock[i])}${'▲'.repeat(nodes.level[i])}`;
+        this.labels[i].position.set(nodes.x[i], nodes.y[i] + nodes.radius(i) + 14);
       }
     }
   }

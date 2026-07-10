@@ -1,4 +1,4 @@
-import { MAX_NODES, NODE_LEVELS, TAP_RADIUS_MIN, TAP_RADIUS_PAD } from '../config/balance';
+import { MAX_NODES, NODE_LEVELS, TAP_RADIUS_MIN, TAP_RADIUS_PAD, UPGRADE_COSTS } from '../config/balance';
 import type { Faction, LevelDef } from '../config/levels';
 
 /**
@@ -12,18 +12,21 @@ export class Nodes {
   readonly y = new Float32Array(MAX_NODES);
   readonly stock = new Float32Array(MAX_NODES); // flottant (production continue), affiché floor()
   readonly flash = new Float32Array(MAX_NODES); // timer visuel de capture (décroît dans update)
+  readonly upgradeProgress = new Float32Array(MAX_NODES); // unités investies vers le niveau suivant
   readonly faction = new Uint8Array(MAX_NODES);
   readonly level = new Uint8Array(MAX_NODES);
   readonly selected = new Uint8Array(MAX_NODES);
   readonly byFaction = new Int16Array(3);
-  /** Câblé une fois par World (fx + sfx futurs) — jamais réassigné au tick. */
+  /** Câblés une fois par World (fx + sfx futurs) — jamais réassignés au tick. */
   onCapture: (i: number, to: Faction) => void = () => {};
+  onUpgrade: (i: number) => void = () => {};
 
   load(def: LevelDef): void {
     this.count = def.nodes.length;
     this.byFaction.fill(0);
     this.selected.fill(0);
     this.flash.fill(0);
+    this.upgradeProgress.fill(0);
     for (let i = 0; i < this.count; i++) {
       const n = def.nodes[i];
       this.x[i] = n.x;
@@ -58,14 +61,33 @@ export class Nodes {
     }
   }
 
+  /** Coût de montée au niveau suivant, ou 0 si le nœud est au niveau max. */
+  upgradeCost(i: number): number {
+    return UPGRADE_COSTS[this.level[i]] ?? 0;
+  }
+
   /**
    * Effet d'une unité qui touche le nœud, résolu contre la faction COURANTE :
-   * renfort si alliée (surplus au-delà du cap perdu), −1 sinon, capture sous 0.
+   * renfort si alliée — et si le nid est PLEIN, l'unité est investie dans la
+   * montée de niveau (geste Auralux : nourrir un nid au cap l'améliore) ;
+   * −1 sinon, capture sous 0.
    */
   arrive(i: number, f: Faction): void {
     if (this.faction[i] === f) {
       const cap = this.cap(i);
-      if (this.stock[i] < cap) this.stock[i] = Math.min(cap, this.stock[i] + 1);
+      if (this.stock[i] < cap) {
+        this.stock[i] = Math.min(cap, this.stock[i] + 1);
+        return;
+      }
+      const cost = this.upgradeCost(i);
+      if (cost === 0) return; // niveau max : surplus perdu
+      this.upgradeProgress[i] += 1;
+      if (this.upgradeProgress[i] >= cost) {
+        this.level[i]++;
+        this.upgradeProgress[i] = 0;
+        this.flash[i] = 1;
+        this.onUpgrade(i);
+      }
       return;
     }
     this.stock[i] -= 1;
@@ -77,6 +99,7 @@ export class Nodes {
     this.byFaction[to]++;
     this.faction[i] = to;
     this.stock[i] = 0; // l'unité qui capture est consommée par la prise
+    this.upgradeProgress[i] = 0; // le niveau reste, l'investissement en cours est perdu
     this.selected[i] = 0;
     this.flash[i] = 1;
     this.onCapture(i, to);

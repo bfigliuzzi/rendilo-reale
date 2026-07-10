@@ -1,3 +1,4 @@
+import type { Sfx } from '../audio/sfx';
 import { DESIGN_H, DESIGN_W, DRAG_THRESHOLD } from '../config/balance';
 import { PLAYER } from '../config/levels';
 import type { World } from '../game/world';
@@ -24,6 +25,7 @@ export class Gestures {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly world: World,
+    private readonly sfx: Sfx,
   ) {
     canvas.addEventListener('pointerdown', this.onDown);
     canvas.addEventListener('pointermove', this.onMove);
@@ -100,6 +102,8 @@ export class Gestures {
     }
     if (nodes.faction[hit] === PLAYER) {
       nodes.selected[hit] = nodes.selected[hit] ? 0 : 1; // sélection/cumul, re-tap = retrait
+      if (nodes.selected[hit]) this.sfx.select();
+      else this.sfx.deselect();
       return;
     }
     // cible ennemie/neutre : envoi depuis toute la sélection

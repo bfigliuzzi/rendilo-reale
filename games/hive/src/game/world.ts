@@ -1,3 +1,4 @@
+import type { Sfx } from '../audio/sfx';
 import { PALETTE } from '../render/textures';
 import type { Fx } from '../render/fx';
 import type { Layers } from '../render/layers';
@@ -53,6 +54,7 @@ export class World {
     private readonly layers: Layers,
     atlas: Atlas,
     private readonly fx: Fx,
+    private readonly sfx: Sfx,
   ) {
     this.units = new Units(layers.units, atlas);
     this.emitter = new Emitter(this.nodes, this.units);
@@ -68,6 +70,18 @@ export class World {
         size: 1.1,
       });
       this.fx.shake(4);
+      this.sfx.capture(to === PLAYER);
+    };
+    this.nodes.onUpgrade = (i): void => {
+      this.fx.burst(this.nodes.x[i], this.nodes.y[i], {
+        count: 18,
+        color: PALETTE.select,
+        speed: 160,
+        life: 0.6,
+        size: 1.2,
+      });
+      this.fx.shake(2);
+      this.sfx.upgrade();
     };
   }
 
@@ -94,7 +108,9 @@ export class World {
 
   /** API de commande (joueur et futur bot) : envoi de SEND_FRAC du stock. */
   sendOrder(src: number, dst: number, f: Faction): boolean {
-    return this.emitter.send(src, dst, f, Math.max(1, Math.floor(this.nodes.stock[src] * SEND_FRAC)));
+    const ok = this.emitter.send(src, dst, f, Math.max(1, Math.floor(this.nodes.stock[src] * SEND_FRAC)));
+    if (ok) this.sfx.send();
+    return ok;
   }
 
   update(dt: number): void {
@@ -108,7 +124,7 @@ export class World {
     this.nodes.grow(dt); // 2. production
     this.emitter.update(dt); // 3. rafales d'émission
     this.units.update(dt, this.time, this.nodes); // 4. vol + arrivées/captures
-    this.combat.update(this.units, this.fx); // 5. annihilation 1:1
+    this.combat.update(this.units, this.fx, this.sfx); // 5. annihilation 1:1
     this.units.sweepDead(); // 6. compactage (les index de grille ne servent plus)
     this.ai.update(dt); // 7. décision IA
     if (this.stress) this.stressDrive(dt);
@@ -134,8 +150,15 @@ export class World {
     g.moveTo(sx, sy);
     g.lineTo(this.drag.x, this.drag.y);
     g.stroke({ width: 4, color: PALETTE.select, alpha: 0.7 });
-    g.circle(this.drag.x, this.drag.y, 10);
-    g.stroke({ width: 3, color: PALETTE.select, alpha: 0.9 });
+    // cible valide survolée : anneau sur le nœud, sinon simple curseur
+    const hover = this.drag.hoverId;
+    if (hover >= 0 && hover !== this.drag.srcId) {
+      g.circle(this.nodes.x[hover], this.nodes.y[hover], this.nodes.radius(hover) + 12);
+      g.stroke({ width: 4, color: PALETTE.select, alpha: 0.95 });
+    } else {
+      g.circle(this.drag.x, this.drag.y, 10);
+      g.stroke({ width: 3, color: PALETTE.select, alpha: 0.9 });
+    }
   }
 
   /** Une faction est éliminée quand elle n'a plus NI nœud NI unité NI flux. */

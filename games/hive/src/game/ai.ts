@@ -35,7 +35,8 @@ export class Ai {
 
   reset(params: AiParams): void {
     this.params = params;
-    this.timer = params.decisionInterval; // laisse l'adversaire respirer au départ
+    // grâce initiale : le temps que l'adversaire s'oriente (surtout multi-nids)
+    this.timer = Math.max(params.decisionInterval, params.grace ?? 0);
   }
 
   update(dt: number): void {
@@ -95,7 +96,10 @@ export class Ai {
         bestCost = Math.max(0, cost);
       }
     }
-    if (best < 0) return;
+    if (best < 0) {
+      this.invest();
+      return;
+    }
 
     // contributeurs = mes `waveNodes` nœuds les PLUS PROCHES de la cible
     let force = 0;
@@ -122,13 +126,44 @@ export class Ai {
       force += Math.floor(nodes.stock[bestI] * (1 - p.reserveFrac));
     }
     const needed = bestCost * (1.4 - 0.5 * p.aggression) + 1;
-    if (force < needed) return; // pas de supériorité : on accumule
+    if (force < needed) {
+      this.invest(); // pas de supériorité : on fait fructifier l'accumulation
+      return;
+    }
 
     // vague groupée : les contributeurs retenus envoient EN MÊME TEMPS
     for (let s = 0; s < picked; s++) {
       const i = this.wave[s];
       this.emitter.send(i, best, me, Math.floor(nodes.stock[i] * (1 - p.reserveFrac)));
     }
+  }
+
+  /**
+   * Temps calme : nourrir un nid au cap pour le monter de niveau — le donneur
+   * est le nœud allié le plus riche (hors receveur), s'il a un vrai surplus.
+   */
+  private invest(): void {
+    const { nodes } = this;
+    let capped = -1;
+    for (let i = 0; i < nodes.count; i++) {
+      if (nodes.faction[i] !== this.me || nodes.upgradeCost(i) === 0) continue;
+      if (nodes.stock[i] >= nodes.cap(i) - 1) {
+        capped = i;
+        break;
+      }
+    }
+    if (capped < 0) return;
+    let donor = -1;
+    let best = 0;
+    for (let i = 0; i < nodes.count; i++) {
+      if (nodes.faction[i] !== this.me || i === capped) continue;
+      const surplus = Math.floor(nodes.stock[i] * (1 - this.params.reserveFrac));
+      if (surplus > best) {
+        best = surplus;
+        donor = i;
+      }
+    }
+    if (donor >= 0 && best >= 6) this.emitter.send(donor, capped, this.me, best);
   }
 
   /** Distance moyenne de mes nœuds à la cible (pour le coût de trajet). */

@@ -13,6 +13,7 @@ export class Layers {
   readonly orbit: ParticleContainer;
   readonly units: ParticleContainer;
   readonly fx: ParticleContainer;
+  readonly arcs = new Graphics(); // arcs de progression d'upgrade (≤ 16, clear+redraw)
   readonly labels = new Container();
   readonly overlay = new Graphics(); // flèche de drag, au-dessus de tout
 
@@ -29,6 +30,6 @@ export class Layers {
     // fx : échelle, teinte et alpha varient pendant la vie des particules
     this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 
-    stage.addChild(this.bg, this.orbit, this.nodes, this.units, this.fx, this.labels, this.overlay);
+    stage.addChild(this.bg, this.orbit, this.nodes, this.units, this.fx, this.arcs, this.labels, this.overlay);
   }
 }
