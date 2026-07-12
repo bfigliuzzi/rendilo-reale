@@ -91,8 +91,8 @@ const NUEE: LevelDef = {
   name: 'La Nuée',
   nodes: [
     { x: 270, y: 850, faction: PLAYER, stock: 28 },
-    { x: 150, y: 130, faction: FOE, stock: 16 },
-    { x: 390, y: 130, faction: FOE, stock: 16 },
+    { x: 150, y: 130, faction: FOE, stock: 12 },
+    { x: 390, y: 130, faction: FOE, stock: 12 },
     { x: 100, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 440, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 270, y: 650, faction: NEUTRAL, stock: 14 },
@@ -104,7 +104,7 @@ const NUEE: LevelDef = {
     { species: 'bee' },
     {
       species: 'fly',
-      ai: { decisionInterval: 1.5, aggression: 0.65, reserveFrac: 0.22, distWeight: 0.45, defendBias: 1.4, waveNodes: 2, grace: 8 },
+      ai: { decisionInterval: 1.8, aggression: 0.58, reserveFrac: 0.26, distWeight: 0.45, defendBias: 1.4, waveNodes: 2, grace: 12 },
     },
   ],
 };

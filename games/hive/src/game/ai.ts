@@ -121,10 +121,15 @@ export class Ai {
       return;
     }
 
-    // contributeurs = mes `waveNodes` nœuds les PLUS PROCHES de la cible
+    // contributeurs = mes `waveNodes` nœuds les PLUS PROCHES de la cible.
+    // MOBILISATION de fin de partie : plus aucun neutre à prendre ⇒ vague
+    // élargie (+2) — sans quoi une IA à petits nids (cap en puissance) peut
+    // tourner en rond en upgrades sans jamais réunir la force d'attaque
+    // (mesuré : idle qui timeout au lieu de punir l'inaction).
+    const waveMax = neutralsLeft ? p.waveNodes : p.waveNodes + 2;
     let force = 0;
     let picked = 0;
-    for (let k = 0; k < p.waveNodes; k++) {
+    for (let k = 0; k < waveMax; k++) {
       let bestI = -1;
       let bestD = Infinity;
       for (let i = 0; i < nodes.count; i++) {
