@@ -80,7 +80,7 @@ const VERGER: LevelDef = {
     { species: 'bee' },
     {
       species: 'roach',
-      ai: { decisionInterval: 1.9, aggression: 0.55, reserveFrac: 0.28, distWeight: 0.5, defendBias: 1.5, waveNodes: 2 },
+      ai: { decisionInterval: 2.2, aggression: 0.55, reserveFrac: 0.28, distWeight: 0.5, defendBias: 1.5, waveNodes: 2, grace: 5 },
     },
   ],
 };

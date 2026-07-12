@@ -5,7 +5,11 @@ import type { Faction, LevelDef } from '../config/levels';
  * Pool SoA des nœuds (≤ MAX_NODES, immobiles — pas d'interpolation nécessaire).
  * Production (× croissance de l'espèce), arrivées (valeur EN UNITÉS LOCALES du
  * nœud : renfort/dégât/capture) et sélection joueur.
- * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level`.
+ * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level` ; cap et coût
+ * d'upgrade sont DÉNOMINÉS EN PUISSANCE (divisés par la puissance de l'espèce
+ * occupante) : un nid plein stocke la même puissance défensive et un niveau
+ * coûte le même effort quel que soit le clan — sinon le clan costaud gagnait
+ * toute guerre d'usure sur ses nids (mesuré au bot).
  */
 export class Nodes {
   count = 0;
@@ -22,8 +26,11 @@ export class Nodes {
   onCapture: (i: number, to: Faction) => void = () => {};
   onUpgrade: (i: number) => void = () => {};
 
-  /** Croissance par faction (référence possédée par World, remplie à loadLevel). */
-  constructor(private readonly factionGrowth: Float32Array) {}
+  /** Stats par faction (références possédées par World, remplies à loadLevel). */
+  constructor(
+    private readonly factionGrowth: Float32Array,
+    private readonly factionPower: Float32Array,
+  ) {}
 
   load(def: LevelDef): void {
     this.count = def.nodes.length;
@@ -47,7 +54,7 @@ export class Nodes {
   }
 
   cap(i: number): number {
-    return NODE_LEVELS[this.level[i]].cap;
+    return NODE_LEVELS[this.level[i]].cap / this.factionPower[this.faction[i]];
   }
 
   prod(i: number): number {
@@ -67,7 +74,8 @@ export class Nodes {
 
   /** Coût de montée au niveau suivant, ou 0 si le nœud est au niveau max. */
   upgradeCost(i: number): number {
-    return UPGRADE_COSTS[this.level[i]] ?? 0;
+    const base = UPGRADE_COSTS[this.level[i]] ?? 0;
+    return base && base / this.factionPower[this.faction[i]];
   }
 
   /**

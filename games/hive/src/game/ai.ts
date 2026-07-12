@@ -15,8 +15,10 @@ import type { Units } from './units';
  * les plus proches de la cible (le combat récompense la masse, mais mobiliser
  * toute l'économie écraserait le joueur), sinon accumulation.
  * Anti-sur-extension structurel : `reserveFrac` reste à la maison et on
- * n'attaque qu'en supériorité — pondérée par le rapport de PUISSANCE des
- * espèces (une IA mouches doit envoyer plus de monde qu'une IA cafards).
+ * n'attaque qu'en supériorité. TOUTES les estimations (menaces, coûts, forces)
+ * sont en MONNAIE DE PUISSANCE (`factionPower`) : les unités des clans n'ont
+ * pas la même valeur — compter des têtes ferait sous-défendre face à un clan
+ * costaud et sur-attaquer avec un clan fragile.
  * Passe par la MÊME API (Emitter.send) que le joueur : aucune triche possible.
  * Scratch buffers préalloués — zéro alloc.
  */
@@ -24,7 +26,7 @@ export class Ai {
   active = false;
   private timer = 0;
   private params: AiParams = AI_DEFAULTS;
-  // renforts en vol par nœud : ceux des adversaires, les miens
+  // renforts en vol par nœud, EN PUISSANCE : ceux des adversaires, les miens
   private readonly incomingFoe = new Float32Array(MAX_NODES);
   private readonly incomingMine = new Float32Array(MAX_NODES);
   private readonly wave = new Int16Array(MAX_NODES); // contributeurs de la vague en cours
@@ -35,7 +37,13 @@ export class Ai {
     private readonly emitter: Emitter,
     private readonly me: Faction = 2,
     private readonly factionPower: Float32Array | null = null,
+    private readonly factionSpeed: Float32Array | null = null,
   ) {}
+
+  /** Puissance d'une unité de la faction f (1 sans table fournie). */
+  private pw(f: number): number {
+    return this.factionPower ? this.factionPower[f] : 1;
+  }
 
   /** reset() sans paramètres = faction absente de la carte : IA inerte. */
   reset(params?: AiParams): void {
@@ -54,36 +62,32 @@ export class Ai {
     this.decide();
   }
 
-  /** Rapport de puissance espèce cible / mon espèce (1 sans table fournie). */
-  private powerRatio(target: Faction): number {
-    return this.factionPower ? this.factionPower[target] / this.factionPower[this.me] : 1;
-  }
-
   private decide(): void {
     const { nodes, units, me } = this;
     const p = this.params;
+    const myPw = this.pw(me);
     this.incomingFoe.fill(0, 0, nodes.count);
     this.incomingMine.fill(0, 0, nodes.count);
     for (let i = 0; i < units.count; i++) {
       if (units.dead[i]) continue;
-      if (units.faction[i] === me) this.incomingMine[units.target[i]]++;
-      else this.incomingFoe[units.target[i]]++;
+      if (units.faction[i] === me) this.incomingMine[units.target[i]] += myPw;
+      else this.incomingFoe[units.target[i]] += this.pw(units.faction[i]);
     }
 
-    // 1. DÉFENSE : renforcer mon nœud le plus menacé (menace = ce qui arrive
-    //    moins ce qui tient déjà), pondérée par defendBias face à l'attaque.
+    // 1. DÉFENSE : renforcer mon nœud le plus menacé (menace EN PUISSANCE = ce
+    //    qui arrive moins ce qui tient déjà), pondérée par defendBias.
     let defendNode = -1;
     let worstThreat = 0;
     for (let i = 0; i < nodes.count; i++) {
       if (nodes.faction[i] !== me) continue;
-      const threat = this.incomingFoe[i] - (nodes.stock[i] + this.incomingMine[i]);
+      const threat = this.incomingFoe[i] - (nodes.stock[i] * myPw + this.incomingMine[i]);
       if (threat > worstThreat) {
         worstThreat = threat;
         defendNode = i;
       }
     }
     if (defendNode >= 0 && worstThreat * p.defendBias >= 1) {
-      this.reinforce(defendNode, Math.ceil(worstThreat * 1.2));
+      this.reinforce(defendNode, Math.ceil((worstThreat * 1.2) / myPw));
       return;
     }
 
@@ -93,15 +97,17 @@ export class Ai {
     let best = -1;
     let bestScore = -Infinity;
     let bestCost = 0;
+    const mySpeed = UNIT_SPEED * (this.factionSpeed ? this.factionSpeed[me] : 1);
     for (let c = 0; c < nodes.count; c++) {
       const f = nodes.faction[c];
       if (f === me) continue;
       const dist = this.avgDistFrom(c);
-      const flight = dist / UNIT_SPEED;
-      // tout nœud possédé par un adversaire se défend avec sa prod + ses renforts
-      const defense = f !== NEUTRAL ? this.incomingFoe[c] + nodes.prod(c) * flight : 0;
+      const flight = dist / mySpeed;
+      // tout nœud possédé par un adversaire se défend avec sa prod + ses
+      // renforts (le tout EN PUISSANCE)
+      const defense = f !== NEUTRAL ? this.incomingFoe[c] + nodes.prod(c) * flight * this.pw(f) : 0;
       // mes unités déjà en route vers c réduisent ce qu'il reste à payer
-      const cost = nodes.stock[c] + defense - this.incomingMine[c];
+      const cost = nodes.stock[c] * this.pw(f) + defense - this.incomingMine[c];
       const value = f === NEUTRAL ? (neutralsLeft ? 2 : 1) : 1 + p.aggression;
       const score = value / (Math.max(0, cost) + 1) - (p.distWeight * dist) / 300;
       if (score > bestScore) {
@@ -137,10 +143,10 @@ export class Ai {
       }
       if (bestI < 0) break;
       this.wave[picked++] = bestI;
-      force += Math.floor(nodes.stock[bestI] * (1 - p.reserveFrac));
+      force += Math.floor(nodes.stock[bestI] * (1 - p.reserveFrac)) * myPw;
     }
-    // le coût est en unités du DÉFENSEUR : converti dans ma monnaie de puissance
-    const needed = bestCost * this.powerRatio(nodes.faction[best] as Faction) * (1.4 - 0.5 * p.aggression) + 1;
+    // coût et force sont tous deux en puissance : comparaison directe
+    const needed = bestCost * (1.4 - 0.5 * p.aggression) + 1;
     if (force < needed) {
       this.invest(); // pas de supériorité : on fait fructifier l'accumulation
       return;

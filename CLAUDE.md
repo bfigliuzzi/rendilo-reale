@@ -98,17 +98,26 @@ dans ses temps calmes (`Ai.invest`).
   boucle de rendu (throttlé, zéro hook dans la sim), bandeau DOM `#hud-tuto`
   (`aria-live`). Flow le démarre/coupe.
 - **Équilibrage mesuré au bot** : `node tools/verify-hive.mjs <url> <scenario>` —
-  scénarios `win[:carte]` (bot all-in, ATTEND une victoire), `idle[:carte]` (passif,
-  ATTEND une défaite), `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`,
-  exposée sur `window.__game` — pas de duplication d'heuristiques ; garder
-  `MIRROR_PARAMS` alignés sur la carte testée), `stress` (fps à ~600 unités).
-  Exit ≠ 0 si erreur console ou issue inattendue → utilisable en CI. Bande de
-  référence (Mac, 2026-07) : cartes 1-2 bot-win ~50-75 s, carte 3 ~1/3 (borderline
-  voulu, l'humain a les upgrades en plus), cartes 4-5 bot-lose (défi humain,
-  survie > 30-55 s grâce à `grace`), idle carte 1 = défaite ~110 s, mirror =
-  impasse (l'équilibre de tortue à niveau égal est un connu du genre — c'est
-  l'action qui paie), stress 120 fps. À re-mesurer en RELATIF après tout changement
-  de balance (mêmes précautions machine que horde).
+  scénarios `win[:carte]` (bot all-in CONSCIENT DES PUISSANCES via
+  `world.factionPower`, ATTEND une victoire ; carte 1-based, défaut 2 — la
+  carte 1 est le tutoriel), `idle[:carte]` (passif, ATTEND une défaite),
+  `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`, exposée sur
+  `window.__game` — pas de duplication d'heuristiques ; garder `MIRROR_PARAMS`
+  alignés sur la carte testée), `stress` (fps à ~600 unités).
+  Exit ≠ 0 si erreur console ou issue inattendue → utilisable en CI.
+  **PARITÉ D'USURE — les quatre tuyaux à garder en puissance** (chacun a été
+  mesuré comme déséquilibre réel au bot) : ① production `growth·power ≡ 1`,
+  ② cadence d'émission `EMIT_INTERVAL × power`, ③ cap et coût d'upgrade
+  `÷ power`, ④ estimations de l'IA et du bot en monnaie de puissance. Toute
+  nouvelle mécanique quantitative (coût, stock, débit) doit choisir sa
+  dénomination puissance/unités EXPLICITEMENT, sinon le clan costaud (cafards)
+  gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des
+  premières cartes qui bascule en lose.
+  Bande de référence (conteneur, rendu logiciel, 2026-07) : tutoriel bot-win
+  ~30 s, cartes 2-3 bot-win, idle carte 2 = défaite ~70 s, stress ~34 fps
+  (même machine : main = verger bot-win ~71 s). À re-mesurer en RELATIF après
+  tout changement de balance, batch de contrôle sur l'ancien tuning en cas de
+  doute (mêmes précautions machine que horde).
   `window.__game = {world, flow, app, Ai, save}`, `world.postSend/sendOrder`
   scriptables.
 - Sons : `audio/sfx.ts`, 100 % WebAudio synthétisé (pattern horde), throttlés en

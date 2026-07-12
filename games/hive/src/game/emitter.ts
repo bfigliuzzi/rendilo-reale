@@ -9,6 +9,10 @@ import type { Units } from './units';
  * c'est le look Auralux. `remaining` est FIGÉ à l'ordre : la production continue
  * pendant l'émission mais ne prolonge pas le flux. Le flux s'annule si la source
  * change de faction ou tombe à sec (comportement prévisible, rien d'implicite).
+ * La cadence est en PUISSANCE constante (intervalle × power de l'espèce) : le
+ * tuyau transporte le même débit de puissance pour tous les clans — les mouches
+ * sortent en nuée dense, les cafards au compte-goutte (parité d'usure, sinon le
+ * clan costaud renforce/attaque plus vite à travers le même tuyau).
  * Ring buffer fixe, zéro allocation.
  */
 export class Emitter {
@@ -20,9 +24,11 @@ export class Emitter {
   readonly timer = new Float32Array(MAX_STREAMS);
   readonly byFaction = new Int16Array(MAX_FACTIONS);
 
+  /** `factionPower` : référence possédée par World, remplie à loadLevel. */
   constructor(
     private readonly nodes: Nodes,
     private readonly units: Units,
+    private readonly factionPower: Float32Array,
   ) {}
 
   /**
@@ -72,7 +78,7 @@ export class Emitter {
         this.units.spawn(this.nodes.x[src] + Math.cos(a) * r, this.nodes.y[src] + Math.sin(a) * r, f, dst);
         this.nodes.stock[src] -= 1;
         this.remaining[s] -= 1;
-        this.timer[s] += EMIT_INTERVAL;
+        this.timer[s] += EMIT_INTERVAL * this.factionPower[f];
       }
       if (this.remaining[s] <= 0) this.stop(s);
     }

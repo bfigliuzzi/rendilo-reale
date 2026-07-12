@@ -75,13 +75,13 @@ export class World {
     this.factionPower.fill(1);
     this.nodeTexByFaction = [atlas.nodeBodyNeutral, atlas.nodeBodies[0][0], atlas.nodeBodies[2][1], atlas.nodeBodies[1][2]];
     this.unitTexByFaction = [atlas.unitMote, atlas.unitFrames[0][0], atlas.unitFrames[2][1], atlas.unitFrames[1][2]];
-    this.nodes = new Nodes(this.factionGrowth);
+    this.nodes = new Nodes(this.factionGrowth, this.factionPower);
     this.units = new Units(layers.units, this.unitTexByFaction, this.factionSpeed, this.factionPower);
-    this.emitter = new Emitter(this.nodes, this.units);
+    this.emitter = new Emitter(this.nodes, this.units, this.factionPower);
     // une IA par camp non-joueur, préallouées ; inertes si la faction est absente
     this.ais = [
-      new Ai(this.nodes, this.units, this.emitter, 2, this.factionPower),
-      new Ai(this.nodes, this.units, this.emitter, 3, this.factionPower),
+      new Ai(this.nodes, this.units, this.emitter, 2, this.factionPower, this.factionSpeed),
+      new Ai(this.nodes, this.units, this.emitter, 3, this.factionPower, this.factionSpeed),
     ];
     this.nodesView = new NodesView(layers, atlas, this.nodeTexByFaction);
     this.orbitView = new OrbitView(layers.orbit, this.unitTexByFaction);

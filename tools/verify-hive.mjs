@@ -211,7 +211,7 @@ if (kind === 'stress') {
     await page.evaluate((params) => {
       if (window.__mirrorTimer) clearInterval(window.__mirrorTimer);
       const g = window.__game;
-      const ai = new g.Ai(g.world.nodes, g.world.units, g.world.emitter, 1, g.world.factionPower);
+      const ai = new g.Ai(g.world.nodes, g.world.units, g.world.emitter, 1, g.world.factionPower, g.world.factionSpeed);
       ai.reset(params);
       let last = performance.now();
       window.__mirrorTimer = setInterval(() => {
