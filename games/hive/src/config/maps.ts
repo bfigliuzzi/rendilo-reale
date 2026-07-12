@@ -17,11 +17,11 @@ const EVEIL: LevelDef = {
   id: 'eveil',
   name: "L'Éveil",
   nodes: [
-    { x: 270, y: 830, faction: PLAYER, stock: 20 },
+    { x: 270, y: 830, faction: PLAYER, stock: 40 },
     { x: 270, y: 150, faction: FOE, stock: 10 },
-    { x: 150, y: 620, faction: NEUTRAL, stock: 5 },
-    { x: 390, y: 620, faction: NEUTRAL, stock: 5 },
-    { x: 270, y: 420, faction: NEUTRAL, stock: 12 },
+    { x: 150, y: 620, faction: NEUTRAL, stock: 6 },
+    { x: 390, y: 620, faction: NEUTRAL, stock: 6 },
+    { x: 270, y: 420, faction: NEUTRAL, stock: 14 },
   ],
   factions: [
     { species: 'bee' },
@@ -80,7 +80,7 @@ const VERGER: LevelDef = {
     { species: 'bee' },
     {
       species: 'roach',
-      ai: { decisionInterval: 2.2, aggression: 0.55, reserveFrac: 0.28, distWeight: 0.5, defendBias: 1.5, waveNodes: 2, grace: 5 },
+      ai: { decisionInterval: 2.3, aggression: 0.52, reserveFrac: 0.3, distWeight: 0.5, defendBias: 1.5, waveNodes: 2, grace: 5 },
     },
   ],
 };
