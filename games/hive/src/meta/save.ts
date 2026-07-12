@@ -25,9 +25,10 @@ const DEFAULTS: SaveData = {
   sendFrac: SEND_FRAC_DEFAULT,
 };
 
-/** Arrondit au cran de 10 % dans [SEND_FRAC_MIN, 1]. */
+/** Arrondit au cran de 10 % dans [SEND_FRAC_MIN, 1] (re-quantifié à 2
+ *  décimales : 7 × 0.1 = 0.7000…01 en flottant, qui polluerait le save). */
 export function clampSendFrac(v: number): number {
-  const snapped = Math.round(v / SEND_FRAC_STEP) * SEND_FRAC_STEP;
+  const snapped = Math.round(Math.round(v / SEND_FRAC_STEP) * SEND_FRAC_STEP * 100) / 100;
   return Math.min(1, Math.max(SEND_FRAC_MIN, snapped));
 }
 

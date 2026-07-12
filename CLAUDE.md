@@ -113,11 +113,17 @@ dans ses temps calmes (`Ai.invest`).
   dénomination puissance/unités EXPLICITEMENT, sinon le clan costaud (cafards)
   gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des
   premières cartes qui bascule en lose.
-  Bande de référence (conteneur, rendu logiciel, 2026-07) : tutoriel bot-win
-  ~30 s, cartes 2-3 bot-win, idle carte 2 = défaite ~70 s, stress ~34 fps
-  (même machine : main = verger bot-win ~71 s). À re-mesurer en RELATIF après
-  tout changement de balance, batch de contrôle sur l'ancien tuning en cas de
-  doute (mêmes précautions machine que horde).
+  Bande de référence (conteneur, rendu logiciel, 2026-07, cross-runs — le
+  signal est BRUITÉ, 2-3 runs minimum par carte) : tutoriel bot-win ~30 s,
+  cartes 2-3 bot-win ~60-90 s, carte 4 borderline (~1/2), cartes 5-9 bot-lose
+  (survie ~35-80 s — défi humain, le joueur a la skill + le sélecteur de %),
+  idle carte 2 = défaite ~55 s, mirror = mixte/impasse (timeout,lose,win),
+  stress ~34 fps (contrôle même machine : main = verger bot-win ~71 s).
+  À re-mesurer en RELATIF après tout changement de balance, batch de contrôle
+  sur l'ancien tuning en cas de doute (mêmes précautions machine que horde).
+  L'anti-enlisement de l'IA (`STALL_DECISIONS` : vague élargie après 8
+  décisions sans attaque abordable) est calibré sur idle — un élargissement
+  PERMANENT écrasait toutes les cartes.
   `window.__game = {world, flow, app, Ai, save}`, `world.postSend/sendOrder`
   scriptables.
 - Sons : `audio/sfx.ts`, 100 % WebAudio synthétisé (pattern horde), throttlés en

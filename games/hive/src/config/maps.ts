@@ -213,7 +213,7 @@ const GUERRE_DES_CLANS: LevelDef = {
   id: 'guerre-des-clans',
   name: 'La Guerre des clans',
   nodes: [
-    { x: 270, y: 860, faction: PLAYER, stock: 30 },
+    { x: 270, y: 835, faction: PLAYER, stock: 30 },
     { x: 130, y: 140, faction: FOE, stock: 20 },
     { x: 130, y: 320, faction: FOE, stock: 12 },
     { x: 410, y: 140, faction: FOE2, stock: 20 },
