@@ -22,9 +22,12 @@ import type { Units } from './units';
  * Passe par la MÊME API (Emitter.send) que le joueur : aucune triche possible.
  * Scratch buffers préalloués — zéro alloc.
  */
+const STALL_DECISIONS = 8; // décisions consécutives sans attaque abordable avant mobilisation
+
 export class Ai {
   active = false;
   private timer = 0;
+  private stall = 0; // décisions d'affilée où l'attaque était inabordable
   private params: AiParams = AI_DEFAULTS;
   // renforts en vol par nœud, EN PUISSANCE : ceux des adversaires, les miens
   private readonly incomingFoe = new Float32Array(MAX_NODES);
@@ -48,6 +51,7 @@ export class Ai {
   /** reset() sans paramètres = faction absente de la carte : IA inerte. */
   reset(params?: AiParams): void {
     this.active = params !== undefined;
+    this.stall = 0;
     if (!params) return;
     this.params = params;
     // grâce initiale : le temps que l'adversaire s'oriente (surtout multi-nids)
@@ -122,11 +126,13 @@ export class Ai {
     }
 
     // contributeurs = mes `waveNodes` nœuds les PLUS PROCHES de la cible.
-    // MOBILISATION de fin de partie : plus aucun neutre à prendre ⇒ vague
-    // élargie (+2) — sans quoi une IA à petits nids (cap en puissance) peut
-    // tourner en rond en upgrades sans jamais réunir la force d'attaque
-    // (mesuré : idle qui timeout au lieu de punir l'inaction).
-    const waveMax = neutralsLeft ? p.waveNodes : p.waveNodes + 2;
+    // ANTI-ENLISEMENT : après STALL_DECISIONS décisions d'affilée sans attaque
+    // abordable, vague élargie (+2) — sans quoi une IA à petits nids (cap en
+    // puissance) tourne en rond en upgrades sans jamais réunir la force
+    // d'attaque (mesuré : idle qui timeout au lieu de punir l'inaction).
+    // Un +2 PERMANENT écrasait tout dès la fin des neutres — le compteur cible
+    // uniquement le blocage.
+    const waveMax = this.stall >= STALL_DECISIONS ? p.waveNodes + 2 : p.waveNodes;
     let force = 0;
     let picked = 0;
     for (let k = 0; k < waveMax; k++) {
@@ -153,9 +159,11 @@ export class Ai {
     // coût et force sont tous deux en puissance : comparaison directe
     const needed = bestCost * (1.4 - 0.5 * p.aggression) + 1;
     if (force < needed) {
+      this.stall++;
       this.invest(); // pas de supériorité : on fait fructifier l'accumulation
       return;
     }
+    this.stall = 0;
 
     // vague groupée : les contributeurs retenus envoient EN MÊME TEMPS
     for (let s = 0; s < picked; s++) {
