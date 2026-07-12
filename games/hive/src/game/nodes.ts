@@ -1,10 +1,11 @@
-import { MAX_NODES, NODE_LEVELS, TAP_RADIUS_MIN, TAP_RADIUS_PAD, UPGRADE_COSTS } from '../config/balance';
+import { MAX_FACTIONS, MAX_NODES, NODE_LEVELS, TAP_RADIUS_MIN, TAP_RADIUS_PAD, UPGRADE_COSTS } from '../config/balance';
 import type { Faction, LevelDef } from '../config/levels';
 
 /**
  * Pool SoA des nœuds (≤ MAX_NODES, immobiles — pas d'interpolation nécessaire).
- * Production, arrivées (+1 allié / −1 adverse / capture) et sélection joueur.
- * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level` (upgrade futur câblé).
+ * Production (× croissance de l'espèce), arrivées (valeur EN UNITÉS LOCALES du
+ * nœud : renfort/dégât/capture) et sélection joueur.
+ * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level`.
  */
 export class Nodes {
   count = 0;
@@ -16,10 +17,13 @@ export class Nodes {
   readonly faction = new Uint8Array(MAX_NODES);
   readonly level = new Uint8Array(MAX_NODES);
   readonly selected = new Uint8Array(MAX_NODES);
-  readonly byFaction = new Int16Array(3);
+  readonly byFaction = new Int16Array(MAX_FACTIONS);
   /** Câblés une fois par World (fx + sfx futurs) — jamais réassignés au tick. */
   onCapture: (i: number, to: Faction) => void = () => {};
   onUpgrade: (i: number) => void = () => {};
+
+  /** Croissance par faction (référence possédée par World, remplie à loadLevel). */
+  constructor(private readonly factionGrowth: Float32Array) {}
 
   load(def: LevelDef): void {
     this.count = def.nodes.length;
@@ -47,7 +51,7 @@ export class Nodes {
   }
 
   prod(i: number): number {
-    return NODE_LEVELS[this.level[i]].prodPerSec;
+    return NODE_LEVELS[this.level[i]].prodPerSec * this.factionGrowth[this.faction[i]];
   }
 
   /** Production continue des nœuds possédés (les neutres ne produisent pas). */
@@ -67,21 +71,23 @@ export class Nodes {
   }
 
   /**
-   * Effet d'une unité qui touche le nœud, résolu contre la faction COURANTE :
+   * Effet d'une unité qui touche le nœud, résolu contre la faction COURANTE.
+   * `value` est la valeur de l'unité EN UNITÉS LOCALES du nœud
+   * (= hp restant / puissance du défenseur, calculée par Units.update) :
    * renfort si alliée — et si le nid est PLEIN, l'unité est investie dans la
    * montée de niveau (geste Auralux : nourrir un nid au cap l'améliore) ;
-   * −1 sinon, capture sous 0.
+   * −value sinon, capture sous 0.
    */
-  arrive(i: number, f: Faction): void {
+  arrive(i: number, f: Faction, value: number): void {
     if (this.faction[i] === f) {
       const cap = this.cap(i);
       if (this.stock[i] < cap) {
-        this.stock[i] = Math.min(cap, this.stock[i] + 1);
+        this.stock[i] = Math.min(cap, this.stock[i] + value);
         return;
       }
       const cost = this.upgradeCost(i);
       if (cost === 0) return; // niveau max : surplus perdu
-      this.upgradeProgress[i] += 1;
+      this.upgradeProgress[i] += value;
       if (this.upgradeProgress[i] >= cost) {
         this.level[i]++;
         this.upgradeProgress[i] = 0;
@@ -90,7 +96,7 @@ export class Nodes {
       }
       return;
     }
-    this.stock[i] -= 1;
+    this.stock[i] -= value;
     if (this.stock[i] < 0) this.capture(i, f);
   }
 

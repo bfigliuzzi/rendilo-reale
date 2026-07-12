@@ -1,18 +1,22 @@
 import { clamp } from '@shared/math';
 import type { Sfx } from '../audio/sfx';
-import { ENEMY, PLAYER, type LevelDef } from '../config/levels';
+import { PLAYER, type Faction, type LevelDef, type SpeciesId } from '../config/levels';
 import { MAPS } from '../config/maps';
 import type { Gestures } from '../input/gestures';
-import { persist, type SaveData } from '../meta/save';
+import { clampSendFrac, persist, type SaveData } from '../meta/save';
 import type { Hud } from '../ui/hud';
 import type { Screens } from '../ui/screens';
+import type { Tutorial } from './tutorial';
 import type { World } from './world';
 
 export type FlowState = 'menu' | 'playing' | 'result';
 
+const SPECIES_EMOJI: Record<SpeciesId, string> = { bee: '🐝', fly: '🪰', roach: '🪳' };
+
 /**
  * Machine à états menu (sélection de niveau) → partie → résultat.
- * SEUL endroit habilité à toucher la sauvegarde (déverrouillage, records).
+ * SEUL endroit habilité à toucher la sauvegarde (déverrouillage, records,
+ * fraction d'envoi, mute).
  */
 export class Flow {
   state: FlowState = 'menu';
@@ -23,6 +27,7 @@ export class Flow {
     private readonly screens: Screens,
     private readonly gestures: Gestures,
     private readonly hud: Hud,
+    private readonly tutorial: Tutorial,
     private readonly save: SaveData,
     private readonly sfx: Sfx,
   ) {
@@ -36,6 +41,15 @@ export class Flow {
       persist(this.save);
       this.showMenu(); // re-render pour l'état du bouton
     };
+    hud.onSendFracChange = (v): void => {
+      const frac = clampSendFrac(v);
+      this.world.sendFrac = frac;
+      this.hud.setSendFrac(frac);
+      if (frac !== this.save.sendFrac) {
+        this.save.sendFrac = frac;
+        persist(this.save);
+      }
+    };
     world.onGameOver = (victory, timeSec): void => this.onGameOver(victory, timeSec);
   }
 
@@ -44,11 +58,16 @@ export class Flow {
     this.world.playing = false;
     this.gestures.setEnabled(false);
     this.hud.setInGame(false);
+    this.tutorial.stop();
     this.screens.showMenu(
       MAPS.map((m, i) => ({
         name: m.name,
         locked: i >= this.save.unlocked,
         bestTime: this.save.bestTimes[m.id] ?? null,
+        foes: m.factions
+          .slice(1)
+          .map((f) => SPECIES_EMOJI[f.species])
+          .join(''),
       })),
       this.save.muted,
     );
@@ -57,9 +76,14 @@ export class Flow {
   startGame(level: number): void {
     this.levelIdx = clamp(level, 0, Math.min(this.save.unlocked, MAPS.length) - 1);
     this.state = 'playing';
-    this.world.loadLevel(MAPS[this.levelIdx]);
+    const def = MAPS[this.levelIdx];
+    this.world.loadLevel(def);
+    this.world.sendFrac = this.save.sendFrac;
+    this.hud.setSendFrac(this.save.sendFrac);
     this.gestures.setEnabled(true);
     this.hud.setInGame(true);
+    if (def.tutorial) this.tutorial.start(def.tutorial, this.world);
+    else this.tutorial.stop();
     this.screens.hide();
   }
 
@@ -67,6 +91,7 @@ export class Flow {
     this.state = 'result';
     this.gestures.setEnabled(false);
     this.hud.setInGame(false);
+    this.tutorial.stop();
     if (victory) this.sfx.victory();
     else this.sfx.defeat();
     const def = MAPS[this.levelIdx];
@@ -93,10 +118,12 @@ export class Flow {
   /** Mode ?stress : carte bi-camps saturée, pool d'unités à fond, pas de fin. */
   startStress(): void {
     this.state = 'playing';
-    const base = MAPS[0];
+    const base = MAPS[1];
     const def: LevelDef = {
       ...base,
-      nodes: base.nodes.map((n, i) => ({ ...n, faction: i % 2 === 0 ? PLAYER : ENEMY, stock: 60 })),
+      nodes: base.nodes.map((n, i) => ({ ...n, faction: (i % 2 === 0 ? PLAYER : 2) as Faction, stock: 60 })),
+      factions: [{ species: 'bee' }, { species: 'roach' }],
+      tutorial: undefined,
     };
     this.world.loadLevel(def);
     this.world.stress = true;

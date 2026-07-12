@@ -1,7 +1,6 @@
-import { Particle, type ParticleContainer } from 'pixi.js';
+import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import { MAX_NODES, NODE_LEVELS, ORBIT_VISUAL_CAP } from '../config/balance';
 import type { Nodes } from '../game/nodes';
-import type { Atlas } from './textures';
 
 const PARK = -9999;
 
@@ -18,9 +17,10 @@ export class OrbitView {
   private readonly radiusMul: Float32Array;
   private readonly lastFaction = new Uint8Array(MAX_NODES);
 
+  /** `texByFaction` : table possédée par World (0 = mote neutre), remplie à loadLevel. */
   constructor(
     private readonly container: ParticleContainer,
-    private readonly atlas: Atlas,
+    private readonly texByFaction: readonly Texture[],
   ) {
     const total = MAX_NODES * ORBIT_VISUAL_CAP;
     this.angle0 = new Float32Array(total);
@@ -33,7 +33,7 @@ export class OrbitView {
       this.angVel[k] = (ringIdx % 2 === 0 ? 1 : -1) * (0.9 + ringIdx * 0.35);
       this.radiusMul[k] = 1.35 + ringIdx * 0.28;
       const p = new Particle({
-        texture: atlas.unitByFaction[0],
+        texture: texByFaction[0],
         x: PARK,
         y: PARK,
         anchorX: 0.5,
@@ -60,7 +60,7 @@ export class OrbitView {
       const f = nodes.faction[i];
       if (f !== this.lastFaction[i]) {
         this.lastFaction[i] = f;
-        const tex = this.atlas.unitByFaction[f];
+        const tex = this.texByFaction[f];
         for (let k = 0; k < ORBIT_VISUAL_CAP; k++) this.particles[base + k].texture = tex;
       }
       const visible = Math.min(Math.floor(nodes.stock[i]), ORBIT_VISUAL_CAP);
@@ -80,6 +80,12 @@ export class OrbitView {
       }
     }
     this.container.update();
+  }
+
+  /** À l'entrée en partie : invalide le cache de factions — les textures d'une
+   *  même faction changent d'une carte à l'autre (espèces différentes). */
+  reset(): void {
+    this.lastFaction.fill(255);
   }
 
   private park(idx: number): void {

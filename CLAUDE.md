@@ -34,13 +34,15 @@ Aucune autre dépendance runtime.
 
 ## Essaim (`games/hive/`) — conquête de nœuds façon Auralux
 
-Campagne de 5 cartes en données (`config/maps.ts`, types `LevelDef` dans
+Campagne de 9 cartes en données (`config/maps.ts`, types `LevelDef` dans
 `config/levels.ts`) — la difficulté monte par les DONNÉES : AiParams (tempo,
 agressivité, `waveNodes`, `grace` = délai avant la première décision IA, vital dès
 que l'IA part multi-nids), nids de départ et leurs niveaux, richesse des neutres —
-abeilles (joueur, faction 1) vs cafards (IA, faction 2) + neutres. Les nœuds
-produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par niveau) ; le stock est
-visualisé en nuée orbitale (`orbitView`, purement rendu, plafond 60 points) + compteur.
+JAMAIS par l'espèce (budget égal, voir Clans). Carte 0 = tutoriel guidé, puis
+introduction progressive : cafards → mouches → abeilles rivales → mêlée à 3 clans.
+Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par niveau,
+× croissance d'espèce) ; le stock est visualisé en nuée orbitale (`orbitView`,
+purement rendu, plafond 60 points) + compteur.
 Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sélection,
 tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié).
 **Upgrade de nœuds** : nourrir un nid allié DÉJÀ PLEIN investit le surplus vers le
@@ -49,19 +51,52 @@ nid dérivée du niveau) — aucun geste dédié. La capture CONSERVE le niveau 
 = prise stratégique) mais remet l'investissement en cours à zéro ; l'IA investit
 dans ses temps calmes (`Ai.invest`).
 
-- **Un envoi = `SEND_FRAC` (50 %) du stock, jamais 100 %** : le stock EST la défense
+- **Clans (espèces) à budget égal** : la FACTION est un camp (0 neutre, 1 joueur —
+  TOUJOURS abeilles —, 2-3 IA), l'ESPÈCE est son peuple (`FactionDef` dans
+  `LevelDef.factions`, stats `SPECIES` dans `balance.ts`). On ne déclare QUE
+  `growthMul`/`speedMul`, la puissance est DÉRIVÉE : `power = 1/growthMul`
+  (**parité d'usure** : débit de puissance produit identique — c'est CE ratio qui
+  décide des guerres d'attrition, mesuré au bot : une pondération `√vitesse` dans
+  le budget faisait gagner toute guerre longue au clan lent). La vitesse est l'axe
+  TEMPO, en OPPOSITION avec la croissance (rapide ⇒ nombreux/fragile, lent ⇒
+  rare/costaud) : elle compense la défense stockée (un nid plein vaut cap × power).
+  Abeilles 1/1/1, mouches 1.5/1.3/≈0.67, cafards 0.85/0.8/≈1.18. INVARIANT de
+  données : jamais deux IA de même espèce sur une carte (le duel joueur-vs-abeilles
+  rivales est le seul cas de même espèce — distinguable par teinte + style de
+  contour + cœur d'unité évidé côté IA).
+- **Un envoi = `world.sendFrac` du stock, jamais 100 %** : le stock EST la défense
   (capture dès que < 0) — le 100 % rendait chaque envoi suicidaire (un éclaireur
-  retournait le nœud vidé). Re-taper envoie la moitié suivante. Mesuré au bot.
+  retournait le nœud vidé). Défaut `SEND_FRAC_DEFAULT` (50 %), réglable 10-100 %
+  par crans de 10 % au stepper du HUD (SEULE zone interactive du HUD,
+  `#hud-send`, persisté `save.sendFrac` — validation/clamp `clampSendFrac`, écrit
+  par Flow seul). Le bot de verify suppose le défaut 50 %.
 - Un envoi = rafale étalée (`EMIT_INTERVAL`), `remaining` figé à l'ordre ; flux annulé
-  si la source tombe ou se vide. Arrivée résolue contre la faction COURANTE du nœud.
-- Combat = annihilation 1:1 en vol via `@shared/spatialGrid` (cafards insérés, abeilles
-  interrogent 3×3) ; morts marquées `dead=1`, `sweepDead()` APRÈS la phase grille.
-- Fin de partie : une faction est éliminée quand nœuds == 0 ET unités en vol == 0 ET
-  flux == 0 (une nuée en vol peut encore reprendre un nœud).
-- **IA** (`game/ai.ts`) : décision toutes `decisionInterval` s — défense, sinon vague
-  groupée des `waveNodes` nids les PLUS PROCHES de la cible (les borner est vital :
-  mobiliser toute l'économie écrasait le joueur), sinon accumulation. Paramètres par
-  carte dans `LevelDef.ai` ; passe par la même API `emitter.send` que le joueur.
+  si la source tombe ou se vide. Arrivée résolue contre la faction COURANTE du nœud,
+  à hauteur de `hp restant / power du défenseur` (renfort, dégât ET investissement
+  d'upgrade — une unité pleine vaut 1 chez un allié, pas d'exploit de soin en transit).
+- **Combat à puissance N factions** via `@shared/spatialGrid` : TOUTES les unités
+  vivantes insérées, chaque unité non engagée résout UN contact 3×3 contre une
+  autre faction — dégâts mutuels `min(hp_i, hp_j)` (deux égaux s'annihilent, un
+  costaud mange un faible et survit entamé), flag `engaged` = une paire par tick,
+  mort sous `HP_EPSILON` ; morts marquées `dead=1`, `sweepDead()` APRÈS la phase
+  grille. Fx/sfx uniquement sur mort (pas de grésillement de grignotage).
+- Fin de partie : défaite si le joueur est éliminé, victoire quand TOUTES les
+  factions IA le sont (éliminée = nœuds == 0 ET unités en vol == 0 ET flux == 0 —
+  une nuée en vol peut encore reprendre un nœud ; une faction absente de la carte
+  est trivialement éliminée : aucun cas particulier pour les duels).
+- **IA** (`game/ai.ts`) : une instance PAR camp IA (préallouées dans World,
+  inertes si la faction est absente), décision toutes `decisionInterval` s —
+  défense, sinon vague groupée des `waveNodes` nids les PLUS PROCHES de la cible
+  (les borner est vital : mobiliser toute l'économie écrasait le joueur), sinon
+  accumulation. Tout nœud non-mien est un ennemi potentiel (en mêlée, les unités
+  tierces gonflent la défense estimée d'une cible — surestimation assumée,
+  « laisse-les s'entretuer » émergent) ; la marge de supériorité est pondérée par
+  le rapport de puissance des espèces (`factionPower`). Paramètres par camp dans
+  `LevelDef.factions[k].ai` ; passe par la même API `emitter.send` que le joueur.
+- **Tutoriel** (`game/tutorial.ts`) : déclaratif (`LevelDef.tutorial`, étapes
+  select/send/capture/upgrade/win), pur OBSERVATEUR de l'état du monde depuis la
+  boucle de rendu (throttlé, zéro hook dans la sim), bandeau DOM `#hud-tuto`
+  (`aria-live`). Flow le démarre/coupe.
 - **Équilibrage mesuré au bot** : `node tools/verify-hive.mjs <url> <scenario>` —
   scénarios `win[:carte]` (bot all-in, ATTEND une victoire), `idle[:carte]` (passif,
   ATTEND une défaite), `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`,
@@ -80,11 +115,16 @@ dans ses temps calmes (`Ai.invest`).
   interne (annihilations surtout) ; l'IA est muette (seuls `World.sendOrder` et les
   événements sonorisent — `Emitter.send` direct ne fait aucun bruit). Mute persistant
   (bouton menu, `save.muted`).
-- Accessibilité : faction = FORME (hexagone/goutte/cercle) + glyphe + silhouette
-  d'unité distincte, jamais la couleur seule. `?stress` = les deux camps canonnent
-  (~600 unités, mesuré 120 fps desktop). Save `rendilo-reale:hive:save:v1`
-  (`meta/save.ts`, schéma versionné + merge sur défauts) : déverrouillage de
-  campagne + records par carte — écrite UNIQUEMENT par `game/flow.ts`.
+- Accessibilité : ESPÈCE = FORME (hexagone abeille / losange mouche / goutte
+  cafard / cercle neutre) + glyphe + silhouette d'unité distincte ; FACTION =
+  teinte ET style de contour (plein joueur / double f2 / pointillé f3) + cœur
+  d'unité évidé côté IA — jamais la couleur seule, même entre abeilles rivales.
+  `?stress` = les deux camps canonnent (~600 unités, mesuré 120 fps desktop).
+  Save `rendilo-reale:hive:save:v1` (`meta/save.ts`, schéma versionné v2 + merge
+  sur défauts ; migration v1→v2 : `unlocked` positionnel re-dérivé des cartes
+  gagnées via `bestTimes`, ids des 5 cartes historiques conservés) :
+  déverrouillage de campagne + records par carte + `sendFrac` — écrite
+  UNIQUEMENT par `game/flow.ts`.
 
 ## Déploiement
 

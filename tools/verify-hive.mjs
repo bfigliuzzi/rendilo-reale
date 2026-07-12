@@ -4,12 +4,16 @@
 // Usage : node tools/verify-hive.mjs [url] [scenario] [secondes] [capture.png]
 //   scenario :
 //     win[:N]    bot « bon joueur » (expansion, défense, all-in persistant) sur la
-//                carte N (1-based, défaut 1) — ATTEND une victoire
+//                carte N (1-based, défaut 2) — ATTEND une victoire
 //     idle[:N]   bot passif sur la carte N — ATTEND une défaite (l'IA punit l'inaction)
-//     mirror[:R] R parties (défaut 3, carte 1) où le camp abeilles est piloté par la
-//                MÊME classe Ai que les cafards (exposée sur __game) — rapport
+//     mirror[:R] R parties (défaut 3, carte 2) où le camp abeilles est piloté par la
+//                MÊME classe Ai que l'adversaire (exposée sur __game) — rapport
 //                win/lose/timeout, aucune attente stricte (l'impasse est valide à niveau égal)
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
+//
+// Cartes (1-based) : 1 eveil (TUTORIEL, IA somnolente — pas un scénario de mesure),
+// 2 clairiere 🪳, 3 verger 🪳, 4 nuee 🪰, 5 riviere 🪰, 6 ruche-rivale 🐝,
+// 7 fourmiliere 🐝, 8 trone 🐝, 9 guerre-des-clans 🪰🪳 (mêlée à 3).
 //
 // Env : CHROME_PATH surcharge le binaire Chrome ; --no-sandbox ajouté en root ;
 // en conteneur, lancer node SANS les variables proxy (cf. CLAUDE.md).
@@ -22,7 +26,7 @@ const SCENARIO = process.argv[3] ?? 'win';
 const SECONDS = Number(process.argv[4] ?? 240);
 const SHOT = process.argv[5] ?? '';
 
-// paramètres du camp miroir — garder alignés sur la carte testée (SKIRMISH_1)
+// paramètres du camp miroir — garder alignés sur la carte testée (CLAIRIERE)
 const MIRROR_PARAMS = {
   decisionInterval: 2.2,
   aggression: 0.5,
@@ -34,7 +38,8 @@ const MIRROR_PARAMS = {
 
 const [kind, suffixStr] = SCENARIO.split(':');
 const MIRROR_RUNS = kind === 'mirror' ? Number(suffixStr ?? 3) : 3;
-const LEVEL = kind === 'win' || kind === 'idle' ? Number(suffixStr ?? 1) : 1;
+// défaut carte 2 (clairiere) : la carte 1 est le tutoriel à IA somnolente
+const LEVEL = kind === 'win' || kind === 'idle' ? Number(suffixStr ?? 2) : 2;
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -68,7 +73,9 @@ await page.evaluate(() => {
   requestAnimationFrame(count);
 });
 
-/** Bot « bon joueur » : défense, expansion vers les neutres, all-in persistant. */
+/** Bot « bon joueur » : défense, expansion vers les neutres, all-in persistant.
+ *  Conscient des PUISSANCES d'espèce (un bon joueur envoie plus de monde contre
+ *  un clan costaud) : les masses sont comptées en puissance via factionPower. */
 function driveWinBot() {
   return page.evaluate(() => {
     const g = window.__game;
@@ -76,16 +83,17 @@ function driveWinBot() {
     const w = g.world;
     const n = w.nodes;
     const u = w.units;
-    const incFoe = new Array(n.count).fill(0);
+    const P = w.factionPower;
+    const incFoe = new Array(n.count).fill(0); // en puissance
     const incMine = new Array(n.count).fill(0);
     for (let i = 0; i < u.count; i++) {
       if (u.dead[i]) continue;
-      if (u.faction[i] === 2) incFoe[u.target[i]]++;
-      else incMine[u.target[i]]++;
+      if (u.faction[i] !== 1) incFoe[u.target[i]] += P[u.faction[i]];
+      else incMine[u.target[i]] += P[1];
     }
     // défense : un nœud assiégé appelle le voisin allié le plus fourni
     for (let i = 0; i < n.count; i++) {
-      if (n.faction[i] !== 1 || incFoe[i] <= n.stock[i] + incMine[i]) continue;
+      if (n.faction[i] !== 1 || incFoe[i] <= n.stock[i] * P[1] + incMine[i]) continue;
       let helper = -1;
       let best = 0;
       for (let j = 0; j < n.count; j++) {
@@ -115,16 +123,17 @@ function driveWinBot() {
       }
       if (bestJ >= 0) w.postSend(i, bestJ);
     }
-    // all-in persistant : dès 70 de masse, marteler LE nid faible jusqu'à sa chute
+    // all-in persistant : dès 70 de masse (en puissance), marteler LE nid
+    // faible jusqu'à sa chute
     let total = 0;
-    for (let i = 0; i < n.count; i++) if (n.faction[i] === 1) total += n.stock[i];
+    for (let i = 0; i < n.count; i++) if (n.faction[i] === 1) total += n.stock[i] * P[1];
     let target = window.__botTarget ?? -1;
-    if (target >= 0 && n.faction[target] !== 2) target = -1;
+    if (target >= 0 && n.faction[target] < 2) target = -1;
     if (target < 0 && total >= 70) {
       let weakest = Infinity;
       for (let j = 0; j < n.count; j++) {
-        if (n.faction[j] !== 2) continue;
-        const def = n.stock[j] + incFoe[j] - incMine[j];
+        if (n.faction[j] < 2) continue; // hostile = toute faction IA (2 ou 3)
+        const def = n.stock[j] * P[n.faction[j]] + incFoe[j] - incMine[j];
         if (def < weakest) {
           weakest = def;
           target = j;
@@ -198,11 +207,11 @@ if (kind === 'stress') {
   expected = null;
   const results = [];
   for (let run = 0; run < MIRROR_RUNS; run++) {
-    // le camp abeilles est piloté par la même classe Ai que les cafards
+    // le camp abeilles est piloté par la même classe Ai que l'adversaire
     await page.evaluate((params) => {
       if (window.__mirrorTimer) clearInterval(window.__mirrorTimer);
       const g = window.__game;
-      const ai = new g.Ai(g.world.nodes, g.world.units, g.world.emitter, 1);
+      const ai = new g.Ai(g.world.nodes, g.world.units, g.world.emitter, 1, g.world.factionPower);
       ai.reset(params);
       let last = performance.now();
       window.__mirrorTimer = setInterval(() => {

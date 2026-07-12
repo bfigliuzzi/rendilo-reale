@@ -3,6 +3,7 @@ export interface LevelEntry {
   name: string;
   locked: boolean;
   bestTime: number | null; // meilleur temps de victoire (s), null si jamais gagné
+  foes: string; // emoji des clans adverses (ex. '🪰🪳' pour la mêlée)
 }
 
 export interface ResultInfo {
@@ -40,7 +41,7 @@ export class Screens {
           return `<button class="btn level locked" disabled aria-label="${l.name} (verrouillé)">🔒 ${i + 1}. ${l.name}</button>`;
         }
         const best = l.bestTime !== null ? `<span class="best">🏆 ${fmtTime(l.bestTime)}</span>` : '';
-        return `<button class="btn level${l.bestTime !== null ? ' done' : ' primary'}" data-level="${i}">${i + 1}. ${l.name}${best}</button>`;
+        return `<button class="btn level${l.bestTime !== null ? ' done' : ' primary'}" data-level="${i}">${i + 1}. ${l.name} <span class="foes">${l.foes}</span>${best}</button>`;
       })
       .join('');
     this.root.innerHTML = `

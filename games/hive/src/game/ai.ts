@@ -1,25 +1,30 @@
 import { AI_DEFAULTS, MAX_NODES, UNIT_SPEED } from '../config/balance';
-import { ENEMY, NEUTRAL, type AiParams, type Faction } from '../config/levels';
+import { NEUTRAL, type AiParams, type Faction } from '../config/levels';
 import type { Emitter } from './emitter';
 import type { Nodes } from './nodes';
 import type { Units } from './units';
 
 /**
- * Contrôleur IA GÉNÉRIQUE sur la faction (les cafards en jeu ; le camp abeilles
- * dans le scénario miroir de tools/verify-hive.mjs — même code, zéro dérive).
+ * Contrôleur IA GÉNÉRIQUE sur la faction (chaque camp IA a son instance ; le
+ * camp abeilles dans le scénario miroir de tools/verify-hive.mjs — même code,
+ * zéro dérive). TOUT nœud non-mien est un ennemi potentiel : en mêlée à trois,
+ * les unités d'une faction tierce en route vers une cible gonflent sa défense
+ * estimée — surestimation assumée (« laisse-les s'entretuer » émergent).
  * Une décision toutes `decisionInterval` s, UNE action par décision (rythme
  * lisible). Défense d'abord, sinon attaque GROUPÉE depuis les `waveNodes` nids
- * les plus proches de la cible (l'annihilation 1:1 récompense la masse, mais
- * mobiliser toute l'économie écraserait le joueur), sinon accumulation.
+ * les plus proches de la cible (le combat récompense la masse, mais mobiliser
+ * toute l'économie écraserait le joueur), sinon accumulation.
  * Anti-sur-extension structurel : `reserveFrac` reste à la maison et on
- * n'attaque qu'en supériorité. Passe par la MÊME API (Emitter.send) que le
- * joueur : aucune triche possible. Scratch buffers préalloués — zéro alloc.
+ * n'attaque qu'en supériorité — pondérée par le rapport de PUISSANCE des
+ * espèces (une IA mouches doit envoyer plus de monde qu'une IA cafards).
+ * Passe par la MÊME API (Emitter.send) que le joueur : aucune triche possible.
+ * Scratch buffers préalloués — zéro alloc.
  */
 export class Ai {
+  active = false;
   private timer = 0;
   private params: AiParams = AI_DEFAULTS;
-  private readonly foe: Faction;
-  // renforts en vol par nœud : ceux de l'adversaire, les miens
+  // renforts en vol par nœud : ceux des adversaires, les miens
   private readonly incomingFoe = new Float32Array(MAX_NODES);
   private readonly incomingMine = new Float32Array(MAX_NODES);
   private readonly wave = new Int16Array(MAX_NODES); // contributeurs de la vague en cours
@@ -28,22 +33,30 @@ export class Ai {
     private readonly nodes: Nodes,
     private readonly units: Units,
     private readonly emitter: Emitter,
-    private readonly me: Faction = ENEMY,
-  ) {
-    this.foe = (3 - me) as Faction;
-  }
+    private readonly me: Faction = 2,
+    private readonly factionPower: Float32Array | null = null,
+  ) {}
 
-  reset(params: AiParams): void {
+  /** reset() sans paramètres = faction absente de la carte : IA inerte. */
+  reset(params?: AiParams): void {
+    this.active = params !== undefined;
+    if (!params) return;
     this.params = params;
     // grâce initiale : le temps que l'adversaire s'oriente (surtout multi-nids)
     this.timer = Math.max(params.decisionInterval, params.grace ?? 0);
   }
 
   update(dt: number): void {
+    if (!this.active) return;
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = this.params.decisionInterval;
     this.decide();
+  }
+
+  /** Rapport de puissance espèce cible / mon espèce (1 sans table fournie). */
+  private powerRatio(target: Faction): number {
+    return this.factionPower ? this.factionPower[target] / this.factionPower[this.me] : 1;
   }
 
   private decide(): void {
@@ -85,7 +98,8 @@ export class Ai {
       if (f === me) continue;
       const dist = this.avgDistFrom(c);
       const flight = dist / UNIT_SPEED;
-      const defense = f === this.foe ? this.incomingFoe[c] + nodes.prod(c) * flight : 0;
+      // tout nœud possédé par un adversaire se défend avec sa prod + ses renforts
+      const defense = f !== NEUTRAL ? this.incomingFoe[c] + nodes.prod(c) * flight : 0;
       // mes unités déjà en route vers c réduisent ce qu'il reste à payer
       const cost = nodes.stock[c] + defense - this.incomingMine[c];
       const value = f === NEUTRAL ? (neutralsLeft ? 2 : 1) : 1 + p.aggression;
@@ -125,7 +139,8 @@ export class Ai {
       this.wave[picked++] = bestI;
       force += Math.floor(nodes.stock[bestI] * (1 - p.reserveFrac));
     }
-    const needed = bestCost * (1.4 - 0.5 * p.aggression) + 1;
+    // le coût est en unités du DÉFENSEUR : converti dans ma monnaie de puissance
+    const needed = bestCost * this.powerRatio(nodes.faction[best] as Faction) * (1.4 - 0.5 * p.aggression) + 1;
     if (force < needed) {
       this.invest(); // pas de supériorité : on fait fructifier l'accumulation
       return;

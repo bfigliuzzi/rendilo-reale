@@ -1,4 +1,4 @@
-import { type Graphics, Sprite, Text } from 'pixi.js';
+import { type Graphics, Sprite, Text, type Texture } from 'pixi.js';
 import { MAX_NODES, NODE_LEVELS } from '../config/balance';
 import type { Nodes } from '../game/nodes';
 import type { Layers } from './layers';
@@ -7,8 +7,9 @@ import { PALETTE, type Atlas } from './textures';
 const BASE_RADIUS = NODE_LEVELS[0].radius;
 
 /**
- * Sprites des nœuds : corps (texture par faction, swap à la capture ; taille
- * selon le niveau d'upgrade), anneau (sélection pulsante OU flash blanc),
+ * Sprites des nœuds : corps (texture par faction — table possédée par World,
+ * remplie à loadLevel selon les espèces ; swap à la capture ; taille selon le
+ * niveau d'upgrade), anneau (sélection pulsante OU flash blanc),
  * arc de progression d'upgrade et compteur de stock (+ ▲ par niveau).
  * Le Text n'est mis à jour que quand la valeur AFFICHÉE change (invariant repo).
  */
@@ -22,11 +23,12 @@ export class NodesView {
 
   constructor(
     layers: Layers,
-    private readonly atlas: Atlas,
+    atlas: Atlas,
+    private readonly texByFaction: readonly Texture[],
   ) {
     this.arcs = layers.arcs;
     for (let i = 0; i < MAX_NODES; i++) {
-      const body = new Sprite(atlas.nodeBody[0]);
+      const body = new Sprite(atlas.nodeBodyNeutral);
       body.anchor.set(0.5);
       body.scale.set(0.5); // sources en supersampling ×2
       body.visible = false;
@@ -77,7 +79,7 @@ export class NodesView {
       const f = nodes.faction[i];
       if (f !== this.lastFaction[i]) {
         this.lastFaction[i] = f;
-        body.texture = this.atlas.nodeBody[f];
+        body.texture = this.texByFaction[f];
       }
       // taille selon le niveau + respiration légère, calculées au rendu
       const sizeMul = nodes.radius(i) / BASE_RADIUS;

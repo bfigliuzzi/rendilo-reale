@@ -1,7 +1,9 @@
-import { Particle, type ParticleContainer } from 'pixi.js';
+import { Particle, type ParticleContainer, type Texture } from 'pixi.js';
 import { lerp, rand } from '@shared/math';
 import {
   ARRIVE_FRAC,
+  HP_EPSILON,
+  MAX_FACTIONS,
   UNIT_CAP,
   UNIT_SPEED,
   UNIT_SPEED_JITTER,
@@ -10,14 +12,15 @@ import {
   WOBBLE_VEL_MIN,
 } from '../config/balance';
 import type { Faction } from '../config/levels';
-import type { Atlas } from '../render/textures';
 import type { Nodes } from './nodes';
 
 const PARK = -9999;
 
 /**
  * Pool SoA des unités en vol (particules Pixi index-verrouillées, comme les
- * ennemis de horde). Vol : ligne droite vers le nœud cible + serpentin latéral.
+ * ennemis de horde). Vol : ligne droite vers le nœud cible + serpentin latéral,
+ * vitesse × speedMul de l'espèce. Chaque unité porte `hp` = puissance de son
+ * espèce : c'est à la fois ses PV en combat et sa valeur à l'arrivée.
  * Morts DIFFÉRÉES : `dead=1` pendant les phases arrivée/combat (les index de la
  * grille spatiale restent valides), compactage en une passe via sweepDead().
  */
@@ -30,19 +33,26 @@ export class Units {
   readonly speed = new Float32Array(UNIT_CAP);
   readonly phase = new Float32Array(UNIT_CAP);
   readonly wobble = new Float32Array(UNIT_CAP); // vitesse latérale max du serpentin
+  readonly hp = new Float32Array(UNIT_CAP); // PV restants = puissance d'espèce à la naissance
   readonly faction = new Uint8Array(UNIT_CAP);
   readonly dead = new Uint8Array(UNIT_CAP);
   readonly target = new Int16Array(UNIT_CAP);
-  readonly byFaction = new Int16Array(3);
+  readonly byFaction = new Int16Array(MAX_FACTIONS);
   private readonly particles: Particle[] = [];
 
+  /**
+   * `texByFaction`/`factionSpeed`/`factionPower` : références possédées par
+   * World, REMPLIES à loadLevel (jamais réassignées) — zéro alloc au tick.
+   */
   constructor(
     container: ParticleContainer,
-    private readonly atlas: Atlas,
+    private readonly texByFaction: readonly Texture[],
+    private readonly factionSpeed: Float32Array,
+    private readonly factionPower: Float32Array,
   ) {
     for (let i = 0; i < UNIT_CAP; i++) {
       const p = new Particle({
-        texture: atlas.unitByFaction[1],
+        texture: texByFaction[1],
         x: PARK,
         y: PARK,
         anchorX: 0.5,
@@ -64,26 +74,36 @@ export class Units {
     const i = this.count++;
     this.x[i] = this.prevX[i] = x;
     this.y[i] = this.prevY[i] = y;
-    this.speed[i] = UNIT_SPEED * rand(1 - UNIT_SPEED_JITTER, 1 + UNIT_SPEED_JITTER);
+    this.speed[i] = UNIT_SPEED * this.factionSpeed[f] * rand(1 - UNIT_SPEED_JITTER, 1 + UNIT_SPEED_JITTER);
     this.phase[i] = rand(0, Math.PI * 2);
     this.wobble[i] = rand(WOBBLE_VEL_MIN, WOBBLE_VEL_MAX);
+    this.hp[i] = this.factionPower[f];
     this.faction[i] = f;
     this.dead[i] = 0;
     this.target[i] = targetNode;
     this.byFaction[f]++;
-    this.particles[i].texture = this.atlas.unitByFaction[f];
+    this.particles[i].texture = this.texByFaction[f];
   }
 
-  /** Marque une unité morte (annihilation ou arrivée) — compactée au sweep. */
+  /** Marque une unité morte (combat ou arrivée) — compactée au sweep. */
   markDead(i: number): void {
     if (this.dead[i]) return;
     this.dead[i] = 1;
     this.byFaction[this.faction[i]]--;
   }
 
+  /** Inflige `dmg` PV ; sous HP_EPSILON l'unité meurt (anti-zombie flottant). */
+  hit(i: number, dmg: number): void {
+    this.hp[i] -= dmg;
+    if (this.hp[i] <= HP_EPSILON) this.markDead(i);
+  }
+
   /**
    * Vol + arrivées. L'effet d'arrivée est résolu contre la faction COURANTE du
-   * nœud (un nœud qui a basculé en route devient renfort/cible automatiquement).
+   * nœud (un nœud qui a basculé en route devient renfort/cible automatiquement),
+   * à hauteur de hp restant / puissance du défenseur : une unité pleine vaut 1
+   * chez un allié, une unité blessée vaut sa fraction restante (pas d'exploit
+   * de soin en transit), et les puissances se convertissent entre espèces.
    */
   update(dt: number, time: number, nodes: Nodes): void {
     for (let i = 0; i < this.count; i++) {
@@ -96,7 +116,7 @@ export class Units {
       const d2 = dx * dx + dy * dy;
       const arriveR = nodes.radius(t) * ARRIVE_FRAC;
       if (d2 <= arriveR * arriveR) {
-        nodes.arrive(t, this.faction[i] as Faction);
+        nodes.arrive(t, this.faction[i] as Faction, this.hp[i] / this.factionPower[nodes.faction[t]]);
         this.markDead(i);
         continue;
       }
@@ -122,6 +142,7 @@ export class Units {
         this.speed[i] = this.speed[last];
         this.phase[i] = this.phase[last];
         this.wobble[i] = this.wobble[last];
+        this.hp[i] = this.hp[last];
         this.faction[i] = this.faction[last];
         this.dead[i] = this.dead[last];
         this.target[i] = this.target[last];

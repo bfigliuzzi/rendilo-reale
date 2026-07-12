@@ -5,6 +5,7 @@ import { Sfx } from './audio/sfx';
 import { DESIGN_H, DESIGN_W } from './config/balance';
 import { Ai } from './game/ai';
 import { Flow } from './game/flow';
+import { Tutorial } from './game/tutorial';
 import { World } from './game/world';
 import { Gestures } from './input/gestures';
 import { loadSave } from './meta/save';
@@ -47,8 +48,9 @@ async function boot(): Promise<void> {
   const world = new World(layers, atlas, fx, sfx);
   const gestures = new Gestures(app.canvas, world, sfx);
   const hud = new Hud();
+  const tutorial = new Tutorial();
   const screens = new Screens(document.getElementById('ui')!);
-  const flow = new Flow(world, screens, gestures, hud, save, sfx);
+  const flow = new Flow(world, screens, gestures, hud, tutorial, save, sfx);
 
   if (new URLSearchParams(location.search).has('stress')) flow.startStress();
   else flow.showMenu();
@@ -63,6 +65,7 @@ async function boot(): Promise<void> {
       world.render(alpha);
       app.renderer.render(app.stage);
       hud.onFrame(frameMs, world);
+      tutorial.onFrame(frameMs, world);
     },
   );
 }

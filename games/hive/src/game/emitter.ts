@@ -1,5 +1,5 @@
 import { rand } from '@shared/math';
-import { EMIT_INTERVAL, MAX_STREAMS } from '../config/balance';
+import { EMIT_INTERVAL, MAX_FACTIONS, MAX_STREAMS } from '../config/balance';
 import type { Faction } from '../config/levels';
 import type { Nodes } from './nodes';
 import type { Units } from './units';
@@ -18,7 +18,7 @@ export class Emitter {
   readonly faction = new Uint8Array(MAX_STREAMS);
   readonly active = new Uint8Array(MAX_STREAMS);
   readonly timer = new Float32Array(MAX_STREAMS);
-  readonly byFaction = new Int16Array(3);
+  readonly byFaction = new Int16Array(MAX_FACTIONS);
 
   constructor(
     private readonly nodes: Nodes,
