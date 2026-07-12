@@ -85,14 +85,14 @@ const VERGER: LevelDef = {
   ],
 };
 
-/** 3. La Nuée : première rencontre avec les mouches — pression de masse rapide. */
+/** 4. La Nuée : la pression de masse des mouches, à un nid contre deux. */
 const NUEE: LevelDef = {
   id: 'nuee',
   name: 'La Nuée',
   nodes: [
-    { x: 270, y: 850, faction: PLAYER, stock: 28 },
-    { x: 150, y: 130, faction: FOE, stock: 12 },
-    { x: 390, y: 130, faction: FOE, stock: 12 },
+    { x: 270, y: 850, faction: PLAYER, stock: 30 },
+    { x: 150, y: 130, faction: FOE, stock: 10 },
+    { x: 390, y: 130, faction: FOE, stock: 10 },
     { x: 100, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 440, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 270, y: 650, faction: NEUTRAL, stock: 14 },
@@ -109,7 +109,7 @@ const NUEE: LevelDef = {
   ],
 };
 
-/** 4. Deux rives : le centre est un nid niveau 1 très convoité (mouches véloces). */
+/** 3. Deux rives, première rencontre avec les mouches : le centre est un nid niveau 1 très convoité. */
 const RIVIERE: LevelDef = {
   id: 'riviere',
   name: 'La Rivière',
@@ -241,8 +241,8 @@ export const MAPS: readonly LevelDef[] = [
   EVEIL,
   CLAIRIERE,
   VERGER,
-  NUEE,
   RIVIERE,
+  NUEE,
   RUCHE_RIVALE,
   FOURMILIERE,
   TRONE,

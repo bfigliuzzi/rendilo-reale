@@ -12,7 +12,7 @@
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
 //
 // Cartes (1-based) : 1 eveil (TUTORIEL, IA somnolente — pas un scénario de mesure),
-// 2 clairiere 🪳, 3 verger 🪳, 4 nuee 🪰, 5 riviere 🪰, 6 ruche-rivale 🐝,
+// 2 clairiere 🪳, 3 verger 🪳, 4 riviere 🪰, 5 nuee 🪰, 6 ruche-rivale 🐝,
 // 7 fourmiliere 🐝, 8 trone 🐝, 9 guerre-des-clans 🪰🪳 (mêlée à 3).
 //
 // Env : CHROME_PATH surcharge le binaire Chrome ; --no-sandbox ajouté en root ;
