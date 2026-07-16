@@ -107,6 +107,18 @@ footer {
   color: #8b98a8;
 }
 
+footer p {
+  margin: 0 0 8px;
+}
+
+footer .about {
+  line-height: 1.5;
+}
+
+footer a {
+  color: #93b4dd; /* ≥ 4.5:1 sur #0b1016 (RGAA) */
+}
+
 @media (prefers-reduced-motion: reduce) {
   .game-card {
     transition: none;
