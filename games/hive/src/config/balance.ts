@@ -19,16 +19,23 @@ export const MAX_FACTIONS = 4;
 // grosses), la VITESSE est l'axe d'équilibrage résiduel.
 // VALEURS CALIBRÉES au scénario `duel` de tools/verify-hive.mjs (IA identique
 // des deux côtés, 4 cartes symétriques, camps alternés — re-mesurer après
-// TOUT changement ici ou dans le combat) : la vitesse de chaque clan est
-// choisie pour ~50 % de win-rate contre les deux autres. Mesures 2026-07,
-// APRÈS correction des trois fuites de parité (combat re-ciblable, fantômes
-// de grille, dotation initiale — cf. combat.ts / spatialGrid / nodes.ts) :
-// mouche 1.3 → 10/6 contre abeille (sa vitesse compense exactement sa
-// fragilité de granularité) ; cafard 0.8 → 1/15 (sa lenteur historique
-// n'était « payée » que par ces bugs : sa tankiness n'a AUCUNE valeur
-// agrégée, le combat min() étant équitable en puissance) → remonté à 0.95,
-// re-mesuré ~parité. Le cafard reste LE clan lent : l'identité se lit à la
-// rareté/taille des unités, pas au chrono.
+// TOUT changement ici ou dans le combat). Mesures 2026-07, APRÈS correction
+// des quatre fuites de parité (combat re-ciblable, fantômes de grille,
+// dotation initiale, seuil d'invest IA — cf. combat.ts / spatialGrid /
+// nodes.ts / ai.ts) :
+// - mouche 1.5/1.3 (valeurs historiques) → ~10/6 contre abeille : sa vitesse
+//   compense sa fragilité de granularité, NE PAS y toucher isolément ;
+// - cafard : la lenteur 0.8 historique n'était « payée » que par ces bugs
+//   (1/15 une fois corrigés — sa tankiness n'a AUCUNE valeur agrégée, le
+//   combat min() étant équitable en puissance) → 0.9/0.95 : power 1.11
+//   (résidu per-échange divisé par ~1.6 — l'ex-ressenti « gagne tous les
+//   échanges »), toujours le clan le plus lent. Il SOUS-performe encore en
+//   duel IA-vs-IA (~15-30 % selon la config : artefact des heuristiques de
+//   l'IA, quantifiées plus grossièrement à grosses unités ; l'issue d'un
+//   duel est quasi DÉTERMINISTE par géométrie, la précision sous ±20 %
+//   n'existe pas). Ce n'est PAS un biais côté joueur (toujours abeille) :
+//   la difficulté d'une carte cafard se règle par ses AiParams/DONNÉES,
+//   JAMAIS en re-gonflant un tuyau de puissance de l'espèce.
 // Les clans se valent à économie égale : la difficulté vient des DONNÉES de
 // carte, jamais de l'espèce.
 export interface SpeciesStats {
@@ -44,7 +51,7 @@ function species(growthMul: number, speedMul: number): SpeciesStats {
 export const SPECIES: Record<SpeciesId, SpeciesStats> = {
   bee: species(1, 1), // référence (power 1)
   fly: species(1.5, 1.3), // nuée rapide et fragile (power ≈ 0.67)
-  roach: species(0.9, 0.95), // rares, costauds, les plus lents (power ≈ 1.18)
+  roach: species(0.9, 0.95), // rares, costauds, les plus lents (power ≈ 1.11)
 };
 
 // Nœuds — table par niveau d'upgrade : production, cap et rayon sont TOUS
