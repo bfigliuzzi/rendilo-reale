@@ -197,7 +197,10 @@ export class Ai {
         donor = i;
       }
     }
-    if (donor >= 0 && best >= 6) this.emitter.send(donor, capped, this.me, best);
+    // seuil de « vrai surplus » EN PUISSANCE (pipe ④) : en unités, le clan à
+    // grosses unités investissait structurellement moins (6 unités cafard
+    // = 6,7 de puissance) et la nuée fine plus tôt — mesuré au duel
+    if (donor >= 0 && best * this.pw(this.me) >= 6) this.emitter.send(donor, capped, this.me, best);
   }
 
   /** Distance moyenne de mes nœuds à la cible (pour le coût de trajet). */
