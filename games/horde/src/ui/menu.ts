@@ -35,6 +35,7 @@ export interface MenuHandlers {
   adjustComposition: (cls: 'sniper' | 'art', delta: number) => void;
   claimAchievement: (id: string) => void;
   toggleMute: () => boolean;
+  resetProgress: () => void;
   backToMenu: () => void;
 }
 
@@ -51,6 +52,7 @@ const CLASS_INFO = [
 export class Menu {
   private handlers: MenuHandlers | null = null;
   private lastScreen = ''; // anti-clignotement : n'animer qu'au changement d'écran
+  private confirmingReset = false; // confirmation en deux temps du reset de progression
 
   constructor(
     private readonly root: HTMLElement,
@@ -92,6 +94,15 @@ export class Menu {
       <button class="btn" data-action="shop">⬆&nbsp; Arsenal</button>
       <button class="btn" data-action="achievements">🏅&nbsp; Succès${claimables > 0 ? ` <span class="pill">${claimables}</span>` : ''}</button>
       <button class="btn small" data-action="mute">${s.muted ? '🔇 Son coupé' : '🔊 Son actif'}</button>
+      ${
+        this.confirmingReset
+          ? `<div class="reset-warn">⚠️ Tout effacer — or, arsenal, succès, campagne, record ? Définitif.</div>
+             <div class="card-row reset-row">
+               <button class="btn danger" data-action="reset-confirm">Oui, tout effacer</button>
+               <button class="btn" data-action="reset-cancel">Annuler</button>
+             </div>`
+          : `<button class="btn small" data-action="reset">🗑 Réinitialiser la progression</button>`
+      }
       <a class="btn small hub-link" href="/">⌂ Autres jeux</a>
     `, 'home');
   }
@@ -265,6 +276,8 @@ export class Menu {
     if (!h) return;
     const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
     if (!btn || btn.hasAttribute('disabled')) return;
+    // toute action autre que « reset » referme la confirmation en deux temps
+    if (btn.dataset.action !== 'reset') this.confirmingReset = false;
     switch (btn.dataset.action) {
       case 'campaign':
         h.startCampaign(this.save.campaignLevel);
@@ -307,6 +320,16 @@ export class Menu {
       case 'mute':
         h.toggleMute();
         this.showHome();
+        break;
+      case 'reset':
+        this.confirmingReset = true;
+        this.showHome();
+        break;
+      case 'reset-cancel':
+        this.showHome();
+        break;
+      case 'reset-confirm':
+        h.resetProgress();
         break;
       case 'menu':
         h.backToMenu();

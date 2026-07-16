@@ -104,6 +104,15 @@ export function loadSave(): SaveData {
   }
 }
 
+/**
+ * Réinitialisation TOTALE de la progression (or, arsenal, succès, campagne,
+ * endless, mute) : réassigne les défauts EN PLACE — l'objet save est partagé
+ * par référence dans toute l'app, il ne doit jamais être remplacé.
+ */
+export function resetSave(save: SaveData): void {
+  Object.assign(save, structuredClone(DEFAULTS));
+}
+
 export function persist(save: SaveData): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(save));

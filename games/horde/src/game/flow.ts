@@ -3,7 +3,7 @@ import * as B from '../config/balance';
 import { makeCampaignLevel, makeEndlessLevel } from '../config/campaign';
 import { makeStressLevel } from '../config/levels';
 import { ACHIEVEMENTS, claimableGold, reachedTiers } from '../meta/achievements';
-import { persist, type SaveData } from '../meta/save';
+import { persist, resetSave, type SaveData } from '../meta/save';
 import { computeStats, UPGRADES, type UpgradeId } from '../meta/upgrades';
 import { WEAPONS, type WeaponId } from '../meta/weapons';
 import type { Hud } from '../ui/hud';
@@ -41,6 +41,7 @@ export class Flow {
       adjustComposition: (cls, delta) => this.adjustComposition(cls, delta),
       claimAchievement: (id) => this.claimAchievement(id),
       toggleMute: () => this.toggleMute(),
+      resetProgress: () => this.resetProgress(),
       backToMenu: () => this.showMenu(),
     });
     world.onGameOver = (r) => this.handleGameOver(r);
@@ -187,6 +188,14 @@ export class Flow {
     this.save.upgrades[id] = lvl + 1;
     persist(this.save);
     this.sfx.buy();
+  }
+
+  /** Réinitialisation TOTALE (confirmée en deux temps côté menu) : save vierge. */
+  private resetProgress(): void {
+    resetSave(this.save);
+    persist(this.save);
+    this.sfx.setMuted(this.save.muted);
+    this.menu.showHome();
   }
 
   private toggleMute(): boolean {
