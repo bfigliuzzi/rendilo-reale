@@ -10,26 +10,25 @@ export const DESIGN_H = 960;
 export const MAX_FACTIONS = 4;
 
 // Espèces (clans) — ÉQUILIBRAGE PAR BUDGET (pattern « armes à budget » de
-// horde) : on déclare un ARCHÉTYPE (croissance, vitesse), les valeurs JOUÉES
-// sont dérivées par deux règles :
-// ① PARITÉ D'USURE : power = 1/growthMul (débit de puissance produit identique
-//   pour tous — c'est CE ratio qui décide des guerres d'attrition, mesuré au
-//   bot : le pondérer par la vitesse faisait gagner toute guerre longue au
-//   clan lent).
-// ② TEMPÉRAGE : growthMul = archG^TEMPER_GROWTH, speedMul = archS^TEMPER_SPEED.
-//   La VITESSE est le seul axe que le budget ne peut PAS pricer (la parité
-//   d'usure ne contraint que la production) et son élasticité est BRUTALE :
-//   l'avance de vol se recompose en boule de neige d'expansion. Mesuré au
-//   scénario `duel` de tools/verify-hive.mjs (IA identique, carte symétrique) :
-//   mouche ×1.3 → 16/16 contre abeille, ×1.17 → 11/12, quand abeille-cafard
-//   (granularité pure, ±15 % de vitesse) restait ~50/50. D'où DEUX exposants :
-//   la vitesse fortement compressée (l'axe décisif), la granularité doucement
-//   (aggregate-neutre par ①, on la resserre seulement pour borner l'avantage
-//   per-échange du cafard — le résidu du survivant après un échange 1c1, le
-//   ressenti « le cafard gagne tous les échanges »). Les identités tiennent :
-//   la nuée se LIT à la densité d'unités, le cafard à la rareté/taille.
-//   Chaque exposant est CALIBRÉ aux duels (cible : tous matchups ≈ 50 %) —
-//   le retuner = re-mesurer.
+// horde) : on ne déclare QUE croissance et vitesse, la puissance est DÉRIVÉE
+// pour la PARITÉ D'USURE : growthMul · power ≡ 1 (débit de puissance produit
+// identique pour tous — c'est CE ratio qui décide des guerres d'attrition,
+// mesuré au bot : le pondérer par la vitesse faisait gagner toute guerre
+// longue au clan lent). La granularité (growth/power) est ainsi
+// AGRÉGAT-NEUTRE : c'est l'axe d'IDENTITÉ (nuée dense vs unités rares et
+// grosses), la VITESSE est l'axe d'équilibrage résiduel.
+// VALEURS CALIBRÉES au scénario `duel` de tools/verify-hive.mjs (IA identique
+// des deux côtés, 4 cartes symétriques, camps alternés — re-mesurer après
+// TOUT changement ici ou dans le combat) : la vitesse de chaque clan est
+// choisie pour ~50 % de win-rate contre les deux autres. Mesures 2026-07,
+// APRÈS correction des trois fuites de parité (combat re-ciblable, fantômes
+// de grille, dotation initiale — cf. combat.ts / spatialGrid / nodes.ts) :
+// mouche 1.3 → 10/6 contre abeille (sa vitesse compense exactement sa
+// fragilité de granularité) ; cafard 0.8 → 1/15 (sa lenteur historique
+// n'était « payée » que par ces bugs : sa tankiness n'a AUCUNE valeur
+// agrégée, le combat min() étant équitable en puissance) → remonté à 0.95,
+// re-mesuré ~parité. Le cafard reste LE clan lent : l'identité se lit à la
+// rareté/taille des unités, pas au chrono.
 // Les clans se valent à économie égale : la difficulté vient des DONNÉES de
 // carte, jamais de l'espèce.
 export interface SpeciesStats {
@@ -38,18 +37,14 @@ export interface SpeciesStats {
   power: number; // PV/dégâts d'une unité — DÉRIVÉ, jamais réglé à la main
 }
 
-export const SPECIES_TEMPER_GROWTH = 1;
-export const SPECIES_TEMPER_SPEED = 1;
-
-function species(archGrowth: number, archSpeed: number): SpeciesStats {
-  const growthMul = archGrowth ** SPECIES_TEMPER_GROWTH;
-  return { growthMul, speedMul: archSpeed ** SPECIES_TEMPER_SPEED, power: 1 / growthMul };
+function species(growthMul: number, speedMul: number): SpeciesStats {
+  return { growthMul, speedMul, power: 1 / growthMul };
 }
 
 export const SPECIES: Record<SpeciesId, SpeciesStats> = {
   bee: species(1, 1), // référence (power 1)
-  fly: species(1.5, 1.3), // nuée rapide et fragile (joué ≈ ×1.28/×1.08, power ≈ 0.78)
-  roach: species(0.85, 0.8), // rares, lents, costauds (joué ≈ ×0.91/×0.94, power ≈ 1.10)
+  fly: species(1.5, 1.3), // nuée rapide et fragile (power ≈ 0.67)
+  roach: species(0.9, 0.95), // rares, costauds, les plus lents (power ≈ 1.18)
 };
 
 // Nœuds — table par niveau d'upgrade : production, cap et rayon sont TOUS

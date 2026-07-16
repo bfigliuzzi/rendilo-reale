@@ -57,10 +57,15 @@ dans ses temps calmes (`Ai.invest`).
   `growthMul`/`speedMul`, la puissance est DÉRIVÉE : `power = 1/growthMul`
   (**parité d'usure** : débit de puissance produit identique — c'est CE ratio qui
   décide des guerres d'attrition, mesuré au bot : une pondération `√vitesse` dans
-  le budget faisait gagner toute guerre longue au clan lent). La vitesse est l'axe
-  TEMPO, en OPPOSITION avec la croissance (rapide ⇒ nombreux/fragile, lent ⇒
-  rare/costaud) : elle compense la défense stockée (un nid plein vaut cap × power).
-  Abeilles 1/1/1, mouches 1.5/1.3/≈0.67, cafards 0.85/0.8/≈1.18. INVARIANT de
+  le budget faisait gagner toute guerre longue au clan lent). La granularité
+  (growth/power) est donc AGRÉGAT-NEUTRE : c'est l'axe d'IDENTITÉ (nuée dense ⇔
+  unités rares et grosses) ; la VITESSE est l'axe d'équilibrage résiduel, CALIBRÉE
+  PAR CLAN au scénario `duel` (cible ~50 % contre chaque autre clan — la lenteur
+  0.8 historique du cafard n'était « payée » que par les fuites de parité depuis
+  corrigées, il s'effondrait à 1/15 une fois celles-ci fermées ; re-mesurer les
+  duels après TOUT changement de SPECIES ou du combat).
+  Abeilles 1/1/1, mouches 1.5/1.3/≈0.67, cafards 0.85/0.95/≈1.18 (toujours le
+  clan le plus lent — son identité se lit à la rareté/taille). INVARIANT de
   données : jamais deux IA de même espèce sur une carte (le duel joueur-vs-abeilles
   rivales est le seul cas de même espèce — distinguable par teinte + style de
   contour + cœur d'unité évidé côté IA).
