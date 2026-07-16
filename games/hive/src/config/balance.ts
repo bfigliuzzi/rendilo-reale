@@ -10,30 +10,46 @@ export const DESIGN_H = 960;
 export const MAX_FACTIONS = 4;
 
 // Espèces (clans) — ÉQUILIBRAGE PAR BUDGET (pattern « armes à budget » de
-// horde) : on ne déclare QUE croissance et vitesse, la puissance est DÉRIVÉE
-// pour la PARITÉ D'USURE : growthMul · power ≡ 1 (débit de puissance produit
-// identique pour tous — c'est CE ratio qui décide des guerres d'attrition,
-// mesuré au bot : le pondérer par la vitesse faisait gagner toute guerre
-// longue au clan lent). La vitesse est l'axe TEMPO : elle compense la défense
-// stockée (un nid plein vaut cap × power en défense — plus pour un clan
-// costaud, moins pour une nuée fragile). Les clans se valent à économie
-// égale : la difficulté vient des DONNÉES de carte, jamais de l'espèce.
-// Retuner un clan = toucher deux nombres, garder vitesse et croissance en
-// OPPOSITION (rapide ⇒ nombreux/fragile, lent ⇒ rare/costaud).
+// horde) : on déclare un ARCHÉTYPE (croissance, vitesse), les valeurs JOUÉES
+// sont dérivées par deux règles :
+// ① PARITÉ D'USURE : power = 1/growthMul (débit de puissance produit identique
+//   pour tous — c'est CE ratio qui décide des guerres d'attrition, mesuré au
+//   bot : le pondérer par la vitesse faisait gagner toute guerre longue au
+//   clan lent).
+// ② TEMPÉRAGE : growthMul = archG^TEMPER_GROWTH, speedMul = archS^TEMPER_SPEED.
+//   La VITESSE est le seul axe que le budget ne peut PAS pricer (la parité
+//   d'usure ne contraint que la production) et son élasticité est BRUTALE :
+//   l'avance de vol se recompose en boule de neige d'expansion. Mesuré au
+//   scénario `duel` de tools/verify-hive.mjs (IA identique, carte symétrique) :
+//   mouche ×1.3 → 16/16 contre abeille, ×1.17 → 11/12, quand abeille-cafard
+//   (granularité pure, ±15 % de vitesse) restait ~50/50. D'où DEUX exposants :
+//   la vitesse fortement compressée (l'axe décisif), la granularité doucement
+//   (aggregate-neutre par ①, on la resserre seulement pour borner l'avantage
+//   per-échange du cafard — le résidu du survivant après un échange 1c1, le
+//   ressenti « le cafard gagne tous les échanges »). Les identités tiennent :
+//   la nuée se LIT à la densité d'unités, le cafard à la rareté/taille.
+//   Chaque exposant est CALIBRÉ aux duels (cible : tous matchups ≈ 50 %) —
+//   le retuner = re-mesurer.
+// Les clans se valent à économie égale : la difficulté vient des DONNÉES de
+// carte, jamais de l'espèce.
 export interface SpeciesStats {
   growthMul: number; // multiplie la production des nids possédés
   speedMul: number; // multiplie la vitesse des unités en vol
   power: number; // PV/dégâts d'une unité — DÉRIVÉ, jamais réglé à la main
 }
 
-function species(growthMul: number, speedMul: number): SpeciesStats {
-  return { growthMul, speedMul, power: 1 / growthMul };
+export const SPECIES_TEMPER_GROWTH = 0.75;
+export const SPECIES_TEMPER_SPEED = 0.3;
+
+function species(archGrowth: number, archSpeed: number): SpeciesStats {
+  const growthMul = archGrowth ** SPECIES_TEMPER_GROWTH;
+  return { growthMul, speedMul: archSpeed ** SPECIES_TEMPER_SPEED, power: 1 / growthMul };
 }
 
 export const SPECIES: Record<SpeciesId, SpeciesStats> = {
   bee: species(1, 1), // référence (power 1)
-  fly: species(1.5, 1.3), // nuée rapide et fragile (power ≈ 0.67)
-  roach: species(0.85, 0.8), // rares, lents, costauds (power ≈ 1.18)
+  fly: species(1.5, 1.3), // nuée rapide et fragile (joué ≈ ×1.28/×1.08, power ≈ 0.78)
+  roach: species(0.85, 0.8), // rares, lents, costauds (joué ≈ ×0.91/×0.94, power ≈ 1.10)
 };
 
 // Nœuds — table par niveau d'upgrade : production, cap et rayon sont TOUS
@@ -78,7 +94,7 @@ export const SEND_FRAC_STEP = 0.1;
 export const GRID_COLS = 12;
 export const GRID_ROWS = 20;
 export const GRID_CELL = 48;
-export const GRID_MAX_PER_CELL = 32;
+export const GRID_MAX_PER_CELL = 128;
 
 // Contrôles
 export const TAP_RADIUS_PAD = 12; // zone de tap = max(radius + pad, TAP_RADIUS_MIN)

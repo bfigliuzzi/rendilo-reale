@@ -9,6 +9,14 @@
 //     mirror[:R] R parties (défaut 3, carte 2) où le camp abeilles est piloté par la
 //                MÊME classe Ai que l'adversaire (exposée sur __game) — rapport
 //                win/lose/timeout, aucune attente stricte (l'impasse est valide à niveau égal)
+//     duel:A-B[:R]  R duels (défaut 8, 16 conseillé) espèce A vs espèce B
+//                (bee|fly|roach) sur 4 cartes SYMÉTRIQUES cyclées (une géométrie
+//                unique est quasi déterministe : l'issue bascule sur des seuils
+//                d'ouverture), MÊME classe Ai et MÊMES paramètres des deux côtés,
+//                camps alternés à chaque run. Sim en ticks ACCÉLÉRÉS (60 Hz hors
+//                temps réel) ; le 4e argument = plafond en secondes SIMULÉES
+//                (défaut 600). Rapport win/départage à la puissance restante —
+//                LA mesure de parité inter-clans (attendu ~50/50 ou impasse)
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
 //
 // Cartes (1-based) : 1 eveil (TUTORIEL, IA somnolente — pas un scénario de mesure),
@@ -36,10 +44,13 @@ const MIRROR_PARAMS = {
   waveNodes: 2,
 };
 
-const [kind, suffixStr] = SCENARIO.split(':');
+const [kind, suffixStr, suffix2] = SCENARIO.split(':');
 const MIRROR_RUNS = kind === 'mirror' ? Number(suffixStr ?? 3) : 3;
 // défaut carte 2 (clairiere) : la carte 1 est le tutoriel à IA somnolente
 const LEVEL = kind === 'win' || kind === 'idle' ? Number(suffixStr ?? 2) : 2;
+const DUEL_RUNS = kind === 'duel' ? Number(suffix2 ?? 8) : 0;
+const DUEL_SPECIES = kind === 'duel' ? (suffixStr ?? 'bee-roach').split('-') : [];
+const DUEL_SIM_CAP = Number(process.argv[4] ?? 600); // secondes SIMULÉES par duel
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
@@ -225,6 +236,137 @@ if (kind === 'stress') {
   }
   await page.evaluate(() => clearInterval(window.__mirrorTimer));
   outcome = results.join(',');
+} else if (kind === 'duel') {
+  expected = null;
+  const [spA, spB] = DUEL_SPECIES;
+  const tally = { [spA]: 0, [spB]: 0, draw: 0 };
+  for (let run = 0; run < DUEL_RUNS; run++) {
+    // camps alternés à chaque run : garde-fou contre toute asymétrie f1/f2 résiduelle
+    const f1 = run % 2 === 1 ? spB : spA;
+    const f2 = run % 2 === 1 ? spA : spB;
+    await page.evaluate(
+      (sp1, sp2, params, mapIdx) => {
+        const g = window.__game;
+        // gèle la boucle rAF : la sim n'avance QUE par nos rafales de ticks (sinon le
+        // camp 2, mis à jour dans world.update, serait avantagé pendant les pauses)
+        if (!window.__realUpdate) {
+          window.__realUpdate = g.world.update.bind(g.world);
+          g.world.update = () => {};
+        }
+        // 4 cartes SYMÉTRIQUES (symétrie centrale x→540−x, y→960−y), cyclées par
+        // run : sur une seule géométrie l'issue est quasi déterministe (elle
+        // bascule sur des seuils d'ouverture) — varier les cartes échantillonne
+        // les ouvertures et rend le win-rate mesurable.
+        const MAPS = [
+          [
+            // clairière : anneau régulier + centre riche
+            { x: 270, y: 810, faction: 1, stock: 25 },
+            { x: 270, y: 150, faction: 2, stock: 25 },
+            { x: 110, y: 650, faction: 0, stock: 8 },
+            { x: 430, y: 310, faction: 0, stock: 8 },
+            { x: 430, y: 650, faction: 0, stock: 8 },
+            { x: 110, y: 310, faction: 0, stock: 8 },
+            { x: 270, y: 480, faction: 0, stock: 18 },
+          ],
+          [
+            // anneau : couronne autour d'un axe central pauvre
+            { x: 270, y: 850, faction: 1, stock: 25 },
+            { x: 270, y: 110, faction: 2, stock: 25 },
+            { x: 270, y: 660, faction: 0, stock: 12 },
+            { x: 270, y: 300, faction: 0, stock: 12 },
+            { x: 120, y: 480, faction: 0, stock: 10 },
+            { x: 420, y: 480, faction: 0, stock: 10 },
+            { x: 140, y: 220, faction: 0, stock: 8 },
+            { x: 400, y: 740, faction: 0, stock: 8 },
+          ],
+          [
+            // couloirs : départs excentrés, poches asymétriques par côté
+            { x: 135, y: 840, faction: 1, stock: 25 },
+            { x: 405, y: 120, faction: 2, stock: 25 },
+            { x: 135, y: 600, faction: 0, stock: 10 },
+            { x: 405, y: 360, faction: 0, stock: 10 },
+            { x: 135, y: 360, faction: 0, stock: 14 },
+            { x: 405, y: 600, faction: 0, stock: 14 },
+            { x: 405, y: 840, faction: 0, stock: 6 },
+            { x: 135, y: 120, faction: 0, stock: 6 },
+            { x: 270, y: 480, faction: 0, stock: 20 },
+          ],
+          [
+            // flancs riches : gros neutres décentrés, centre très convoité
+            { x: 270, y: 820, faction: 1, stock: 25 },
+            { x: 270, y: 140, faction: 2, stock: 25 },
+            { x: 100, y: 760, faction: 0, stock: 16 },
+            { x: 440, y: 200, faction: 0, stock: 16 },
+            { x: 440, y: 760, faction: 0, stock: 6 },
+            { x: 100, y: 200, faction: 0, stock: 6 },
+            { x: 100, y: 480, faction: 0, stock: 10 },
+            { x: 440, y: 480, faction: 0, stock: 10 },
+            { x: 270, y: 480, faction: 0, stock: 24 },
+          ],
+        ];
+        g.world.loadLevel({
+          id: 'duel',
+          name: 'Duel',
+          nodes: MAPS[mapIdx],
+          factions: [{ species: sp1 }, { species: sp2, ai: params }],
+        });
+        window.__duelResult = null;
+        g.world.onGameOver = (victory, time) => {
+          window.__duelResult = { victory, time };
+        };
+        // le camp 1 est piloté par la MÊME classe Ai avec les MÊMES paramètres
+        window.__duelAi = new g.Ai(g.world.nodes, g.world.units, g.world.emitter, 1, g.world.factionPower, g.world.factionSpeed);
+        window.__duelAi.reset(params);
+      },
+      f1,
+      f2,
+      MIRROR_PARAMS,
+      Math.floor(run / 2) % 4, // même carte pour chaque paire de runs à camps alternés
+    );
+    let step;
+    do {
+      step = await page.evaluate(
+        (ticks, cap) => {
+          const g = window.__game;
+          const w = g.world;
+          const dt = 1 / 60;
+          for (let k = 0; k < ticks && !window.__duelResult && w.time < cap; k++) {
+            window.__realUpdate(dt);
+            window.__duelAi.update(dt);
+          }
+          const P = w.factionPower;
+          const power = [0, 0, 0, 0];
+          for (let i = 0; i < w.nodes.count; i++) power[w.nodes.faction[i]] += w.nodes.stock[i] * P[w.nodes.faction[i]];
+          for (let i = 0; i < w.units.count; i++) if (!w.units.dead[i]) power[w.units.faction[i]] += w.units.hp[i];
+          return {
+            done: !!window.__duelResult,
+            victory: window.__duelResult ? window.__duelResult.victory : null,
+            time: w.time,
+            p1: Math.round(power[1]),
+            p2: Math.round(power[2]),
+          };
+        },
+        2400,
+        DUEL_SIM_CAP,
+      );
+    } while (!step.done && step.time < DUEL_SIM_CAP);
+    // timeout : départage à la puissance restante, « draw » sous 10 % d'écart
+    const winner = step.done
+      ? step.victory
+        ? f1
+        : f2
+      : Math.abs(step.p1 - step.p2) < 0.1 * (step.p1 + step.p2)
+        ? 'draw'
+        : step.p1 > step.p2
+          ? f1
+          : f2;
+    tally[winner]++;
+    samples.push({ run, map: Math.floor(run / 2) % 4, f1, f2, time: Math.round(step.time), p1: step.p1, p2: step.p2, winner, decided: step.done });
+  }
+  await page.evaluate(() => {
+    window.__game.world.update = window.__realUpdate;
+  });
+  outcome = `${spA} ${tally[spA]} / draw ${tally.draw} / ${spB} ${tally[spB]}`;
 } else {
   console.error(`scénario inconnu : ${SCENARIO}`);
   process.exit(2);
@@ -241,7 +383,8 @@ const report = {
   fpsAvg: lastSnap ? Math.round(lastSnap.frames / elapsed) : null,
   errors,
   last: lastSnap,
-  samples: samples.filter((_, i) => i % 10 === 0),
+  // duel : un échantillon par run (tous gardés) ; sinon décimation temporelle
+  samples: kind === 'duel' ? samples : samples.filter((_, i) => i % 10 === 0),
 };
 console.log(JSON.stringify(report, null, 1));
 await browser.close();

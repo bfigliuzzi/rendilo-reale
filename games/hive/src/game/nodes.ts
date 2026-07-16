@@ -5,11 +5,12 @@ import type { Faction, LevelDef } from '../config/levels';
  * Pool SoA des nœuds (≤ MAX_NODES, immobiles — pas d'interpolation nécessaire).
  * Production (× croissance de l'espèce), arrivées (valeur EN UNITÉS LOCALES du
  * nœud : renfort/dégât/capture) et sélection joueur.
- * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level` ; cap et coût
- * d'upgrade sont DÉNOMINÉS EN PUISSANCE (divisés par la puissance de l'espèce
- * occupante) : un nid plein stocke la même puissance défensive et un niveau
- * coûte le même effort quel que soit le clan — sinon le clan costaud gagnait
- * toute guerre d'usure sur ses nids (mesuré au bot).
+ * prod/cap/radius sont DÉRIVÉS de NODE_LEVELS via `level` ; cap, coût
+ * d'upgrade ET stock initial des cartes sont DÉNOMINÉS EN PUISSANCE (divisés
+ * par la puissance de l'espèce occupante) : un nid plein stocke la même
+ * puissance défensive, un niveau coûte le même effort et un nid de départ
+ * vaut la même défense quel que soit le clan — sinon le clan costaud gagnait
+ * toute guerre d'usure sur ses nids et partait plus riche (mesuré au bot).
  */
 export class Nodes {
   count = 0;
@@ -42,7 +43,8 @@ export class Nodes {
       const n = def.nodes[i];
       this.x[i] = n.x;
       this.y[i] = n.y;
-      this.stock[i] = n.stock;
+      // stock déclaré EN PUISSANCE dans les cartes → converti en unités locales
+      this.stock[i] = n.stock / this.factionPower[n.faction];
       this.faction[i] = n.faction;
       this.level[i] = n.level ?? 0;
       this.byFaction[n.faction]++;

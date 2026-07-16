@@ -75,11 +75,18 @@ dans ses temps calmes (`Ai.invest`).
   à hauteur de `hp restant / power du défenseur` (renfort, dégât ET investissement
   d'upgrade — une unité pleine vaut 1 chez un allié, pas d'exploit de soin en transit).
 - **Combat à puissance N factions** via `@shared/spatialGrid` : TOUTES les unités
-  vivantes insérées, chaque unité non engagée résout UN contact 3×3 contre une
+  vivantes insérées, chaque unité non engagée INITIE un contact 3×3 contre une
   autre faction — dégâts mutuels `min(hp_i, hp_j)` (deux égaux s'annihilent, un
-  costaud mange un faible et survit entamé), flag `engaged` = une paire par tick,
-  mort sous `HP_EPSILON` ; morts marquées `dead=1`, `sweepDead()` APRÈS la phase
-  grille. Fx/sfx uniquement sur mort (pas de grésillement de grignotage).
+  costaud mange un faible et survit entamé), flag `engaged` = une INITIATION par
+  tick mais une unité engagée reste CIBLABLE tant qu'elle vit (sans quoi le camp
+  le plus NOMBREUX saturait les adversaires et son surplus traversait l'écran
+  sans combattre, et le costaud n'encaissait qu'un coup par tick — les deux
+  mesurés au scénario `duel` ; chaque contact détruit la même puissance des deux
+  côtés, l'usure agrégée reste 1:1), mort sous `HP_EPSILON` ; morts marquées
+  `dead=1`, `sweepDead()` APRÈS la phase grille. `GRID_MAX_PER_CELL` doit rester
+  LARGE (128) : un insert au-delà du plafond est ignoré → « fantôme » qui frappe
+  sans être ciblable, avantage mesurable au camp dense. Fx/sfx uniquement sur
+  mort (pas de grésillement de grignotage).
 - Fin de partie : défaite si le joueur est éliminé, victoire quand TOUTES les
   factions IA le sont (éliminée = nœuds == 0 ET unités en vol == 0 ET flux == 0 —
   une nuée en vol peut encore reprendre un nœud ; une faction absente de la carte
@@ -103,12 +110,20 @@ dans ses temps calmes (`Ai.invest`).
   carte 1 est le tutoriel), `idle[:carte]` (passif, ATTEND une défaite),
   `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`, exposée sur
   `window.__game` — pas de duplication d'heuristiques ; garder `MIRROR_PARAMS`
-  alignés sur la carte testée), `stress` (fps à ~600 unités).
+  alignés sur la carte testée), `duel:A-B[:runs]` (duels d'ESPÈCES A vs B sur
+  carte symétrique, MÊME `Ai`/paramètres des deux côtés, camps alternés, ticks
+  accélérés hors temps réel — LA mesure de parité inter-clans, attendu ~50/50 ;
+  c'est lui qui a mesuré la fuite de combat, les fantômes de grille et la
+  dotation initiale non dénominée), `stress` (fps à ~600 unités).
   Exit ≠ 0 si erreur console ou issue inattendue → utilisable en CI.
-  **PARITÉ D'USURE — les quatre tuyaux à garder en puissance** (chacun a été
+  **PARITÉ D'USURE — les cinq tuyaux à garder en puissance** (chacun a été
   mesuré comme déséquilibre réel au bot) : ① production `growth·power ≡ 1`,
   ② cadence d'émission `EMIT_INTERVAL × power`, ③ cap et coût d'upgrade
-  `÷ power`, ④ estimations de l'IA et du bot en monnaie de puissance. Toute
+  `÷ power`, ④ estimations de l'IA et du bot en monnaie de puissance,
+  ⑤ stock initial des cartes `÷ power` (déclaré EN PUISSANCE dans `maps.ts`,
+  converti en unités locales par `Nodes.load` — sinon un nid cafard de départ
+  valait +18 % de défense, exactement le ressenti « cafards trop forts » des
+  premières cartes). Toute
   nouvelle mécanique quantitative (coût, stock, débit) doit choisir sa
   dénomination puissance/unités EXPLICITEMENT, sinon le clan costaud (cafards)
   gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des

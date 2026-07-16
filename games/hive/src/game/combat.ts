@@ -11,11 +11,18 @@ const MAX_BURSTS_PER_TICK = 6; // au-delà, les impacts restent sans particules 
 /**
  * Combat à puissance entre N factions — LE cœur d'Auralux, généralisé :
  * TOUTES les unités vivantes sont insérées dans la grille (rebâtie à chaque
- * tick), puis chaque unité non engagée résout UN contact contre la première
- * unité d'une AUTRE faction de son voisinage 3×3. Dégâts mutuels
+ * tick), puis chaque unité non engagée INITIE un contact contre la première
+ * unité VIVANTE d'une AUTRE faction de son voisinage 3×3. Dégâts mutuels
  * d = min(hp_i, hp_j) : deux égaux s'annihilent (le 1:1 historique), un
- * costaud mange un faible et survit entamé. Le flag `engaged` garantit une
- * paire résolue UNE fois par tick (pas de double-compte, rythme préservé).
+ * costaud mange un faible et survit entamé. Le flag `engaged` limite chaque
+ * unité à UNE initiation par tick (rythme borné, pas de double-compte), mais
+ * une unité engagée reste CIBLABLE tant qu'elle vit : sans cela, le camp le
+ * plus nombreux saturait tous les adversaires et son surplus traversait
+ * l'écran sans combattre (mesuré au scénario `duel` : la nuée fine gagnait
+ * ~90 % des matchups à vitesse égale), et le costaud ne pouvait encaisser
+ * qu'un contact par tick (le ressenti « le cafard gagne tous les échanges »).
+ * Chaque contact détruit la même puissance des deux côtés : l'usure agrégée
+ * reste exactement 1:1, seule la monétisation du NOMBRE disparaît.
  * Les morts sont MARQUÉES (dead=1), jamais retirées ici : les index de la
  * grille restent valides toute la phase ; Units.sweepDead() compacte après.
  */
@@ -50,7 +57,8 @@ export class Combat {
           const n = grid.counts[cell];
           for (let k = 0; k < n; k++) {
             const j = grid.items[cell * GRID_MAX_PER_CELL + k];
-            if (units.faction[j] === fi || units.dead[j] || this.engaged[j]) continue;
+            // une unité engagée reste ciblable (mais n'initiera plus ce tick)
+            if (units.faction[j] === fi || units.dead[j]) continue;
             const dx = units.x[j] - units.x[i];
             const dy = units.y[j] - units.y[i];
             if (dx * dx + dy * dy > R2) continue;
