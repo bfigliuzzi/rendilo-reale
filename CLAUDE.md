@@ -44,7 +44,9 @@ Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par nivea
 × croissance d'espèce) ; le stock est visualisé en nuée orbitale (`orbitView`,
 purement rendu, plafond 60 points) + compteur.
 Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sélection,
-tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié).
+tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié) ;
+bouton ↻ du HUD (bas gauche, visible en jeu) = redémarrage instantané du niveau
+(`Hud.onRestart` → `Flow.startGame`, loadLevel synchrone).
 **Upgrade de nœuds** : nourrir un nid allié DÉJÀ PLEIN investit le surplus vers le
 niveau suivant (`UPGRADE_COSTS`, arc de progression au rendu, ▲ au label, taille du
 nid dérivée du niveau) — aucun geste dédié. La capture CONSERVE le niveau (gros nid
@@ -133,12 +135,16 @@ dans ses temps calmes (`Ai.invest`).
   dénomination puissance/unités EXPLICITEMENT, sinon le clan costaud (cafards)
   gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des
   premières cartes qui bascule en lose.
-  Bande de référence (conteneur, rendu logiciel, 2026-07, cross-runs — le
-  signal est BRUITÉ, 2-3 runs minimum par carte) : tutoriel bot-win ~30 s,
-  cartes 2-3 bot-win ~60-90 s, carte 4 borderline (~1/2), cartes 5-9 bot-lose
-  (survie ~35-80 s — défi humain, le joueur a la skill + le sélecteur de %),
-  idle carte 2 = défaite ~55 s, mirror = mixte/impasse (timeout,lose,win),
-  stress ~34 fps (contrôle même machine : main = verger bot-win ~71 s).
+  Bande de référence (conteneur, rendu logiciel, 2026-07, POST-corrections de
+  parité, cross-runs — le signal est BRUITÉ, 2-3 runs minimum par carte) :
+  cartes 2-4 bot-win ~55-60 s, carte 5 bot-lose (défaite ~56 s), carte 9
+  (mêlée) survie longue/timeout à 240 s (les IA s'entre-consomment — défi
+  humain), idle carte 2 = défaite ~55 s, mirror = mixte/impasse
+  (timeout,win,win), stress ~28 fps (la grille à 128/cellule et le
+  re-ciblage coûtent ~5 fps en mêlée maximale — assumé : les plafonds bas
+  créaient des « fantômes » inéquitables), duels : bee-fly ≈ parité (~10/6),
+  bee-roach voir la note SPECIES (balance.ts). Contrôle même machine :
+  horde campagne N1 = victoire, 0 erreur console.
   À re-mesurer en RELATIF après tout changement de balance, batch de contrôle
   sur l'ancien tuning en cas de doute (mêmes précautions machine que horde).
   L'anti-enlisement de l'IA (`STALL_DECISIONS` : vague élargie après 8
