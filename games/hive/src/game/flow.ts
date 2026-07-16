@@ -41,6 +41,10 @@ export class Flow {
       persist(this.save);
       this.showMenu(); // re-render pour l'état du bouton
     };
+    // restart instantané (loadLevel est synchrone) — le tutoriel repart avec la carte
+    hud.onRestart = (): void => {
+      if (this.state === 'playing') this.startGame(this.levelIdx);
+    };
     hud.onSendFracChange = (v): void => {
       const frac = clampSendFrac(v);
       this.world.sendFrac = frac;

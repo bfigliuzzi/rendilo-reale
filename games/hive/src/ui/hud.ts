@@ -19,6 +19,8 @@ function cssColor(color: number): string {
 export class Hud {
   /** Câblé par Flow (seul écrivain du save) : reçoit la fraction déjà validée. */
   onSendFracChange: (v: number) => void = () => {};
+  /** Câblé par Flow : redémarre le niveau en cours (bouton ↻, visible en jeu). */
+  onRestart: () => void = () => {};
 
   private readonly perfEl: HTMLElement;
   private readonly statsEl: HTMLElement;
@@ -41,6 +43,7 @@ export class Hud {
     this.sendPlusEl = document.getElementById('send-plus') as HTMLButtonElement;
     this.sendMinusEl.addEventListener('click', () => this.onSendFracChange(this.sendFrac - SEND_FRAC_STEP));
     this.sendPlusEl.addEventListener('click', () => this.onSendFracChange(this.sendFrac + SEND_FRAC_STEP));
+    document.getElementById('hud-restart')!.addEventListener('click', () => this.onRestart());
   }
 
   setInGame(on: boolean): void {

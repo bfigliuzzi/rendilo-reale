@@ -43,6 +43,18 @@
       font-variant-numeric: tabular-nums;
     }
     #hud.in-game #hud-send { display: flex; }
+
+    /* Restart du niveau — en bas à gauche, à l'écart du stepper (pas de tap accidentel) */
+    #hud-restart {
+      position: absolute; left: 8px;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      display: none; pointer-events: auto;
+      width: 48px; height: 48px; border: 0; border-radius: 12px;
+      font: inherit; font-size: 22px; line-height: 1;
+      color: #fff; background: rgba(61, 47, 20, 0.85); cursor: pointer;
+    }
+    #hud-restart:active { background: #2a2010; }
+    #hud.in-game #hud-restart { display: block; }
     #hud-send button {
       width: 44px; height: 40px; border: 0; border-radius: 9px;
       font: inherit; font-size: 22px; font-weight: 700; line-height: 1;
@@ -128,6 +140,7 @@
       <span id="send-value" aria-live="polite">50 %</span>
       <button id="send-plus" type="button" aria-label="Augmenter la part envoyée">+</button>
     </div>
+    <button id="hud-restart" type="button" aria-label="Recommencer le niveau">↻</button>
   </div>
   <div id="ui"></div>
   <script type="module" src="./src/main.ts"></script>
