@@ -38,8 +38,8 @@ export interface SpeciesStats {
   power: number; // PV/dégâts d'une unité — DÉRIVÉ, jamais réglé à la main
 }
 
-export const SPECIES_TEMPER_GROWTH = 0.75;
-export const SPECIES_TEMPER_SPEED = 0.3;
+export const SPECIES_TEMPER_GROWTH = 1;
+export const SPECIES_TEMPER_SPEED = 1;
 
 function species(archGrowth: number, archSpeed: number): SpeciesStats {
   const growthMul = archGrowth ** SPECIES_TEMPER_GROWTH;
