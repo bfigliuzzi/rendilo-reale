@@ -120,10 +120,11 @@ const NUEE: LevelDef = {
     { x: 100, y: 330, faction: NEUTRAL, stock: 8 },
     { x: 440, y: 330, faction: NEUTRAL, stock: 8 },
   ],
-  // vagues bornées à 2 : l'identité de la carte est le SIÈGE de masse, pas le
-  // blitz coordonné — à waveNodes 3 (formule) le rush 2-nids tuait en 35 s,
-  // très au-dessous de la courbe (mesuré au bot)
-  factions: [{ species: 'bee' }, { species: 'fly', ai: campaignAi(6, 1, { waveNodes: 2 }) }],
+  // vagues bornées à 2 et grace 18 : l'identité de la carte est le SIÈGE de
+  // masse, pas le blitz — à waveNodes 3 (formule) le rush 2-nids tuait en
+  // 35 s, et la première vague à grace 12 fauchait l'expansion en 48 s pile
+  // (mesuré au bot ×4) ; l'orage doit laisser le temps de se retrancher
+  factions: [{ species: 'bee' }, { species: 'fly', ai: campaignAi(6, 1, { waveNodes: 2, grace: 18 }) }],
 };
 
 /** 5. Deux rives, première rencontre avec les mouches : symétrie 2v2, le centre est un nid niveau 1 très convoité. */
@@ -206,8 +207,9 @@ const TRONE: LevelDef = {
   ],
   // grace élargie : rampe d'approche de la forteresse — sa production L2
   // domine le rapport de forces quoi qu'il arrive, c'est l'ouverture qui
-  // doit laisser respirer (mesuré : mort du bot en 34-40 s à grace 12)
-  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2, { grace: 16 }) }],
+  // doit laisser respirer (mesuré : mort du bot en ~34-46 s à grace 12-16,
+  // toujours sur la première vague coordonnée)
+  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2, { grace: 22 }) }],
 };
 
 /** 9. La Guerre des clans : mêlée finale à trois — mouches et cafards se battent AUSSI entre eux. */
