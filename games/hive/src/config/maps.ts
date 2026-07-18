@@ -209,7 +209,7 @@ const TRONE: LevelDef = {
   // domine le rapport de forces quoi qu'il arrive, c'est l'ouverture qui
   // doit laisser respirer (mesuré : mort du bot en ~34-46 s à grace 12-16,
   // toujours sur la première vague coordonnée)
-  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2, { grace: 22 }) }],
+  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2, { grace: 19 }) }],
 };
 
 /** 9. La Guerre des clans : mêlée finale à trois — mouches et cafards se battent AUSSI entre eux. */

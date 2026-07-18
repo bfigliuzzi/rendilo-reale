@@ -146,15 +146,18 @@ investit dans ses temps calmes (`Ai.invest`).
   gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des
   premières cartes qui bascule en lose.
   Bande de référence (conteneur, rendu logiciel, 2026-07, POST-corrections de
-  parité, cross-runs — le signal est BRUITÉ, 2-3 runs minimum par carte) :
-  cartes 2-4 bot-win ~55-60 s, carte 5 bot-lose (défaite ~56 s), carte 9
-  (mêlée) survie longue/timeout à 240 s (les IA s'entre-consomment — défi
-  humain), idle carte 2 = défaite ~55 s, mirror = mixte/impasse
-  (timeout,win,win), stress ~28 fps (la grille à 128/cellule et le
-  re-ciblage coûtent ~5 fps en mêlée maximale — assumé : les plafonds bas
-  créaient des « fantômes » inéquitables), duels : bee-fly ≈ parité (~10/6),
-  bee-roach voir la note SPECIES (balance.ts). Contrôle même machine :
-  horde campagne N1 = victoire, 0 erreur console.
+  parité ET courbe campaignAi, cross-runs — le signal est BRUITÉ, 2-3 runs
+  minimum par carte ; les morts du bot sont quasi DÉTERMINISTES par carte,
+  déclenchées par la première vague coordonnée : la grace est le levier fin) :
+  cartes 2-4 bot-win en temps croissants (~70 → 110 s), cartes 5-9 bot-lose
+  (survie ~55-85 s — défi humain : le bot n'a ni retranchement ni adaptation ;
+  la carte 8 est au point de bascule, à grace 22 le bot la GAGNAIT une fois
+  sur deux, 19 = calibré), idle carte 2 = défaite ~55 s, mirror = mixte
+  (win,timeout — MIRROR_PARAMS alignés sur campaignAi(2,0)), stress ~28 fps
+  (la grille à 128/cellule et le re-ciblage coûtent ~5 fps en mêlée maximale —
+  assumé : les plafonds bas créaient des « fantômes » inéquitables), duels :
+  bee-fly ≈ parité (~10/6), bee-roach voir la note SPECIES (balance.ts).
+  Contrôle même machine : horde campagne N1 = victoire, 0 erreur console.
   À re-mesurer en RELATIF après tout changement de balance, batch de contrôle
   sur l'ancien tuning en cas de doute (mêmes précautions machine que horde).
   L'anti-enlisement de l'IA (`STALL_DECISIONS` : vague élargie après 8
