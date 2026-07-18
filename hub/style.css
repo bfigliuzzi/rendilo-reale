@@ -115,6 +115,33 @@ footer .about {
   line-height: 1.5;
 }
 
+footer .version {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+#version-update {
+  font: inherit;
+  font-weight: 700;
+  padding: 8px 14px;
+  border: 1px solid #60a5fa;
+  border-radius: 8px;
+  background: #131c29;
+  color: #93b4dd; /* ≥ 4.5:1 sur #131c29 comme les liens (RGAA) */
+  cursor: pointer;
+}
+
+#version-update:hover {
+  background: #1a2636;
+}
+
+#version-update:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+
 footer a {
   color: #93b4dd; /* ≥ 4.5:1 sur #0b1016 (RGAA) */
 }
