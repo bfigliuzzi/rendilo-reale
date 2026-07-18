@@ -118,7 +118,10 @@ const NUEE: LevelDef = {
     { x: 100, y: 330, faction: NEUTRAL, stock: 8 },
     { x: 440, y: 330, faction: NEUTRAL, stock: 8 },
   ],
-  factions: [{ species: 'bee' }, { species: 'fly', ai: campaignAi(6, 1) }],
+  // vagues bornées à 2 : l'identité de la carte est le SIÈGE de masse, pas le
+  // blitz coordonné — à waveNodes 3 (formule) le rush 2-nids tuait en 35 s,
+  // très au-dessous de la courbe (mesuré au bot)
+  factions: [{ species: 'bee' }, { species: 'fly', ai: campaignAi(6, 1, { waveNodes: 2 }) }],
 };
 
 /** 5. Deux rives, première rencontre avec les mouches : symétrie 2v2, le centre est un nid niveau 1 très convoité. */
@@ -187,10 +190,10 @@ const TRONE: LevelDef = {
   nodes: [
     { x: 270, y: 850, faction: PLAYER, stock: 30 },
     // forteresse L2 (prod ×2.3) + 2 nids latéraux : l'économie IA domine déjà —
-    // stocks latéraux contenus, le bot mourait en 33 s à 12/12
+    // stocks latéraux minimes (le bot mourait en 33-40 s à 10-12 chacun)
     { x: 270, y: 120, faction: FOE, stock: 36, level: 2 },
-    { x: 120, y: 250, faction: FOE, stock: 10 },
-    { x: 420, y: 250, faction: FOE, stock: 10 },
+    { x: 120, y: 250, faction: FOE, stock: 6 },
+    { x: 420, y: 250, faction: FOE, stock: 6 },
     { x: 100, y: 700, faction: NEUTRAL, stock: 8 },
     { x: 440, y: 700, faction: NEUTRAL, stock: 8 },
     { x: 100, y: 490, faction: NEUTRAL, stock: 12 },
@@ -198,7 +201,10 @@ const TRONE: LevelDef = {
     { x: 270, y: 560, faction: NEUTRAL, stock: 20, level: 1 },
     { x: 270, y: 370, faction: NEUTRAL, stock: 16 },
   ],
-  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2) }],
+  // grace élargie : rampe d'approche de la forteresse — sa production L2
+  // domine le rapport de forces quoi qu'il arrive, c'est l'ouverture qui
+  // doit laisser respirer (mesuré : mort du bot en 34-40 s à grace 12)
+  factions: [{ species: 'bee' }, { species: 'bee', ai: campaignAi(8, 2, { grace: 16 }) }],
 };
 
 /** 9. La Guerre des clans : mêlée finale à trois — mouches et cafards se battent AUSSI entre eux. */
