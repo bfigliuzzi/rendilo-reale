@@ -109,8 +109,10 @@ const NUEE: LevelDef = {
   name: 'La Nuée',
   nodes: [
     { x: 270, y: 850, faction: PLAYER, stock: 30 },
-    { x: 150, y: 130, faction: FOE, stock: 10 },
-    { x: 390, y: 130, faction: FOE, stock: 10 },
+    // 2×7 : même contenus, deux nids produisent +144 de puissance en 60 s —
+    // à 2×10 le bot mourait en 48 s, sous la courbe du slot 6 (mesuré)
+    { x: 150, y: 130, faction: FOE, stock: 7 },
+    { x: 390, y: 130, faction: FOE, stock: 7 },
     { x: 100, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 440, y: 560, faction: NEUTRAL, stock: 10 },
     { x: 270, y: 650, faction: NEUTRAL, stock: 14 },
@@ -188,10 +190,11 @@ const TRONE: LevelDef = {
   id: 'trone',
   name: 'Le Trône',
   nodes: [
-    { x: 270, y: 850, faction: PLAYER, stock: 30 },
-    // forteresse L2 (prod ×2.3) + 2 nids latéraux : l'économie IA domine déjà —
-    // stocks latéraux minimes (le bot mourait en 33-40 s à 10-12 chacun)
-    { x: 270, y: 120, faction: FOE, stock: 36, level: 2 },
+    // départ joueur renforcé (40) : la forteresse L2 produit 2.8 de
+    // puissance/s quoi qu'il arrive — c'est l'ouverture du joueur qu'on
+    // muscle, pas l'identité de la carte qu'on rabote (bot mort ~40 s sinon)
+    { x: 270, y: 850, faction: PLAYER, stock: 40 },
+    { x: 270, y: 120, faction: FOE, stock: 30, level: 2 },
     { x: 120, y: 250, faction: FOE, stock: 6 },
     { x: 420, y: 250, faction: FOE, stock: 6 },
     { x: 100, y: 700, faction: NEUTRAL, stock: 8 },
