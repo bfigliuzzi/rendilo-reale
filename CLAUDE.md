@@ -38,8 +38,16 @@ Campagne de 9 cartes en données (`config/maps.ts`, types `LevelDef` dans
 `config/levels.ts`) — la difficulté monte par les DONNÉES : AiParams (tempo,
 agressivité, `waveNodes`, `grace` = délai avant la première décision IA, vital dès
 que l'IA part multi-nids), nids de départ et leurs niveaux, richesse des neutres —
-JAMAIS par l'espèce (budget égal, voir Clans). Carte 0 = tutoriel guidé, puis
-introduction progressive : cafards → mouches → abeilles rivales → mêlée à 3 clans.
+JAMAIS par l'espèce (budget égal, voir Clans). Les AiParams de campagne sont
+DÉRIVÉS d'une formule MONOTONE `campaignAi(n, surplusNests)` (rampes en
+t = (n−2)/7, grace compensant les nids IA excédentaires — chaque nid = +1.2 de
+puissance/s dès t=0, LE terme dominant du rapport de forces) : le tuning local
+carte par carte avait produit une courbe non monotone (carte 6 plus facile que
+la 5, cartes 7-8 infaisables — mesuré au bot). Les cartes ne déclarent que
+espèce, layout, stocks et surcharges assumées (tutoriel, désynchro de mêlée) ;
+l'ORDRE de `MAPS` suit la courbe mesurée (`win:2..win:9`, 2 runs min après tout
+changement). Carte 0 = tutoriel guidé, puis introduction progressive :
+cafards → abeilles rivales → mouches → mêlée à 3 clans.
 Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par niveau,
 × croissance d'espèce) ; le stock est visualisé en nuée orbitale (`orbitView`,
 purement rendu, plafond 60 points) + compteur.
@@ -47,11 +55,13 @@ Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sé
 tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié) ;
 bouton ↻ du HUD (bas gauche, visible en jeu) = redémarrage instantané du niveau
 (`Hud.onRestart` → `Flow.startGame`, loadLevel synchrone).
-**Upgrade de nœuds** : nourrir un nid allié DÉJÀ PLEIN investit le surplus vers le
-niveau suivant (`UPGRADE_COSTS`, arc de progression au rendu, ▲ au label, taille du
-nid dérivée du niveau) — aucun geste dédié. La capture CONSERVE le niveau (gros nid
-= prise stratégique) mais remet l'investissement en cours à zéro ; l'IA investit
-dans ses temps calmes (`Ai.invest`).
+**Upgrade de nœuds** : sur-nourrir un nid allié investit TOUT ce qui déborde du cap
+vers le niveau suivant (`UPGRADE_COSTS`, arc de progression au rendu, ▲ au label,
+taille du nid dérivée du niveau) — aucun geste dédié. Le débordement d'une arrivée
+compte (exiger un nid strictement plein à chaque arrivée jetait l'excédent :
+l'upgrade était quasi introuvable en partie réelle). La capture CONSERVE le niveau
+(gros nid = prise stratégique) mais remet l'investissement en cours à zéro ; l'IA
+investit dans ses temps calmes (`Ai.invest`).
 
 - **Clans (espèces) à budget égal** : la FACTION est un camp (0 neutre, 1 joueur —
   TOUJOURS abeilles —, 2-3 IA), l'ESPÈCE est son peuple (`FactionDef` dans

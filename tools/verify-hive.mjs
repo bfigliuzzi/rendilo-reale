@@ -20,7 +20,7 @@
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
 //
 // Cartes (1-based) : 1 eveil (TUTORIEL, IA somnolente — pas un scénario de mesure),
-// 2 clairiere 🪳, 3 verger 🪳, 4 riviere 🪰, 5 nuee 🪰, 6 ruche-rivale 🐝,
+// 2 clairiere 🪳, 3 verger 🪳, 4 ruche-rivale 🐝, 5 riviere 🪰, 6 nuee 🪰,
 // 7 fourmiliere 🐝, 8 trone 🐝, 9 guerre-des-clans 🪰🪳 (mêlée à 3).
 //
 // Env : CHROME_PATH surcharge le binaire Chrome ; --no-sandbox ajouté en root ;
@@ -34,14 +34,16 @@ const SCENARIO = process.argv[3] ?? 'win';
 const SECONDS = Number(process.argv[4] ?? 240);
 const SHOT = process.argv[5] ?? '';
 
-// paramètres du camp miroir — garder alignés sur la carte testée (CLAIRIERE)
+// paramètres du camp miroir — garder alignés sur la carte testée (CLAIRIERE,
+// soit campaignAi(2, 0) dans config/maps.ts)
 const MIRROR_PARAMS = {
-  decisionInterval: 2.2,
+  decisionInterval: 2.4,
   aggression: 0.5,
   reserveFrac: 0.3,
   distWeight: 0.5,
-  defendBias: 1.5,
+  defendBias: 1.4,
   waveNodes: 2,
+  grace: 4,
 };
 
 const [kind, suffixStr, suffix2] = SCENARIO.split(':');

@@ -84,16 +84,23 @@ export class Nodes {
    * Effet d'une unité qui touche le nœud, résolu contre la faction COURANTE.
    * `value` est la valeur de l'unité EN UNITÉS LOCALES du nœud
    * (= hp restant / puissance du défenseur, calculée par Units.update) :
-   * renfort si alliée — et si le nid est PLEIN, l'unité est investie dans la
-   * montée de niveau (geste Auralux : nourrir un nid au cap l'améliore) ;
+   * renfort si alliée — et TOUT ce qui DÉBORDE du cap est investi dans la
+   * montée de niveau (geste Auralux : sur-nourrir un nid l'améliore ; exiger
+   * un nid strictement plein à chaque arrivée jetait le débordement et
+   * rendait l'upgrade quasi introuvable en partie réelle) ;
    * −value sinon, capture sous 0.
    */
   arrive(i: number, f: Faction, value: number): void {
     if (this.faction[i] === f) {
       const cap = this.cap(i);
       if (this.stock[i] < cap) {
-        this.stock[i] = Math.min(cap, this.stock[i] + value);
-        return;
+        const space = cap - this.stock[i];
+        if (value <= space) {
+          this.stock[i] += value;
+          return;
+        }
+        this.stock[i] = cap;
+        value -= space; // le débordement poursuit vers l'investissement
       }
       const cost = this.upgradeCost(i);
       if (cost === 0) return; // niveau max : surplus perdu
