@@ -34,20 +34,38 @@ Aucune autre dépendance runtime.
 
 ## Essaim (`games/hive/`) — conquête de nœuds façon Auralux
 
-Campagne de 9 cartes en données (`config/maps.ts`, types `LevelDef` dans
-`config/levels.ts`) — la difficulté monte par les DONNÉES : AiParams (tempo,
-agressivité, `waveNodes`, `grace` = délai avant la première décision IA, vital dès
-que l'IA part multi-nids), nids de départ et leurs niveaux, richesse des neutres —
-JAMAIS par l'espèce (budget égal, voir Clans). Les AiParams de campagne sont
-DÉRIVÉS d'une formule MONOTONE `campaignAi(n, surplusNests)` (rampes en
-t = (n−2)/7, grace compensant les nids IA excédentaires — chaque nid = +1.2 de
-puissance/s dès t=0, LE terme dominant du rapport de forces) : le tuning local
-carte par carte avait produit une courbe non monotone (carte 6 plus facile que
-la 5, cartes 7-8 infaisables — mesuré au bot). Les cartes ne déclarent que
-espèce, layout, stocks et surcharges assumées (tutoriel, désynchro de mêlée) ;
-l'ORDRE de `MAPS` suit la courbe mesurée (`win:2..win:9`, 2 runs min après tout
-changement). Carte 0 = tutoriel guidé, puis introduction progressive :
-cafards → abeilles rivales → mouches → mêlée à 3 clans.
+**3 campagnes de 30 niveaux, une par espèce JOUABLE** (`config/campaigns.ts` :
+`CampaignDef {species, name, emoji, levels, unlockedBy?}`, déblocage SÉQUENTIEL
+dérivé du save — Mouches à la victoire du niveau 9 Abeilles, Cafards au 9 Mouches,
+jamais stocké : `campaignUnlocked(save, sp)`). La campagne Abeilles ABSORBE les
+9 cartes historiques de `config/maps.ts` (ids conservés → records migrés) ; tout
+le reste (bee 10-30, fly/roach 1-30) est GÉNÉRÉ au boot par `config/mapgen.ts` —
+déterministe par (espèce, n), mulberry32, zéro Math.random, noms curatés en
+données dans campaigns.ts, sanity-check dev (géométrie, factions, monotonie).
+La difficulté monte par les DONNÉES : AiParams (tempo, agressivité, `waveNodes`,
+`grace` = délai avant la première décision IA, vital dès que l'IA part
+multi-nids), nids de départ et leurs niveaux, richesse des neutres — JAMAIS par
+l'espèce (budget égal, voir Clans). AiParams DÉRIVÉS de `campaignAi(n, surplus)`
+(rampes MONOTONES en t = (n−2)/7 ; le tuning local produisait une courbe non
+monotone) prolongée par `campaignAiExt` (u = (d−9)/21, continuité exacte au
+raccord, `waveNodes` figé à 4) avec d = n (bee) ou n+1 (fly/roach, pas de
+tutoriel). **GRAMMAIRE du générateur, apprise au bot (ne pas régresser)** :
+nid principal IA tout en HAUT (y ≤ 160, pattern des 9 cartes main — posé plus
+bas, l'IA rafle l'économie centrale), secondaires jusqu'à y=320, mêlées en
+tripodes quinconce (seule géométrie qui loge 2×3 nids à ≥130 px), poche joueur
+de 2 neutres à 8 sur ses flancs (sans elle l'expansion coûte le double), richesse
+neutre concentrée au centre (6 + 14t², pas d'uniforme 13-19), stock joueur
+26→40 croissant, grace = formule + rampe +0→8 (les cartes historiques mordantes
+surchargent TOUTES la formule brute : NUEE 18, TRONE 19), surplus calculé sur
+les nids RÉELLEMENT posés. Le générateur est GELÉ post-calibration : le SEUL
+tuning par carte passe par `OVERRIDES` (grace d'abord, stocks ensuite — keyé
+par id `fly-2`…). `surplusNests` : chaque nid IA excédentaire = +1.2 de
+puissance/s dès t=0, LE terme dominant du rapport de forces. Les cartes à la
+main ne déclarent que espèce, layout, stocks et surcharges assumées (tutoriel,
+désynchro de mêlée) ; l'ORDRE de `MAPS` suit la courbe mesurée (`win:bee-2..9`,
+2 runs min après tout changement). Carte 0 = tutoriel guidé (exclusif à bee-1),
+puis introduction progressive : cafards → abeilles rivales → mouches → mêlée à
+3 clans.
 Les nœuds produisent en continu (table `NODE_LEVELS` : prod/cap/rayon par niveau,
 × croissance d'espèce) ; le stock est visualisé en nuée orbitale (`orbitView`,
 purement rendu, plafond 60 points) + compteur.
@@ -55,6 +73,16 @@ Contrôles : tap ruche = sélection/cumul, tap cible = envoi depuis toute la sé
 tap vide = désélection, drag = envoi direct (aussi LE geste de renfort allié) ;
 bouton ↻ du HUD (bas gauche, visible en jeu) = redémarrage instantané du niveau
 (`Hud.onRestart` → `Flow.startGame`, loadLevel synchrone).
+**Biomes de décor** (`render/decor.ts` + `HIVE_BIOMES`/`buildDecorSets` dans
+`render/textures.ts`) : 4 biomes DÉRIVÉS de la carte par `biomeOf(def)` — ≥2 IA
+→ friche de guerre, sinon l'espèce de l'IA : abeilles rivales → prairie, mouches
+→ marécage, cafards → sous-bois nocturne. Fond = `groundTiles[biome]` (treillis
+hexagonal décliné par palette), props posés UNE fois à loadLevel (seed FNV-1a de
+`def.id` — stable au restart ↻, clearance 92 px des nids), météo légère en
+particules SOUS le gameplay (≠ horde, délibéré : les unités font 8-16 px).
+Layers : bg → decor → weather → orbit → nodes → … Zéro alloc au tick, +2 draw
+calls ; interdits WCAG du décor identiques à horde (pas de hachures jaune/noir,
+d'anneaux ni de glyphes/à-plats blancs — codes réservés aux dangers).
 **Upgrade de nœuds** : sur-nourrir un nid allié investit TOUT ce qui déborde du cap
 vers le niveau suivant (`UPGRADE_COSTS`, arc de progression au rendu, ▲ au label,
 taille du nid dérivée du niveau) — aucun geste dédié. Le débordement d'une arrivée
@@ -64,7 +92,8 @@ l'upgrade était quasi introuvable en partie réelle). La capture CONSERVE le ni
 investit dans ses temps calmes (`Ai.invest`).
 
 - **Clans (espèces) à budget égal** : la FACTION est un camp (0 neutre, 1 joueur —
-  TOUJOURS abeilles —, 2-3 IA), l'ESPÈCE est son peuple (`FactionDef` dans
+  l'espèce de la CAMPAGNE : `factions[0].species`, sans `ai` —, 2-3 IA), l'ESPÈCE
+  est son peuple (`FactionDef` dans
   `LevelDef.factions`, stats `SPECIES` dans `balance.ts`). On ne déclare QUE
   `growthMul`/`speedMul`, la puissance est DÉRIVÉE : `power = 1/growthMul`
   (**parité d'usure** : débit de puissance produit identique — c'est CE ratio qui
@@ -84,7 +113,9 @@ investit dans ses temps calmes (`Ai.invest`).
 - **Un envoi = `world.sendFrac` du stock, jamais 100 %** : le stock EST la défense
   (capture dès que < 0) — le 100 % rendait chaque envoi suicidaire (un éclaireur
   retournait le nœud vidé). Défaut `SEND_FRAC_DEFAULT` (50 %), réglable 10-100 %
-  par crans de 10 % au stepper du HUD (SEULE zone interactive du HUD,
+  par crans de 10 % au SLIDER VERTICAL du HUD (bord droit, zone pouce ;
+  `<input type=range>` natif en writing-mode vertical, crans dessinés sur la
+  piste, `aria-valuetext` ; avec ↻ c'est la seule zone interactive du HUD,
   `#hud-send`, persisté `save.sendFrac` — validation/clamp `clampSendFrac`, écrit
   par Flow seul). Le bot de verify suppose le défaut 50 %.
 - Un envoi = rafale étalée (`EMIT_INTERVAL`), `remaining` figé à l'ordre ; flux annulé
@@ -123,8 +154,10 @@ investit dans ses temps calmes (`Ai.invest`).
   (`aria-live`). Flow le démarre/coupe.
 - **Équilibrage mesuré au bot** : `node tools/verify-hive.mjs <url> <scenario>` —
   scénarios `win[:carte]` (bot all-in CONSCIENT DES PUISSANCES via
-  `world.factionPower`, ATTEND une victoire ; carte 1-based, défaut 2 — la
-  carte 1 est le tutoriel), `idle[:carte]` (passif, ATTEND une défaite),
+  `world.factionPower`, ATTEND une victoire ; carte = `N` 1-based bee, ou
+  `<espèce>-<N>` : `win:fly-3`, `idle:roach-12` — le harness déverrouille TOUTE
+  la chaîne de campagnes, `startLevel` refuse sinon les campagnes aval ; défaut
+  bee-2, la carte 1 est le tutoriel), `idle[:carte]` (passif, ATTEND une défaite),
   `mirror[:runs]` (camp abeilles piloté par la MÊME classe `Ai`, exposée sur
   `window.__game` — pas de duplication d'heuristiques ; garder `MIRROR_PARAMS`
   alignés sur la carte testée), `duel:A-B[:runs]` (duels d'ESPÈCES A vs B sur
@@ -137,16 +170,16 @@ investit dans ses temps calmes (`Ai.invest`).
   mesuré comme déséquilibre réel au bot) : ① production `growth·power ≡ 1`,
   ② cadence d'émission `EMIT_INTERVAL × power`, ③ cap et coût d'upgrade
   `÷ power`, ④ estimations de l'IA et du bot en monnaie de puissance,
-  ⑤ stock initial des cartes `÷ power` (déclaré EN PUISSANCE dans `maps.ts`,
-  converti en unités locales par `Nodes.load` — sinon un nid cafard de départ
-  valait +18 % de défense, exactement le ressenti « cafards trop forts » des
-  premières cartes). Toute
+  ⑤ stock initial des cartes `÷ power` (déclaré EN PUISSANCE dans `maps.ts`
+  ET `mapgen.ts`, converti en unités locales par `Nodes.load` — sinon un nid
+  cafard de départ valait +18 % de défense, exactement le ressenti « cafards
+  trop forts » des premières cartes). Toute
   nouvelle mécanique quantitative (coût, stock, débit) doit choisir sa
   dénomination puissance/unités EXPLICITEMENT, sinon le clan costaud (cafards)
   gagne toute guerre longue — symptôme type : mirror non-impasse, bot-win des
   premières cartes qui bascule en lose.
-  Bande de référence (conteneur, rendu logiciel, 2026-07, POST-corrections de
-  parité ET courbe campaignAi, cross-runs — le signal est BRUITÉ, 2-3 runs
+  Bande de référence bee 1-9 (conteneur, rendu logiciel, 2026-07, POST-corrections
+  de parité ET courbe campaignAi, cross-runs — le signal est BRUITÉ, 2-3 runs
   minimum par carte ; les morts du bot sont quasi DÉTERMINISTES par carte,
   déclenchées par la première vague coordonnée : la grace est le levier fin) :
   cartes 2-4 bot-win en temps croissants (~70 → 110 s), cartes 5-9 bot-lose
@@ -157,6 +190,17 @@ investit dans ses temps calmes (`Ai.invest`).
   (la grille à 128/cellule et le re-ciblage coûtent ~5 fps en mêlée maximale —
   assumé : les plafonds bas créaient des « fantômes » inéquitables), duels :
   bee-fly ≈ parité (~10/6), bee-roach voir la note SPECIES (balance.ts).
+  **Bande campagnes générées (Mac 120 fps, 2026-07 — le bot y est PLUS FORT
+  qu'en conteneur : bee-5 bot-win ici vs lose conteneur ; lire en RELATIF,
+  même machine)**, checkpoints ×2 runs {2,5,9,13,17,22,26,30} : règles de
+  calibration = ouvertures (n≤2) bot-WIN fiables, JAMAIS de survie < 40 s
+  (symptôme « infaisable » → OVERRIDES.grace), au-delà la variance par layout
+  est assumée (défi humain). Mesuré : bee 13-30 bot-lose survies 96→42 s ;
+  fly-2 win ×3 (~40 s, via OVERRIDE playerStock 40 + grace 14), fly-5 mixte
+  (frontière), fly-9 win, fly-13+ lose (37-76 s, fly-17 calée à grace 20 →
+  47-51 s) ; roach 2-13 win (39-65 s, bascule entre 13 et 17), roach-17+ lose
+  (42-70 s) ; idle fly-2/roach-2 = lose 59/46 s ; duels contrôle bee-fly 9/7,
+  bee-roach 6/10 (≈ note SPECIES, combat inchangé).
   Contrôle même machine : horde campagne N1 = victoire, 0 erreur console.
   À re-mesurer en RELATIF après tout changement de balance, batch de contrôle
   sur l'ancien tuning en cas de doute (mêmes précautions machine que horde).
@@ -174,11 +218,24 @@ investit dans ses temps calmes (`Ai.invest`).
   teinte ET style de contour (plein joueur / double f2 / pointillé f3) + cœur
   d'unité évidé côté IA — jamais la couleur seule, même entre abeilles rivales.
   `?stress` = les deux camps canonnent (~600 unités, mesuré 120 fps desktop).
-  Save `rendilo-reale:hive:save:v1` (`meta/save.ts`, schéma versionné v2 + merge
-  sur défauts ; migration v1→v2 : `unlocked` positionnel re-dérivé des cartes
-  gagnées via `bestTimes`, ids des 5 cartes historiques conservés) :
-  déverrouillage de campagne + records par carte + `sendFrac` — écrite
-  UNIQUEMENT par `game/flow.ts`.
+  Save `rendilo-reale:hive:save:v1` (`meta/save.ts`, schéma versionné v3 + merge
+  sur défauts ; migrations en CHAÎNE v1→v2→v3 — v3 : `campaigns` par espèce
+  remplace `unlocked`, re-dérivé de `bestTimes` car le v2 clampait à 9 : le
+  vétéran « guerre-des-clans battue » obtient bee.unlocked=10 ET le jalon
+  Mouches) : progression par campagne + records par carte (`bestTimes` plat,
+  ids historiques + namespacés) + `sendFrac` + `counters`/`feats` (succès) —
+  écrite UNIQUEMENT par `game/flow.ts` ; `resetSave(save)` mute EN PLACE
+  (objet partagé par référence), bouton reset deux temps sur l'accueil.
+- **Succès** (`meta/achievements.ts`, écran 🏅 du menu) : 6 familles à paliers
+  géométriques SANS FIN et SANS récompense (hive n'a pas de monnaie — affichage
+  pur, pas de claim ; `targetOf`/`reachedTiers` pattern horde) sur les
+  `counters` du save, + 12 hauts faits one-shot (`feats`, dont 3 « ★ légende »
+  quasi impossibles : Triple couronne, Va-tout 100 %, Nomade ≤1 nid).
+  Instrumentation LECTURE SEULE zéro-alloc (`world.run` RunStats,
+  `emitter.sentByFaction`, `combat.deaths`, `nodes.onCapture(i, from, to)`) ;
+  flush en UNE écriture par fin de partie dans `Flow.onGameOver` (victoire ET
+  défaite ; restart ↻/menu non flushés — assumé), feats de la partie affichés
+  sur l'écran de résultat.
 
 ## Déploiement
 

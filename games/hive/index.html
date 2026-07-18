@@ -33,18 +33,58 @@
     #hud-stats { right: 8px; text-align: right; display: none; font-size: 14px; }
     #hud.in-game #hud-stats { display: block; }
 
-    /* Stepper de % d'envoi — SEULE zone interactive du HUD */
+    /* Slider de % d'envoi — SEULE zone interactive du HUD */
     #hud-send {
-      position: absolute; left: 50%; transform: translateX(-50%);
-      bottom: max(10px, env(safe-area-inset-bottom));
-      display: none; align-items: center; gap: 2px;
+      position: absolute; right: max(10px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
+      display: none; flex-direction: column; align-items: center; gap: 8px;
       pointer-events: auto;
-      background: rgba(0, 0, 0, 0.55); border-radius: 12px; padding: 4px;
+      background: rgba(0, 0, 0, 0.55); border-radius: 12px; padding: 10px;
       font-variant-numeric: tabular-nums;
     }
     #hud.in-game #hud-send { display: flex; }
 
-    /* Restart du niveau — en bas à gauche, à l'écart du stepper (pas de tap accidentel) */
+    #send-value { text-align: center; font-size: 15px; font-weight: 700; }
+
+    #send-range {
+      width: 44px; height: min(300px, 34vh);
+      writing-mode: vertical-lr; direction: rtl;
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      touch-action: none;
+      background: transparent; border: none; padding: 0;
+    }
+    /* Webkit: Chrome, Safari, Edge */
+    #send-range::-webkit-slider-track {
+      width: 8px;
+      background: repeating-linear-gradient(
+        to right,
+        rgba(255, 233, 168, 0.5) 0, rgba(255, 233, 168, 0.5) 1px,
+        transparent 1px, transparent calc(100% / 9)
+      );
+      border-radius: 4px;
+    }
+    #send-range::-webkit-slider-thumb {
+      appearance: none; -webkit-appearance: none;
+      width: 34px; height: 22px; margin-top: 0;
+      background: #b07d1e; border: 2px solid #6e4c0e; border-radius: 4px;
+      cursor: pointer;
+    }
+    /* Firefox */
+    #send-range::-moz-range-track {
+      width: 8px;
+      background: repeating-linear-gradient(
+        to right,
+        rgba(255, 233, 168, 0.5) 0, rgba(255, 233, 168, 0.5) 1px,
+        transparent 1px, transparent calc(100% / 9)
+      );
+      border-radius: 4px; border: none;
+    }
+    #send-range::-moz-range-thumb {
+      width: 34px; height: 22px;
+      background: #b07d1e; border: 2px solid #6e4c0e; border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Restart du niveau — en bas à gauche, à l'écart du slider (pas de tap accidentel) */
     #hud-restart {
       position: absolute; left: 8px;
       bottom: max(10px, env(safe-area-inset-bottom));
@@ -55,14 +95,6 @@
     }
     #hud-restart:active { background: #2a2010; }
     #hud.in-game #hud-restart { display: block; }
-    #hud-send button {
-      width: 44px; height: 40px; border: 0; border-radius: 9px;
-      font: inherit; font-size: 22px; font-weight: 700; line-height: 1;
-      color: #fff; background: #3d2f14; cursor: pointer;
-    }
-    #hud-send button:active { background: #2a2010; }
-    #hud-send button:disabled { opacity: 0.35; cursor: default; }
-    #send-value { min-width: 62px; text-align: center; font-size: 15px; font-weight: 700; }
 
     /* Bandeau tutoriel (informatif, non interactif) */
     #hud-tuto {
@@ -124,6 +156,70 @@
     .btn.level.locked { opacity: 0.45; cursor: default; }
     .btn.small { width: auto; padding: 8px 16px; font-size: 13px; background: #241b0c; }
     a.hub-link { display: inline-block; text-decoration: none; color: #e8d5a8; opacity: 0.8; }
+
+    /* Accueil : cartes de campagne (une par espèce) */
+    .campaigns { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .campaign-card {
+      display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+      padding: 12px 14px; border: 0; border-radius: 12px;
+      font: inherit; color: #fff; background: #3d2f14; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+    .campaign-card:not(.locked):active { transform: translateY(2px); box-shadow: none; }
+    .campaign-card.locked { opacity: 0.5; cursor: default; box-shadow: none; }
+    .cc-emoji { font-size: 28px; line-height: 1; }
+    .cc-body { display: flex; flex-direction: column; gap: 2px; }
+    .cc-name { font-size: 16px; font-weight: 700; }
+    .cc-progress { font-size: 13px; opacity: 0.8; }
+    .cc-hint { font-size: 12px; opacity: 0.85; color: #e8d5a8; }
+    .panel h2.campaign-title { font-size: 26px; color: #f6b93b; }
+    .unlock-line { font-size: 15px; font-weight: 700; color: #f6b93b; }
+
+    /* Grille de niveaux d'une campagne — 5 colonnes de pastilles */
+    .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: 100%; }
+    .chip {
+      position: relative; display: flex; align-items: center; justify-content: center;
+      aspect-ratio: 1; min-width: 0; padding: 0; border: 0; border-radius: 10px;
+      font: inherit; font-size: 15px; font-weight: 800; color: #fff;
+      background: #3d2f14; cursor: pointer; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+    }
+    .chip:not(.locked):active { transform: translateY(2px); box-shadow: none; }
+    .chip.done { background: #2e4022; box-shadow: 0 2px 0 #1a2613; }
+    /* « prochain niveau » : couleur + liseré + glyphe ▶ (jamais la couleur seule) */
+    .chip.primary { background: #b07d1e; box-shadow: 0 2px 0 #6e4c0e; outline: 2px solid #ffe9a8; outline-offset: 1px; }
+    .chip-next { position: absolute; top: 2px; left: 4px; font-size: 9px; color: #fff7e0; }
+    .chip.locked { opacity: 0.4; cursor: default; box-shadow: none; }
+    .chip-n { line-height: 1; }
+    .chip-done { position: absolute; top: 2px; right: 4px; font-size: 9px; color: #7ee29a; }
+    .chip-trophy { position: absolute; bottom: 1px; right: 2px; font-size: 8px; opacity: 0.85; }
+
+    /* Écran des succès : familles à paliers (barres) + hauts faits one-shot */
+    .ach-list, .feats { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .ach { background: #241b0c; border-radius: 12px; padding: 10px 12px; text-align: left; }
+    .ach-head { display: flex; gap: 6px; align-items: baseline; font-size: 15px; }
+    .ach-head .ach-tier { margin-left: auto; font-size: 12px; opacity: 0.75; }
+    .ach-desc { font-size: 12px; opacity: 0.8; margin: 2px 0 8px; }
+    .bar { height: 8px; background: #171208; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; background: #f6b93b; }
+    .feat {
+      display: flex; align-items: center; gap: 10px; text-align: left;
+      background: #241b0c; border: 1px solid transparent; border-radius: 12px; padding: 10px 12px;
+    }
+    .feat.locked { opacity: 0.45; }
+    .feat.hard { border-color: #b07d1e; } /* + libellé « ★ légende » : jamais la couleur seule */
+    .feat-icon { font-size: 22px; line-height: 1; }
+    .feat-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .feat-name { font-size: 14px; font-weight: 700; }
+    .feat-hard { font-size: 11px; font-weight: 700; color: #f6b93b; }
+    .feat-desc { font-size: 12px; opacity: 0.8; }
+    .feat-line { font-size: 14px; font-weight: 700; color: #f6b93b; }
+
+    /* Réinitialisation de la progression — confirmation en deux temps */
+    .btn.danger { background: #7f1d1d; box-shadow: 0 3px 0 #450a0a; }
+    .reset-warn { font-size: 14px; line-height: 1.5; color: #fca5a5; }
+    .reset-row { display: flex; gap: 8px; width: 100%; }
+    .reset-row .btn { flex: 1; }
+
     @media (prefers-reduced-motion: reduce) {
       .panel, .panel h2.win, .panel h2.lose { animation: none; }
     }
@@ -135,10 +231,9 @@
     <div id="hud-perf" class="hud-box"></div>
     <div id="hud-stats" class="hud-box"></div>
     <div id="hud-tuto" aria-live="polite"></div>
-    <div id="hud-send" role="group" aria-label="Part de l'essaim envoyée à chaque ordre">
-      <button id="send-minus" type="button" aria-label="Réduire la part envoyée">−</button>
-      <span id="send-value" aria-live="polite">50 %</span>
-      <button id="send-plus" type="button" aria-label="Augmenter la part envoyée">+</button>
+    <div id="hud-send">
+      <span id="send-value" aria-hidden="true">50 %</span>
+      <input id="send-range" type="range" min="10" max="100" step="10" value="50" aria-label="Part de l'essaim envoyée à chaque ordre" aria-valuetext="50 %">
     </div>
     <button id="hud-restart" type="button" aria-label="Recommencer le niveau">↻</button>
   </div>

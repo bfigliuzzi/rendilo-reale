@@ -23,8 +23,9 @@ export class Nodes {
   readonly level = new Uint8Array(MAX_NODES);
   readonly selected = new Uint8Array(MAX_NODES);
   readonly byFaction = new Int16Array(MAX_FACTIONS);
-  /** Câblés une fois par World (fx + sfx futurs) — jamais réassignés au tick. */
-  onCapture: (i: number, to: Faction) => void = () => {};
+  /** Câblés une fois par World (fx + sfx + stats de partie) — jamais réassignés
+   *  au tick. `from` = faction perdante (instrumentation succès). */
+  onCapture: (i: number, from: Faction, to: Faction) => void = () => {};
   onUpgrade: (i: number) => void = () => {};
 
   /** Stats par faction (références possédées par World, remplies à loadLevel). */
@@ -118,14 +119,15 @@ export class Nodes {
   }
 
   private capture(i: number, to: Faction): void {
-    this.byFaction[this.faction[i]]--;
+    const from = this.faction[i] as Faction;
+    this.byFaction[from]--;
     this.byFaction[to]++;
     this.faction[i] = to;
     this.stock[i] = 0; // l'unité qui capture est consommée par la prise
     this.upgradeProgress[i] = 0; // le niveau reste, l'investissement en cours est perdu
     this.selected[i] = 0;
     this.flash[i] = 1;
-    this.onCapture(i, to);
+    this.onCapture(i, from, to);
   }
 
   /** Hit-test tactile : zone de tap élargie (min 34 px de rayon). */

@@ -3,9 +3,11 @@
 //
 // Usage : node tools/verify-hive.mjs [url] [scenario] [secondes] [capture.png]
 //   scenario :
-//     win[:N]    bot « bon joueur » (expansion, défense, all-in persistant) sur la
-//                carte N (1-based, défaut 2) — ATTEND une victoire
-//     idle[:N]   bot passif sur la carte N — ATTEND une défaite (l'IA punit l'inaction)
+//     win[:C]    bot « bon joueur » (expansion, défense, all-in persistant) sur la
+//                carte C — ATTEND une victoire
+//     idle[:C]   bot passif sur la carte C — ATTEND une défaite (l'IA punit l'inaction)
+//   Carte C = campagne-niveau : 'bee-12', 'fly-3', 'roach-30'… (niveau 1-based).
+//   Rétro-compatible : 'win:12' ≡ 'win:bee-12', 'win' ≡ 'win:bee-2'.
 //     mirror[:R] R parties (défaut 3, carte 2) où le camp abeilles est piloté par la
 //                MÊME classe Ai que l'adversaire (exposée sur __game) — rapport
 //                win/lose/timeout, aucune attente stricte (l'impasse est valide à niveau égal)
@@ -19,9 +21,11 @@
 //                LA mesure de parité inter-clans (attendu ~50/50 ou impasse)
 //     stress     ?stress : les deux camps canonnent (~600 unités) — mesure les fps
 //
-// Cartes (1-based) : 1 eveil (TUTORIEL, IA somnolente — pas un scénario de mesure),
-// 2 clairiere 🪳, 3 verger 🪳, 4 ruche-rivale 🐝, 5 riviere 🪰, 6 nuee 🪰,
-// 7 fourmiliere 🐝, 8 trone 🐝, 9 guerre-des-clans 🪰🪳 (mêlée à 3).
+// Cartes bee 1-9 (historiques, tuning inchangé) : 1 eveil (TUTORIEL, IA somnolente —
+// pas un scénario de mesure), 2 clairiere 🪳, 3 verger 🪳, 4 ruche-rivale 🐝,
+// 5 riviere 🪰, 6 nuee 🪰, 7 fourmiliere 🐝, 8 trone 🐝,
+// 9 guerre-des-clans 🪰🪳 (mêlée à 3). Au-delà : campagnes de 30 niveaux par
+// espèce (bee 10-30, fly 1-30, roach 1-30) générées dans config/campaigns.ts.
 //
 // Env : CHROME_PATH surcharge le binaire Chrome ; --no-sandbox ajouté en root ;
 // en conteneur, lancer node SANS les variables proxy (cf. CLAUDE.md).
@@ -48,8 +52,24 @@ const MIRROR_PARAMS = {
 
 const [kind, suffixStr, suffix2] = SCENARIO.split(':');
 const MIRROR_RUNS = kind === 'mirror' ? Number(suffixStr ?? 3) : 3;
-// défaut carte 2 (clairiere) : la carte 1 est le tutoriel à IA somnolente
-const LEVEL = kind === 'win' || kind === 'idle' ? Number(suffixStr ?? 2) : 2;
+// win/idle : carte 'espèce-niveau' ('bee-12'), niveau seul ≡ campagne bee
+// ('win:12' ≡ 'win:bee-12'), défaut bee-2 (la carte bee-1 est le tutoriel
+// à IA somnolente). mirror joue toujours bee-2 (MIRROR_PARAMS alignés dessus).
+let SPECIES = 'bee';
+let LEVEL = 2;
+if ((kind === 'win' || kind === 'idle') && suffixStr) {
+  const m = /^(bee|fly|roach)-(\d+)$/.exec(suffixStr);
+  if (m) {
+    SPECIES = m[1];
+    LEVEL = Number(m[2]);
+  } else {
+    LEVEL = Number(suffixStr);
+  }
+  if (!Number.isInteger(LEVEL) || LEVEL < 1) {
+    console.error(`carte invalide : ${suffixStr} (attendu N ou bee|fly|roach-N)`);
+    process.exit(2);
+  }
+}
 const DUEL_RUNS = kind === 'duel' ? Number(suffix2 ?? 8) : 0;
 const DUEL_SPECIES = kind === 'duel' ? (suffixStr ?? 'bee-roach').split('-') : [];
 const DUEL_SIM_CAP = Number(process.argv[4] ?? 600); // secondes SIMULÉES par duel
@@ -181,11 +201,19 @@ const snapshot = () =>
 
 /** Joue une partie jusqu'au résultat (ou timeout). Retourne 'win'|'lose'|'timeout'. */
 async function playOne(drive, timeoutSec, samples) {
-  await page.evaluate((levelIdx) => {
-    window.__botTarget = -1;
-    window.__game.save.unlocked = 99; // headless : toutes les cartes accessibles
-    window.__game.flow.startGame(levelIdx);
-  }, LEVEL - 1);
+  await page.evaluate(
+    (sp, levelIdx) => {
+      window.__botTarget = -1;
+      const g = window.__game;
+      // headless : TOUTES les campagnes accessibles — startLevel exige la chaîne
+      // amont déverrouillée (campaignUnlocked teste bee pour fly, fly pour roach),
+      // débloquer la seule cible laissait fly/roach bloqués au menu (timeout).
+      for (const k of Object.keys(g.save.campaigns)) g.save.campaigns[k].unlocked = 99;
+      g.flow.startLevel(sp, levelIdx);
+    },
+    SPECIES,
+    LEVEL - 1,
+  );
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutSec * 1000) {
     await new Promise((r) => setTimeout(r, 1500));

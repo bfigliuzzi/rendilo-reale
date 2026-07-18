@@ -27,7 +27,7 @@ const FOE2: Faction = 3; // seconde faction IA (mêlées)
 // (dénominés en puissance) et surcharges ASSUMÉES (tutoriel, désynchro de
 // mêlée). Re-mesurer la courbe (`win:2`..`win:9`, 2 runs min) après TOUT
 // changement ici.
-function campaignAi(n: number, surplusNests: number, over: Partial<AiParams> = {}): AiParams {
+export function campaignAi(n: number, surplusNests: number, over: Partial<AiParams> = {}): AiParams {
   const t = (n - 2) / 7;
   const r2 = (v: number): number => Math.round(v * 100) / 100;
   return {

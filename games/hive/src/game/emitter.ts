@@ -23,6 +23,9 @@ export class Emitter {
   readonly active = new Uint8Array(MAX_STREAMS);
   readonly timer = new Float32Array(MAX_STREAMS);
   readonly byFaction = new Int16Array(MAX_FACTIONS);
+  /** Unités émises par faction depuis le dernier clear (instrumentation succès,
+   *  lecture seule — la sim n'y lit jamais). */
+  readonly sentByFaction = new Int32Array(MAX_FACTIONS);
 
   /** `factionPower` : référence possédée par World, remplie à loadLevel. */
   constructor(
@@ -76,6 +79,7 @@ export class Emitter {
         const a = Math.atan2(this.nodes.y[dst] - this.nodes.y[src], this.nodes.x[dst] - this.nodes.x[src]) + rand(-0.55, 0.55);
         const r = this.nodes.radius(src);
         this.units.spawn(this.nodes.x[src] + Math.cos(a) * r, this.nodes.y[src] + Math.sin(a) * r, f, dst);
+        this.sentByFaction[f]++;
         this.nodes.stock[src] -= 1;
         this.remaining[s] -= 1;
         this.timer[s] += EMIT_INTERVAL * this.factionPower[f];
@@ -92,5 +96,6 @@ export class Emitter {
   clear(): void {
     this.active.fill(0);
     this.byFaction.fill(0);
+    this.sentByFaction.fill(0);
   }
 }

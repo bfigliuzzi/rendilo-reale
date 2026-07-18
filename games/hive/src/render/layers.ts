@@ -9,6 +9,12 @@ import type { Atlas } from './textures';
  */
 export class Layers {
   readonly bg: TilingSprite;
+  /** Props de biome, non interactifs (render/decor.ts). */
+  readonly decor = new Container();
+  /** Météo ambiante — SOUS le gameplay, à l'inverse de horde : choix délibéré,
+   *  les unités font 8-16 px, des motes par-dessus dégraderaient la lecture
+   *  faction/espèce (WCAG). */
+  readonly weather = new Container();
   readonly nodes = new Container();
   readonly orbit: ParticleContainer;
   readonly units: ParticleContainer;
@@ -21,7 +27,8 @@ export class Layers {
     readonly stage: Container,
     atlas: Atlas,
   ) {
-    this.bg = new TilingSprite({ texture: atlas.honeyTile, width: DESIGN_W, height: DESIGN_H });
+    // fond du biome 0 par défaut ; World.loadLevel installe la tuile de la carte
+    this.bg = new TilingSprite({ texture: atlas.groundTiles[0], width: DESIGN_W, height: DESIGN_H });
     this.bg.tileScale.set(0.5); // sources canvas en supersampling ×2
     // uv dynamique : la frame d'un slot change quand il est réutilisé par l'autre faction ;
     // rotation dynamique : les insectes orbitent « tête la première »
@@ -30,6 +37,17 @@ export class Layers {
     // fx : échelle, teinte et alpha varient pendant la vie des particules
     this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 
-    stage.addChild(this.bg, this.orbit, this.nodes, this.units, this.fx, this.arcs, this.labels, this.overlay);
+    stage.addChild(
+      this.bg,
+      this.decor,
+      this.weather,
+      this.orbit,
+      this.nodes,
+      this.units,
+      this.fx,
+      this.arcs,
+      this.labels,
+      this.overlay,
+    );
   }
 }

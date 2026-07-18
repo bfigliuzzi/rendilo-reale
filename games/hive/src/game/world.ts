@@ -1,6 +1,7 @@
 import type { Texture } from 'pixi.js';
 import type { Sfx } from '../audio/sfx';
 import { FACTION_COLORS, PALETTE } from '../render/textures';
+import { biomeOf, Decor } from '../render/decor';
 import type { Fx } from '../render/fx';
 import type { Layers } from '../render/layers';
 import type { Atlas } from '../render/textures';
@@ -23,6 +24,21 @@ export interface DragState {
   x: number;
   y: number;
   hoverId: number;
+}
+
+/**
+ * Stats de la partie courante (instrumentation succès — LECTURE SEULE pour la
+ * sim, alimentée par les callbacks existants ; objet unique muté en place,
+ * remis à zéro champ par champ à loadLevel : zéro allocation au tick).
+ */
+export interface RunStats {
+  captures: number; // nœuds pris par le joueur
+  nestsLost: number; // nids joueur perdus (capturés par une IA)
+  upgrades: number; // montées de niveau de nids joueur
+  maxNests: number; // maximum de nids tenus simultanément par le joueur
+  maxLevelReached: number; // plus haut niveau atteint sur un nid joueur
+  fullSendOnly: boolean; // aucun ordre joueur passé sous 100 %
+  orders: number; // ordres d'envoi joueur aboutis
 }
 
 /**
@@ -49,6 +65,16 @@ export class World {
   time = 0;
   playing = false;
   stress = false;
+  /** Stats de la partie courante, lues par Flow à la fin (jamais recréé). */
+  readonly run: RunStats = {
+    captures: 0,
+    nestsLost: 0,
+    upgrades: 0,
+    maxNests: 0,
+    maxLevelReached: 0,
+    fullSendOnly: true,
+    orders: 0,
+  };
   /** Câblé par Flow. victory du point de vue joueur. */
   onGameOver: (victory: boolean, timeSec: number) => void = () => {};
 
@@ -56,6 +82,7 @@ export class World {
   private readonly ais: readonly Ai[];
   private readonly nodesView: NodesView;
   private readonly orbitView: OrbitView;
+  private readonly decor: Decor;
   // textures par faction (contenu remplacé à loadLevel selon les espèces)
   private readonly nodeTexByFaction: Texture[];
   private readonly unitTexByFaction: Texture[];
@@ -85,7 +112,15 @@ export class World {
     ];
     this.nodesView = new NodesView(layers, atlas, this.nodeTexByFaction);
     this.orbitView = new OrbitView(layers.orbit, this.unitTexByFaction);
-    this.nodes.onCapture = (i, to): void => {
+    this.decor = new Decor(layers.decor, layers.weather, atlas);
+    this.nodes.onCapture = (i, from, to): void => {
+      // stats de partie (succès) : prises et pertes du point de vue joueur ;
+      // la capture CONSERVE le niveau → un gros nid pris compte pour l'Apogée
+      if (to === PLAYER) {
+        this.run.captures++;
+        if (this.nodes.level[i] > this.run.maxLevelReached) this.run.maxLevelReached = this.nodes.level[i];
+      }
+      if (from === PLAYER) this.run.nestsLost++;
       this.fx.burst(this.nodes.x[i], this.nodes.y[i], {
         count: 26,
         color: FACTION_COLORS[to],
@@ -97,6 +132,10 @@ export class World {
       this.sfx.capture(to === PLAYER);
     };
     this.nodes.onUpgrade = (i): void => {
+      if (this.nodes.faction[i] === PLAYER) {
+        this.run.upgrades++;
+        if (this.nodes.level[i] > this.run.maxLevelReached) this.run.maxLevelReached = this.nodes.level[i];
+      }
       this.fx.burst(this.nodes.x[i], this.nodes.y[i], {
         count: 18,
         color: PALETTE.select,
@@ -129,7 +168,21 @@ export class World {
     }
     this.nodes.load(def);
     this.units.clear();
-    this.emitter.clear();
+    this.emitter.clear(); // remet aussi sentByFaction à zéro
+    this.combat.reset();
+    // stats de partie : remise à zéro champ par champ (objet partagé par
+    // référence avec Flow, jamais recréé)
+    this.run.captures = 0;
+    this.run.nestsLost = 0;
+    this.run.upgrades = 0;
+    this.run.maxNests = this.nodes.byFaction[PLAYER];
+    this.run.fullSendOnly = true;
+    this.run.orders = 0;
+    let lvlMax = 0;
+    for (let i = 0; i < this.nodes.count; i++) {
+      if (this.nodes.faction[i] === PLAYER && this.nodes.level[i] > lvlMax) lvlMax = this.nodes.level[i];
+    }
+    this.run.maxLevelReached = lvlMax;
     this.fx.clear();
     this.ais[0].reset(def.factions[1]?.ai);
     this.ais[1].reset(def.factions[2]?.ai);
@@ -139,6 +192,9 @@ export class World {
     this.playing = true;
     this.nodesView.reset(this.nodes);
     this.orbitView.reset();
+    // fond + décor dérivés de la carte (biome selon l'adversaire, seed stable au ↻)
+    this.layers.bg.texture = this.atlas.groundTiles[biomeOf(def)];
+    this.decor.setup(def);
   }
 
   /** Poste un ordre d'envoi joueur (appelé par les gestes, hors tick). */
@@ -152,7 +208,15 @@ export class World {
   /** API de commande (joueur et bot) : envoi de `sendFrac` du stock. */
   sendOrder(src: number, dst: number, f: Faction): boolean {
     const ok = this.emitter.send(src, dst, f, Math.max(1, Math.floor(this.nodes.stock[src] * this.sendFrac)));
-    if (ok) this.sfx.send();
+    if (ok) {
+      this.sfx.send();
+      // instrumentation succès : ordres JOUEUR seulement (l'IA passe par
+      // emitter.send direct, le bot de verify passe bien par ici)
+      if (f === PLAYER) {
+        this.run.orders++;
+        if (this.sendFrac < 1) this.run.fullSendOnly = false;
+      }
+    }
     return ok;
   }
 
@@ -173,6 +237,7 @@ export class World {
     if (this.stress) this.stressDrive(dt);
     else this.checkEnd(); // 8. fin de partie
     this.fx.update(dt); // 9. effets
+    this.decor.update(dt); // 10. météo du décor (gelée hors partie, comme les fx — assumé)
   }
 
   render(alpha: number): void {
@@ -181,6 +246,7 @@ export class World {
     this.orbitView.sync(this.nodes, performance.now() / 1000);
     this.units.syncRender(alpha, this.layers.units);
     this.fx.syncRender(alpha);
+    this.decor.render(alpha);
     this.syncDragOverlay();
   }
 
@@ -210,6 +276,9 @@ export class World {
   }
 
   private checkEnd(): void {
+    // pic de nids tenus simultanément (échantillonné au tick — suffisant, une
+    // capture tient au moins un tick)
+    if (this.nodes.byFaction[PLAYER] > this.run.maxNests) this.run.maxNests = this.nodes.byFaction[PLAYER];
     if (this.eliminated(PLAYER)) {
       this.playing = false;
       this.onGameOver(false, this.time);
@@ -248,6 +317,17 @@ export class World {
       }
       if (far >= 0) this.emitter.send(i, far, f, 20);
     }
+  }
+
+  /**
+   * Agrégats de fin de partie lus par Flow (1 objet alloué par appel — jamais
+   * au tick). `annihilations` = unités ADVERSES détruites en combat, y compris
+   * entre IA en mêlée (« laisse-les s'entretuer » profite au Broyeur — assumé).
+   */
+  runSummary(): { unitsSent: number; annihilations: number } {
+    let annihilations = 0;
+    for (let f = 2; f < MAX_FACTIONS; f++) annihilations += this.combat.deaths[f];
+    return { unitsSent: this.emitter.sentByFaction[PLAYER], annihilations };
   }
 
   stats(): { player: number; enemy: number; neutral: number; units: number } {

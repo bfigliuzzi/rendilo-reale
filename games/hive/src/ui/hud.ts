@@ -1,4 +1,3 @@
-import { SEND_FRAC_MIN, SEND_FRAC_STEP } from '../config/balance';
 import type { World } from '../game/world';
 import { FACTION_COLORS } from '../render/textures';
 
@@ -12,9 +11,9 @@ function cssColor(color: number): string {
 
 /**
  * HUD DOM : perfs (fps) à gauche, comptes de nids par camp à droite (construits
- * dynamiquement selon les factions de la carte), stepper de % d'envoi en bas.
+ * dynamiquement selon les factions de la carte), slider de % d'envoi à droite.
  * Mise à jour throttlée — le DOM n'est touché que ~4 fois par seconde.
- * Le stepper est la SEULE zone interactive du HUD (pointer-events ciblé).
+ * Le slider est la SEULE zone interactive du HUD (pointer-events ciblé).
  */
 export class Hud {
   /** Câblé par Flow (seul écrivain du save) : reçoit la fraction déjà validée. */
@@ -26,9 +25,7 @@ export class Hud {
   private readonly statsEl: HTMLElement;
   private readonly rootEl: HTMLElement;
   private readonly sendValueEl: HTMLElement;
-  private readonly sendMinusEl: HTMLButtonElement;
-  private readonly sendPlusEl: HTMLButtonElement;
-  private sendFrac = 0.5;
+  private readonly sendRangeEl: HTMLInputElement;
   private acc = 0;
   private frames = 0;
   private sinceUpdate = 0;
@@ -39,10 +36,11 @@ export class Hud {
     this.perfEl = document.getElementById('hud-perf')!;
     this.statsEl = document.getElementById('hud-stats')!;
     this.sendValueEl = document.getElementById('send-value')!;
-    this.sendMinusEl = document.getElementById('send-minus') as HTMLButtonElement;
-    this.sendPlusEl = document.getElementById('send-plus') as HTMLButtonElement;
-    this.sendMinusEl.addEventListener('click', () => this.onSendFracChange(this.sendFrac - SEND_FRAC_STEP));
-    this.sendPlusEl.addEventListener('click', () => this.onSendFracChange(this.sendFrac + SEND_FRAC_STEP));
+    this.sendRangeEl = document.getElementById('send-range') as HTMLInputElement;
+    this.sendRangeEl.addEventListener('input', (e) => {
+      const value = (e.target as HTMLInputElement).value;
+      this.onSendFracChange(Number(value) / 100);
+    });
     document.getElementById('hud-restart')!.addEventListener('click', () => this.onRestart());
   }
 
@@ -52,10 +50,13 @@ export class Hud {
 
   /** Reflète la fraction d'envoi courante (déjà clampée par Flow). */
   setSendFrac(v: number): void {
-    this.sendFrac = v;
-    this.sendValueEl.textContent = `${Math.round(v * 100)} %`;
-    this.sendMinusEl.disabled = v <= SEND_FRAC_MIN + 1e-6;
-    this.sendPlusEl.disabled = v >= 1 - 1e-6;
+    const percent = Math.round(v * 100);
+    this.sendValueEl.textContent = `${percent} %`;
+    const rangeValue = String(percent);
+    if (this.sendRangeEl.value !== rangeValue) {
+      this.sendRangeEl.value = rangeValue;
+    }
+    this.sendRangeEl.setAttribute('aria-valuetext', `${percent} %`);
   }
 
   onFrame(frameMs: number, world: World): void {

@@ -27,8 +27,17 @@ const MAX_BURSTS_PER_TICK = 6; // au-delà, les impacts restent sans particules 
  * grille restent valides toute la phase ; Units.sweepDead() compacte après.
  */
 export class Combat {
+  /** Morts en combat par faction depuis reset() (instrumentation succès,
+   *  lecture seule — la sim n'y lit jamais). */
+  readonly deaths = new Int32Array(MAX_FACTIONS);
+
   private readonly grid = new SpatialGrid(GRID_COLS, GRID_ROWS, GRID_CELL, GRID_MAX_PER_CELL);
   private readonly engaged = new Uint8Array(UNIT_CAP);
+
+  /** Remise à zéro des compteurs (appelée par World.loadLevel). */
+  reset(): void {
+    this.deaths.fill(0);
+  }
 
   update(units: Units, fx: Fx, sfx: Sfx): void {
     // early-out : combat impossible à moins de deux factions en vol
@@ -70,6 +79,10 @@ export class Combat {
             // fx/sfx uniquement sur mort : un contact non létal (costaud
             // entamé) ne doit pas produire un grésillement permanent
             if (units.dead[i] || units.dead[j]) {
+              // le contact n'engage que des vivants : chaque mort est comptée
+              // exactement une fois, au contact qui la provoque
+              if (units.dead[i]) this.deaths[fi]++;
+              if (units.dead[j]) this.deaths[units.faction[j]]++;
               sfx.annihilate(); // throttlé en interne
               if (bursts < MAX_BURSTS_PER_TICK) {
                 bursts++;
