@@ -1,11 +1,13 @@
 # Rendilo Reale — hub de jeux web
 
 Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
-dans `games/<id>/` avec son propre `index.html` + `src/`. Deux jeux : **Horde**
+dans `games/<id>/` avec son propre `index.html` + `src/`. Trois jeux : **Horde**
 (`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
 hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
-métaprogression (or, boutique, localStorage). Et **Essaim** (`/games/hive/`), conquête
-de nœuds façon Auralux (voir section dédiée). PixiJS v8 + TypeScript strict + Vite.
+métaprogression (or, boutique, localStorage). **Essaim** (`/games/hive/`), conquête
+de nœuds façon Auralux (voir section dédiée). Et **Cerveau** (`/games/mind/`), un
+Mastermind à 3 difficultés avec un chat farceur (voir section dédiée) — le seul jeu du
+hub entièrement jouable au clavier. PixiJS v8 + TypeScript strict + Vite.
 Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
@@ -237,6 +239,110 @@ investit dans ses temps calmes (`Ai.invest`).
   défaite ; restart ↻/menu non flushés — assumé), feats de la partie affichés
   sur l'écran de résultat.
 
+## Cerveau (`games/mind/`) — Mastermind, chat farceur, RGAA
+
+**3 difficultés, table unique dans `config/balance.ts`** (`DIFFICULTIES`) : Facile
+4 pions / 5 couleurs / 12 essais / SANS doublon (espace 120 codes — le mode où l'on
+peut raisonner par élimination dès le premier indice, c'est ça qui le rend facile,
+pas le nombre d'essais), Normal 4/6/10 avec doublons (LA règle officielle, le point
+d'ancrage), Difficile 5 pions / 8 couleurs / 10 essais + **pion vide JOUABLE**
+(9 symboles ⇒ 59 049 codes, 45× l'espace du normal à budget d'essais égal).
+
+- **Le modèle est PUR** (`game/board.ts`) : ni horloge, ni `Math.random` (secret tiré
+  par `mulberry32(seed)`), ni DOM, ni rendu. Tout ce qui bouge — rebonds, cascade
+  d'indices, ondes de choc, révélation — est du RENDU, reconstruit par des fonctions
+  CLOSES du temps écoulé (`render/boardView.ts`), sans état de sim à faire avancer.
+  C'est cet isolement qui rend le bot fiable et qui autorise le chat à muter la ligne.
+- **`computeFeedback` est le seul endroit silencieusement cassable** du jeu : compter
+  les « mal placés » sans retirer d'abord les paires exactes double les doublons
+  (secret AABB vs essai ABAB → 4 au lieu de 2+2). D'où le comptage en deux temps sur
+  histogrammes préalloués, et le scénario `feedback` du bot qui le fuzze contre une
+  réimplémentation INDÉPENDANTE. À relancer après toute retouche.
+- **`null` ≠ `EMPTY_PEG`** : emplacement non rempli vs pion vide POSÉ. Sans les deux
+  notions on ne sait pas si une ligne est complète. Ils se lisent différemment (socle
+  creux à liseré pointillé vs pion clair à glyphe ⊘) et s'annoncent différemment
+  (« libre » vs « pion vide ») — les confondre à l'oral rendrait le difficile injouable
+  au lecteur d'écran.
+- **ACCESSIBILITÉ : le canvas est `aria-hidden`, l'interaction est du DOM natif.**
+  `ui/hud.ts` pose de vrais `<button>` (emplacements, actions) et
+  `<input type="radio">` (palette, en `radiogroup`) TRANSPARENTS dans `#overlay`, qui
+  subit exactement la même transformation de letterbox que `#stage`. On récupère
+  gratuitement tabulation, Entrée/Espace, noms accessibles, navigation aux flèches du
+  groupe radio, et un anneau de focus réellement visible AU-DESSUS du canvas. Les
+  boutons d'emplacement SUIVENT la ligne en cours (un seul jeu suffit).
+  `appearance: none` sur les radios (jamais `opacity: 0`) : sans quoi ils ne
+  pourraient plus afficher leur focus. **Piège vécu** : `#overlay` est
+  `pointer-events: none` et il faut le rendre à `button` ET à `input` — l'oublier
+  rendait la palette injouable au doigt tout en restant parfaite au clavier, panne
+  qu'aucun test clavier ne voit.
+- **Focus managé** : tabindex glissant sur la ligne (un seul arrêt, flèches pour
+  changer d'emplacement), les chiffres 1-8/0 posent ET avancent (sans quoi « 1 2 3 4 »
+  écraserait quatre fois le même emplacement), le focus saute sur ✓ dès que la ligne
+  est complète — donc Entrée valide sans tabuler — et revient au premier emplacement
+  libre après validation. `Hud.refreshActions` doit être appelée SYNCHRONEMENT à chaque
+  changement de plateau (`world.onBoardChanged`) : on ne peut pas donner le focus à un
+  bouton encore `disabled`, et attendre la frame de rendu faisait rater le saut sur ✓.
+  Les écrans replacent le focus sur leur titre (`tabindex="-1"`) — le manque d'Essaim.
+- **Contrastes vérifiés AU CALCUL, jamais à l'œil** : scénario `contrast` du bot, qui
+  lit les VRAIES valeurs exposées sur `window.__game`. Le bleu `#3a4fd8` et un pion
+  vide sombre échouaient à 2,5 et 2,7:1 sur le plateau (WCAG 1.4.11 exige 3:1) —
+  invisible à l'inspection visuelle. Corrigés en `#5b72e6` et `#c4bccc`. L'encre du
+  glyphe est DÉRIVÉE de la luminance du corps (seuil 0,42) : un glyphe blanc sur le
+  pion blanc ou le pion vide disparaîtrait. Les écarts de luminance entre pions voisins
+  restent parfois faibles (orange/cyan, jaune/vert) : assumé, ce sont la FORME et le
+  GLYPHE qui les séparent en niveaux de gris (table `config/pegs.ts`, 8 formes et
+  8 glyphes tous distincts — le bot vérifie l'unicité de la paire).
+- **Les marqueurs d'indice n'utilisent PAS le noir/blanc classique** du Mastermind :
+  c'est une différence de couleur seule, donc non conforme. Losange PLEIN jaune (bien
+  placé) contre anneau CREUX bleu (mal placé), plus le compte en clair dans
+  l'`aria-label` de la ligne et dans le miroir `#sr-history`.
+- **Écart assumé aux deux autres jeux** : `user-scalable=no` est RETIRÉ du viewport
+  (WCAG 1.4.4) et `touch-action: none` passe du `body` au canvas seul — un jeu au tour
+  par tour n'a aucun geste continu à protéger d'un pincement.
+- **Mouvement réduit** traité côté CANVAS aussi, pas seulement en CSS (le manque
+  d'Essaim) : `prefers-reduced-motion` lu UNE fois au boot, en OU avec l'option joueur
+  (jamais en ET — on ne contredit pas une préférence système, la case est alors cochée
+  et verrouillée). Particules × `RM_PARTICLE_MUL`, shake à 0, aucun flash (WCAG 2.3.1),
+  rayons de victoire immobiles. L'INFORMATION n'est jamais amputée : les indices se
+  lisent sans une seule animation.
+- **Le chat** (`game/cat.ts` + `render/catView.ts`) vit DEHORS de la logique : `Board`
+  ne le connaît pas, il passe par la MÊME API que le joueur (`setPeg`/`swapPegs`) après
+  un `markUndoPoint()` qui arme ↩. Trois garde-fous non négociables : ① il ne touche que
+  la ligne EN COURS (jamais l'historique validé, jamais le code secret), ② il s'abstient
+  au dernier essai (`CAT_SPARE_LAST_TRY` — un vol au tout dernier tour n'est plus une
+  farce, c'est une défaite volée), ③ tout est annulable (bouton ↩, touche Z) et
+  réparable à la main. Un échange n'est tenté qu'entre deux pions DIFFÉRENTS, sinon
+  l'annonce mentirait. Machine à états semée par `seed ^ 0x9e3779b9` (indépendante du
+  code secret : rejouer le même tirage ne rejoue pas les mêmes farces).
+  `cat.setEnabled(false)` le rend totalement inerte — c'est ce que fait le bot pour être
+  déterministe ; `setMischief(false)` (option joueur) le laisse se promener sans toucher
+  aux pions : on garde la vie sans la frustration. Annonce en `aria-live` ASSERTIF, le
+  seul du jeu — le méfait change la saisie en cours, le manquer coûterait un essai.
+- **L'écran de résultat est DIFFÉRÉ** (`WIN_RESULT_DELAY` / `LOSE_RESULT_DELAY`) : sans
+  ça le panneau s'ouvrait avant la révélation du code et les confettis, et le joueur ne
+  voyait jamais la récompense. `World` met la fin de partie en attente, `Flow` l'ouvre
+  au timer — d'où l'attente de `flow.state === 'result'` côté bot.
+- Save `rendilo-reale:mind:save:v1` (`meta/save.ts`, pattern d'Essaim : clé jamais
+  renommée, version DANS le JSON, `structuredClone(DEFAULTS)` puis fusion champ par
+  champ avec garde de type, `resetSave` mute EN PLACE) : records par difficulté
+  (moins d'essais, puis plus rapide), victoires, série, options, `counters`, `feats`.
+  Écrite UNIQUEMENT par `game/flow.ts`, en UNE écriture par fin de partie.
+  Succès (`meta/achievements.ts`) : 6 familles à paliers géométriques sans fin et sans
+  récompense (pas de monnaie ici) + 12 hauts faits dont 3 « ★ légende ».
+- **Vérification** : `node tools/verify-mind.mjs <url> <scénario>` — `contrast`,
+  `feedback[:n]`, `solve:easy|normal|hard[:runs]`, `cat[:runs]`, `lose[:diff]`,
+  `keyboard[:diff]`, `stress`. Le SOLVEUR vit dans node, pas dans la page : il recalcule
+  chaque indice depuis son propre historique et le compare à celui du jeu, ce qui croise
+  les deux implémentations à chaque partie. Minimax sur l'ensemble cohérent, ÉCHANTILLONNÉ
+  en difficile (le minimax complet de Knuth ferait 59 049² ≈ 3,5 G paires). Le scénario
+  `keyboard` joue une partie entière au clavier SEUL depuis l'accueil et vérifie que le
+  focus ne retombe jamais sur `<body>` — c'est le test de non-régression RGAA.
+  Bande mesurée (conteneur, 2026-08) : solve easy 4-5 essais, normal 3-5 (avg 4 —
+  l'optimal de Knuth est 4,478), difficile 5-7 sur 10 ; `cat` gagne malgré le méfait ;
+  `keyboard` 10-12 tours, focus perdu 0 ; `contrast` 0 échec ; `stress` ~19 fps en
+  conteneur (rendu logiciel). `window.__game = {world, flow, app, save, hud, Board,
+  computeFeedback, palette, pegs}`.
+
 ## Déploiement
 
 - **Prod** : https://rendilo-reale.netlify.app — déploiement continu Netlify sur push
@@ -251,6 +357,8 @@ npm run dev              # serveur de dev (-- --host pour tester sur mobile)
 npm run typecheck        # tsc --noEmit
 npm run build            # typecheck + vite build
 node tools/verify.mjs http://localhost:5199/games/horde/ campaign 90 shot.png   # partie pilotée headless
+node tools/verify-hive.mjs http://localhost:5199/games/hive/ win:2               # Essaim
+node tools/verify-mind.mjs http://localhost:5199/games/mind/ contrast            # Cerveau
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON

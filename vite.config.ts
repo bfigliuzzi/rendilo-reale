@@ -37,6 +37,7 @@ export default defineConfig({
         hub: resolve(__dirname, 'index.html'),
         horde: resolve(__dirname, 'games/horde/index.html'),
         hive: resolve(__dirname, 'games/hive/index.html'),
+        mind: resolve(__dirname, 'games/mind/index.html'),
       },
     },
   },

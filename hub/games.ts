@@ -24,4 +24,11 @@ export const GAMES: GameEntry[] = [
     path: '/games/hive/',
     emoji: '🐝',
   },
+  {
+    id: 'mind',
+    title: 'Cerveau',
+    tagline: 'Casse le code secret… si le chat te laisse faire.',
+    path: '/games/mind/',
+    emoji: '🧠',
+  },
 ];
