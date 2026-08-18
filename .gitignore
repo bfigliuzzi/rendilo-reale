@@ -5,3 +5,9 @@ dist/
 
 # Local Netlify folder
 .netlify
+
+# Captures des bots de vérification. `tools/verify.mjs` écrit `verify.png` à la
+# racine par DÉFAUT (5e argument), et la doc propose `shot.png` : sans ces lignes,
+# une simple mesure d'équilibrage salit l'arbre de travail.
+/verify.png
+/shot.png
