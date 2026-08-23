@@ -171,8 +171,8 @@ export class World {
 
     this.spawner.update(this.t, this.sink);
 
-    this.enemies.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, this.onEnemyShoot);
-    this.boss.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, this.onDust);
+    this.enemies.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onEnemyShoot);
+    this.boss.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onDust);
 
     // --- engluement : la mécanique centrale
     this.resolveContacts();
@@ -444,39 +444,39 @@ export class World {
   };
 
   private readonly sink: SpawnSink = {
-    spawnWave: (kind, count, angle, arc) => {
+    spawnWave: (kind, count, laneId, spread) => {
+      const lv = this.level;
+      if (!lv) return;
+      const t = lv.terrain;
+      const lane = t.laneIndex(laneId);
+      const start = t.laneStart[lane];
+      const half = t.laneHalf[lane];
+      const sp = Math.min(spread, B.LANE_SPREAD_MAX);
       for (let k = 0; k < count; k++) {
-        // éventail régulier centré sur `angle` : une vague se lit comme un front,
-        // pas comme un nuage — le joueur doit pouvoir décider d'un flanc
-        const a = angle + (count === 1 ? 0 : (k / (count - 1) - 0.5) * arc);
-        // léger étagement radial : les rangs arrière n'entrent pas tous ensemble
-        const r = B.SPAWN_RING + (k % 3) * 26;
-        const lv = this.level;
-        if (!lv) return;
-        this.enemies.spawn(
-          kind,
-          clamp(lv.cribX + Math.cos(a) * r, 16, lv.w - 16),
-          clamp(lv.cribY + Math.sin(a) * r, 16, lv.h - 16),
-          lv.def.hpMul,
-          k / Math.max(1, count),
-        );
+        // front régulier en travers de la voie : une vague se lit comme un mur qui
+        // descend le chemin, pas comme un nuage — le joueur doit pouvoir décider
+        // d'un flanc. C'est l'ancien éventail d'angles, transposé à la largeur.
+        const off = count === 1 ? 0 : (k / (count - 1) - 0.5) * 2 * sp;
+        // étagement longitudinal : les rangs arrière n'entrent pas tous ensemble
+        const back = (k % 3) * B.SPAWN_STAGGER;
+        const x = t.nodeX[start] - t.segX[start] * back + t.perpX[start] * off * half;
+        const y = t.nodeY[start] - t.segY[start] * back + t.perpY[start] * off * half;
+        this.enemies.spawn(kind, x, y, lv.def.hpMul, k / Math.max(1, count), lane, start + 1, off);
       }
       this.sfx.wave();
     },
     spawnPickup: (kind, x, y) => this.pickups.spawn(kind, x, y),
-    spawnBoss: () => {
+    spawnBoss: (laneId) => {
       const lv = this.level;
       if (!lv) return;
-      // il entre par le bord le plus ÉLOIGNÉ du bébé : on doit le voir venir et
-      // avoir le temps de nettoyer, pas le découvrir collé au berceau
-      const a = Math.atan2(this.crib.y - this.hero.y, this.crib.x - this.hero.x);
-      this.boss.spawn(
-        clamp(lv.cribX + Math.cos(a) * B.SPAWN_RING, 60, lv.w - 60),
-        clamp(lv.cribY + Math.sin(a) * B.SPAWN_RING, 60, lv.h - 60),
-        B.BOSS_HP,
-        lv.cribX,
-        lv.cribY,
-      );
+      const t = lv.terrain;
+      const lane = t.laneIndex(laneId);
+      // il remonte SA voie, mais entre au premier nœud situé à `SPAWN_RING` du
+      // berceau : hors champ (la demi-diagonale de l'écran vaut ≈ 551) et à la
+      // distance sur laquelle son budget de PV est calé. Le faire partir du bout de
+      // la voie lui donnait quarante secondes d'approche contre vingt.
+      const n = t.nodeWithin(lane, lv.cribX, lv.cribY, B.SPAWN_RING);
+      this.boss.spawn(t.nodeX[n], t.nodeY[n], B.BOSS_HP, lv.cribX, lv.cribY, lane, Math.min(n + 1, t.laneStart[lane] + t.laneCount[lane] - 1));
       this.fx.shake(9);
       this.sfx.bossArrive();
     },
@@ -595,14 +595,36 @@ export class World {
     this.enemies.spawn(kind, x, y, 1, 0);
   }
 
-  /** Mode `?stress` : mesure du budget de rendu, hors de toute condition de fin. */
+  /**
+   * Mode `?stress` : mesure du budget de rendu, hors de toute condition de fin.
+   *
+   * Les ennemis sont distribués LE LONG DES VOIES et non plus sur un anneau : sur un
+   * anneau, la plupart tomberaient désormais dans un massif et vibreraient contre
+   * l'éjection, ce qui mesurerait n'importe quoi. Au passage, on mesure aussi le
+   * coût réel du suivi de voie, qui est précisément ce qu'on veut savoir.
+   */
   startStress(): void {
+    const lv = this.level;
+    if (!lv) return;
+    const t = lv.terrain;
+    const lanes = t.laneCount.length;
     for (let k = 0; k < B.STRESS_COUNT; k++) {
-      const a = (k / B.STRESS_COUNT) * Math.PI * 2;
-      const r = 120 + (k % 7) * 60;
-      const lv = this.level;
-      if (!lv) return;
-      this.enemies.spawn(k % 3, lv.cribX + Math.cos(a) * r, lv.cribY + Math.sin(a) * r, 40, k / B.STRESS_COUNT);
+      const lane = k % lanes;
+      const start = t.laneStart[lane];
+      const n = t.laneCount[lane];
+      const node = start + 1 + ((k / lanes) | 0) % Math.max(1, n - 2);
+      const off = (((k * 7) % 11) / 11 - 0.5) * 2 * B.LANE_SPREAD_MAX;
+      const half = t.laneHalf[lane];
+      this.enemies.spawn(
+        k % 3,
+        t.nodeX[node] + t.perpX[node] * off * half,
+        t.nodeY[node] + t.perpY[node] * off * half,
+        40,
+        k / B.STRESS_COUNT,
+        lane,
+        node,
+        off,
+      );
     }
   }
 }

@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { lerp } from '@shared/math';
 import * as B from '../config/balance';
 import { PALETTE, type Atlas } from '../render/textures';
+import type { Terrain } from './terrain';
 
 /** Sortie de `suck()`, préallouée : zéro allocation dans le tick. */
 export interface Pull {
@@ -39,6 +40,9 @@ export class Boss {
   angle = -Math.PI / 2;
   private prevAngle = -Math.PI / 2;
   private dustT = 0;
+  /** Voie remontée, -1 si aucune (il marche alors droit au berceau). */
+  private lane = -1;
+  private node = 0;
   /** Compte à rebours du flash d'impact (rendu uniquement). */
   private hitT = 0;
 
@@ -65,11 +69,13 @@ export class Boss {
     return this.rage ? B.BOSS_RAGE_HALF_ANGLE : B.BOSS_SUCK_HALF_ANGLE;
   }
 
-  spawn(x: number, y: number, hp: number, cribX: number, cribY: number): void {
+  spawn(x: number, y: number, hp: number, cribX: number, cribY: number, lane: number, node: number): void {
     this.active = true;
     this.x = this.prevX = x;
     this.y = this.prevY = y;
     this.hp = this.maxHp = hp;
+    this.lane = lane;
+    this.node = node;
     this.angle = this.prevAngle = Math.atan2(cribY - y, cribX - x);
     this.dustT = B.BOSS_DUST_INTERVAL;
     this.hitT = 0;
@@ -87,6 +93,7 @@ export class Boss {
   retire(): void {
     this.active = false;
     this.hp = 0;
+    this.lane = -1;
     this.sprite.visible = false;
     this.shadow.visible = false;
   }
@@ -97,6 +104,7 @@ export class Boss {
     heroY: number,
     cribX: number,
     cribY: number,
+    terrain: Terrain,
     onDust: (x: number, y: number) => void,
   ): void {
     if (!this.active) return;
@@ -105,11 +113,23 @@ export class Boss {
     this.prevAngle = this.angle;
     if (this.hitT > 0) this.hitT -= dt;
 
-    // le corps va au berceau, quoi qu'il arrive
-    const dx = cribX - this.x;
-    const dy = cribY - this.y;
+    // le corps va au berceau, quoi qu'il arrive — mais désormais PAR SA VOIE. Il ne
+    // traverse plus les massifs en diagonale, et son approche est donc plus longue
+    // que la ligne droite d'avant : c'est ce qui a obligé à re-mesurer son budget.
+    let tx = cribX;
+    let ty = cribY;
+    if (this.lane >= 0) {
+      const n = this.node;
+      tx = terrain.nodeX[n];
+      ty = terrain.nodeY[n];
+      const last = terrain.laneStart[this.lane] + terrain.laneCount[this.lane] - 1;
+      if (n < last && (this.x - tx) * terrain.segX[n] + (this.y - ty) * terrain.segY[n] > 0) this.node = n + 1;
+    }
+    const cribD = Math.hypot(cribX - this.x, cribY - this.y) || 1;
+    const dx = tx - this.x;
+    const dy = ty - this.y;
     const d = Math.hypot(dx, dy) || 1;
-    if (d > B.CRIB_BITE_RADIUS + this.radius) {
+    if (cribD > B.CRIB_BITE_RADIUS + this.radius) {
       this.x += (dx / d) * B.BOSS_SPEED * dt;
       this.y += (dy / d) * B.BOSS_SPEED * dt;
     }

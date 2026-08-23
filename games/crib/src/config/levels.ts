@@ -1,4 +1,3 @@
-import { mulberry32 } from '@shared/rng';
 import * as B from './balance';
 import type { EnemyKindId, PickupKindId } from './balance';
 import { GARDEN, type MapDef } from './maps';
@@ -17,13 +16,14 @@ export type LevelEvent =
       type: 'wave';
       kind: EnemyKindId;
       count: number;
-      /** Ouverture de l'éventail de spawn, en radians. */
-      arc: number;
-      /** Direction du spawn ; omis ⇒ tiré au seed du niveau. */
-      angle?: number;
+      /** Voie d'arrivée (`LaneDef.id`). C'est ELLE qui remplace l'ancien angle de
+       *  spawn : une vague entre par un chemin, plus par un secteur du cercle. */
+      lane: string;
+      /** Fraction de la largeur de voie occupée par le front, 0..1. Défaut 0,7. */
+      spread?: number;
     }
   | { at: number; type: 'pickup'; variant: PickupKindId; x: number; y: number }
-  | { at: number; type: 'boss' }
+  | { at: number; type: 'boss'; lane: string }
   /** Dernier événement : la victoire attend que l'arène soit vide. */
   | { at: number; type: 'clear' };
 
@@ -38,8 +38,6 @@ export interface LevelDef {
   hpMul: number;
   events: LevelEvent[];
 }
-
-const TAU = Math.PI * 2;
 
 /**
  * Niveau de test : ~3 min, une courbe montante qui INTRODUIT les archétypes un par
@@ -58,44 +56,48 @@ export function makeTestLevel(seed = 0xbebe): LevelDef {
     cribHp: B.CRIB_HP,
     hpMul: 1,
     events: [
-      // — Acte I : la couche sale. Objectif : comprendre qu'il faut intercepter.
-      { at: 2, type: 'wave', kind: 'nappy', count: 3, arc: 0.5 },
-      { at: 10, type: 'wave', kind: 'nappy', count: 4, arc: 0.7 },
+      // — Acte I : la couche sale, par le portail SEUL. Objectif : comprendre
+      // qu'il faut intercepter, et qu'une voie a un début et une fin.
+      { at: 2, type: 'wave', kind: 'nappy', count: 3, lane: 'portail', spread: 0.4 },
+      { at: 10, type: 'wave', kind: 'nappy', count: 4, lane: 'portail', spread: 0.6 },
 
-      // — Acte II : la mamie. Premier engluement, sur une seule cible tuable.
-      { at: 18, type: 'wave', kind: 'granny', count: 2, arc: 0.9 },
+      // — Acte II : les mûres s'ouvrent. Premier arbitrage : on ne peut plus tout
+      // tenir depuis un seul point.
+      { at: 18, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.5 },
       { at: 24, type: 'pickup', variant: 'bottle', x: GARDEN.cribX + 190, y: GARDEN.cribY - 150 },
-      { at: 27, type: 'wave', kind: 'nappy', count: 5, arc: 1.1 },
-      { at: 32, type: 'wave', kind: 'granny', count: 1, arc: 0.3 },
+      { at: 27, type: 'wave', kind: 'nappy', count: 5, lane: 'portail', spread: 0.7 },
+      { at: 32, type: 'wave', kind: 'granny', count: 1, lane: 'mures', spread: 0.2 },
 
       // — Acte III : le brocoli. On ne peut plus rester immobile.
-      { at: 40, type: 'wave', kind: 'broccoli', count: 2, arc: 0.8 },
-      { at: 48, type: 'wave', kind: 'nappy', count: 6, arc: 1.4 },
+      { at: 40, type: 'wave', kind: 'broccoli', count: 2, lane: 'mures', spread: 0.5 },
+      { at: 48, type: 'wave', kind: 'nappy', count: 6, lane: 'portail', spread: 0.8 },
       { at: 54, type: 'pickup', variant: 'blanket', x: GARDEN.cribX - 210, y: GARDEN.cribY + 170 },
-      { at: 57, type: 'wave', kind: 'granny', count: 2, arc: 1.2 },
-      { at: 60, type: 'wave', kind: 'broccoli', count: 2, arc: 1 },
+      { at: 57, type: 'wave', kind: 'granny', count: 2, lane: 'portail', spread: 0.7 },
+      { at: 60, type: 'wave', kind: 'broccoli', count: 2, lane: 'mures', spread: 0.6 },
 
-      // — Acte IV : la mêlée. Les trois rôles ensemble, sur deux flancs.
-      { at: 70, type: 'wave', kind: 'nappy', count: 7, arc: 1.6 },
-      { at: 74, type: 'wave', kind: 'granny', count: 3, arc: 2.2 },
+      // — Acte IV : la mêlée. Les trois rôles ensemble, ET les deux voies à la fois.
+      { at: 70, type: 'wave', kind: 'nappy', count: 7, lane: 'mures', spread: 0.85 },
+      { at: 72, type: 'wave', kind: 'nappy', count: 4, lane: 'portail', spread: 0.7 },
+      { at: 74, type: 'wave', kind: 'granny', count: 3, lane: 'portail', spread: 0.85 },
       { at: 78, type: 'pickup', variant: 'pacifier', x: GARDEN.cribX + 60, y: GARDEN.cribY + 260 },
-      { at: 82, type: 'wave', kind: 'broccoli', count: 3, arc: 1.8 },
-      { at: 88, type: 'wave', kind: 'nappy', count: 8, arc: 2.4 },
-      { at: 94, type: 'wave', kind: 'granny', count: 2, arc: 0.8 },
+      { at: 82, type: 'wave', kind: 'broccoli', count: 3, lane: 'mures', spread: 0.7 },
+      { at: 88, type: 'wave', kind: 'nappy', count: 8, lane: 'portail', spread: 0.85 },
+      { at: 94, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.5 },
 
       // — Respiration avant le boss : de quoi se refaire, pas de quoi souffler.
       { at: 102, type: 'pickup', variant: 'bottle', x: GARDEN.cribX - 120, y: GARDEN.cribY - 250 },
       { at: 104, type: 'pickup', variant: 'pacifier', x: GARDEN.cribX + 240, y: GARDEN.cribY + 90 },
-      { at: 108, type: 'wave', kind: 'nappy', count: 5, arc: 1.2 },
+      { at: 108, type: 'wave', kind: 'nappy', count: 5, lane: 'mures', spread: 0.7 },
 
       // — Acte V : l'Aspirateur, escorté juste assez pour empêcher le duel propre.
       // L'escorte compte double ici : le tir auto vise le PLUS PROCHE, donc chaque
-      // couche vivante est du DPS volé au boss.
-      { at: 116, type: 'boss' },
-      { at: 124, type: 'wave', kind: 'nappy', count: 4, arc: 1 },
-      { at: 132, type: 'wave', kind: 'granny', count: 2, arc: 1.4 },
-      { at: 140, type: 'wave', kind: 'broccoli', count: 2, arc: 1.2 },
-      { at: 148, type: 'wave', kind: 'nappy', count: 6, arc: 1.8 },
+      // couche vivante est du DPS volé au boss. Il remonte l'allée du portail — la
+      // voie la plus longue : c'est ce qui laisse le temps de nettoyer avant lui.
+      { at: 116, type: 'boss', lane: 'portail' },
+      { at: 124, type: 'wave', kind: 'nappy', count: 4, lane: 'mures', spread: 0.6 },
+      { at: 132, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.7 },
+      { at: 140, type: 'wave', kind: 'broccoli', count: 2, lane: 'portail', spread: 0.6 },
+      { at: 148, type: 'wave', kind: 'nappy', count: 6, lane: 'mures', spread: 0.85 },
 
       // Après ce point, plus rien n'arrive : tuer le boss et nettoyer suffit.
       // Calé serré exprès — au premier tuning (clear à 190) le boss tombait vers
@@ -117,19 +119,4 @@ export function assertSorted(def: LevelDef): void {
       throw new Error(`${def.id} : events non trié à l'index ${i}`);
     }
   }
-}
-
-/**
- * Angles de spawn du niveau, pré-tirés au seed pour les vagues qui n'imposent pas
- * leur direction. Pré-calculé plutôt que tiré au vol : le spawner ne doit rien
- * allouer ni faire avancer d'état aléatoire pendant le tick.
- */
-export function spawnAngles(def: LevelDef): Float32Array<ArrayBuffer> {
-  const rand = mulberry32(def.seed);
-  const out = new Float32Array(def.events.length);
-  for (let i = 0; i < def.events.length; i++) {
-    const ev = def.events[i];
-    out[i] = ev.type === 'wave' && ev.angle !== undefined ? ev.angle : rand() * TAU;
-  }
-  return out;
 }

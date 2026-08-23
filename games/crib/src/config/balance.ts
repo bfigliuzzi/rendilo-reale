@@ -44,10 +44,10 @@ export const CRIB_X = ARENA_W / 2;
 export const CRIB_Y = ARENA_H / 2;
 
 /**
- * Rayon d'apparition des ennemis autour du berceau. La demi-diagonale de l'écran
- * vaut √(270² + 480²) ≈ 551 : à 560 px, un ennemi qui apparaît est toujours juste
- * HORS champ quand le bébé garde le berceau — jamais de pop à l'écran — et toute
- * la surface de l'arène finit par servir.
+ * Rayon d'apparition du BOSS quand aucune voie ne lui est assignée. Les vagues, elles,
+ * entrent désormais par le premier nœud de leur voie, posé hors de l'arène : c'est la
+ * géométrie de la carte, et non plus un rayon, qui garantit qu'un ennemi n'apparaît
+ * jamais à l'écran.
  */
 export const SPAWN_RING = 560;
 
@@ -432,6 +432,24 @@ export const ENEMY_LOST_TIME = 2.5;
 
 /** Étagement longitudinal des rangs au spawn, en px (anti-file indienne). */
 export const SPAWN_STAGGER = 26;
+
+/**
+ * Fraction de la demi-largeur réellement occupée par le front d'une vague. À 1, les
+ * rangs extérieurs frôlent le bord de la voie et raclent les virages.
+ */
+export const LANE_SPREAD_MAX = 0.85;
+
+/**
+ * Dispersion de vitesse entre deux ennemis d'une même vague, en fraction. Sans
+ * elle, un rang entier avance au pas et se superpose exactement — moche, et
+ * in-esquivable au corps à corps. Tirée DÉTERMINISTEMENT à l'apparition.
+ */
+export const ENEMY_SPEED_JITTER = 0.06;
+
+/** Distance d'arrêt devant une barricade, en plus du rayon de l'ennemi. */
+export const BARRICADE_STOP = 26;
+/** Rayon de collision d'une barricade (elle occupe la largeur de sa voie). */
+export const BARRICADE_RADIUS = 34;
 
 // -------------------------------------------------- améliorations du bébé (niveau)
 

@@ -1,11 +1,12 @@
 import * as B from '../config/balance';
-import { assertSorted, spawnAngles, type LevelDef } from '../config/levels';
+import { assertSorted, type LevelDef } from '../config/levels';
 
 /** Ce que le spawner sait faire faire au monde. Évite un cycle d'imports avec `World`. */
 export interface SpawnSink {
-  spawnWave(kind: number, count: number, angle: number, arc: number): void;
+  /** `lane` est l'identifiant déclaré dans la carte ; c'est World qui le résout. */
+  spawnWave(kind: number, count: number, lane: string, spread: number): void;
   spawnPickup(kind: number, x: number, y: number): void;
-  spawnBoss(): void;
+  spawnBoss(lane: string): void;
 }
 
 /**
@@ -22,13 +23,11 @@ export class Spawner {
   cleared = false;
 
   private def: LevelDef | null = null;
-  private angles = new Float32Array(0);
   private cursor = 0;
 
   load(def: LevelDef): void {
     if (import.meta.env.DEV) assertSorted(def);
     this.def = def;
-    this.angles = spawnAngles(def);
     this.cursor = 0;
     this.cleared = false;
   }
@@ -43,17 +42,16 @@ export class Spawner {
     if (!def) return;
     while (this.cursor < def.events.length && def.events[this.cursor].at <= t) {
       const ev = def.events[this.cursor];
-      const angle = this.angles[this.cursor];
       this.cursor++;
       switch (ev.type) {
         case 'wave':
-          sink.spawnWave(B.kindIndex(ev.kind), ev.count, angle, ev.arc);
+          sink.spawnWave(B.kindIndex(ev.kind), ev.count, ev.lane, ev.spread ?? 0.7);
           break;
         case 'pickup':
           sink.spawnPickup(B.pickupIndex(ev.variant), ev.x, ev.y);
           break;
         case 'boss':
-          sink.spawnBoss();
+          sink.spawnBoss(ev.lane);
           break;
         case 'clear':
           this.cleared = true;

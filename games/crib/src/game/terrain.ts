@@ -171,6 +171,23 @@ export class Terrain {
     return best;
   }
 
+  /**
+   * Premier nœud de `lane` situé à moins de `dist` du berceau.
+   *
+   * Sert à faire entrer le boss : le laisser partir du bout de sa voie lui donnait
+   * une approche de près de quarante secondes, contre les vingt sur lesquelles tout
+   * son budget de PV est calé. On le pose donc à la distance historique, ce qui
+   * garde la propriété qui compte — il apparaît hors champ — sans casser l'arithmétique.
+   */
+  nodeWithin(lane: number, cribX: number, cribY: number, dist: number): number {
+    const start = this.laneStart[lane];
+    const end = start + this.laneCount[lane] - 1;
+    for (let i = start; i < end; i++) {
+      if (Math.hypot(this.nodeX[i] - cribX, this.nodeY[i] - cribY) <= dist) return i;
+    }
+    return end;
+  }
+
   /** Distance d'un point à la voie la plus proche (pour valider un emplacement). */
   distToAnyLane(x: number, y: number): number {
     let best = Infinity;
