@@ -1,3 +1,4 @@
+import * as B from './balance';
 import type { EnemyKindId, PickupKindId } from './balance';
 import { GARDEN, type MapDef } from './maps';
 
@@ -75,7 +76,9 @@ export function makeGarden(seed = 0xbebe): LevelDef {
     map: GARDEN,
     cribHp: 240,
     hpMul: 1,
-    startGold: 60,
+    // exactement le prix d'UNE tourelle : le premier jour du jeu n'offre pas un
+    // choix, il offre un geste — aller à un emplacement et construire.
+    startGold: 70,
     nights: [
       {
         n: 1,
@@ -152,6 +155,21 @@ export function makeGarden(seed = 0xbebe): LevelDef {
 export const LEVELS: readonly ((seed?: number) => LevelDef)[] = [makeGarden];
 
 /**
+ * Or que RAPPORTE une nuit si le joueur tue tout. Le revenu étant dérivé du
+ * contenu (`gold ≈ hp / 3` par archétype), ajouter une vague la finance
+ * automatiquement — on n'a donc jamais à tenir alignées à la main une courbe de
+ * difficulté et une courbe économique.
+ */
+export function nightIncome(night: NightDef): number {
+  let total = 0;
+  for (const ev of night.events) {
+    if (ev.type === 'wave') total += B.ENEMY_KINDS[B.kindIndex(ev.kind)].gold * ev.count;
+    else if (ev.type === 'boss') total += B.BOSS_GOLD;
+  }
+  return total;
+}
+
+/**
  * Garde-fous DEV du contenu. Même esprit que les assertions du terrain : chacun
  * correspond à un bug qui ne se voit qu'en jeu, tard, et sur une seule nuit.
  */
@@ -179,6 +197,12 @@ export function assertLevelSane(def: LevelDef): void {
     const hasBoss = night.events.some((e) => e.type === 'boss');
     if (k === def.nights.length - 1 && !hasBoss) {
       throw new Error(`${def.id} : la dernière nuit doit porter un boss`);
+    }
+    // revenu MONOTONE : une nuit qui rapporte moins que la précédente casse la
+    // promesse implicite du jour (« la prochaine me donnera de quoi répondre ») et
+    // ne se voit qu'après plusieurs parties.
+    if (k > 0 && nightIncome(night) < nightIncome(def.nights[k - 1])) {
+      throw new Error(`${def.id} nuit ${night.n} : revenu en baisse (${nightIncome(night)})`);
     }
   });
 }

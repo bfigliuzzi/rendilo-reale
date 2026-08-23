@@ -13,6 +13,7 @@ import { Boss, type Pull } from './boss';
 import { Bullets } from './bullets';
 import { resetLoadout } from './loadout';
 import { Crib } from './crib';
+import { Economy } from './economy';
 import { EnemyPool } from './enemies';
 import { Hero } from './hero';
 import type { Level } from './level';
@@ -55,6 +56,7 @@ export interface Stats {
   bottleT: number;
   immuneT: number;
   cleared: boolean;
+  gold: number;
 }
 
 /** Cumuls d'une partie, lus par l'écran de résultat. */
@@ -109,6 +111,8 @@ export class World {
   readonly puddles: Puddles;
   readonly boss: Boss;
   readonly spawner = new Spawner();
+  /** La bourse du niveau. Remise à zéro par `loadLevel` seul — jamais par une nuit. */
+  readonly economy = new Economy();
 
   readonly run: RunStats = { kills: 0, picked: 0, pins: 0, maxGrip: 0 };
 
@@ -213,6 +217,7 @@ export class World {
     this.layers.ground.texture = ground;
 
     this.crib.reset(def.cribHp, level.cribX, level.cribY);
+    this.economy.reset(def.startGold);
     resetLoadout(this.hero.loadout);
     this.hero.reset(level.cribX, level.cribY + 90);
     this.spawner.unload();
@@ -325,6 +330,7 @@ export class World {
       bottleT: this.hero.bottleT,
       immuneT: this.hero.immuneT,
       cleared: this.spawner.cleared,
+      gold: this.economy.gold,
     };
   }
 
@@ -505,6 +511,10 @@ export class World {
   private readonly onEnemyDeath = (x: number, y: number, kind: number): void => {
     const def = B.ENEMY_KINDS[kind];
     this.run.kills++;
+    // l'or tombe DIRECTEMENT au compteur : pas de pièce à ramasser. Une pièce
+    // perdue hors champ serait une punition invisible, et le détour est déjà porté
+    // par les ramassables (biberon, doudou, tétine) dont c'est tout le rôle.
+    this.economy.credit(def.gold);
     this.fx.burst(x, y, { count: 9, color: def.color, speed: 140, life: 0.34, size: 1 });
     this.sfx.enemyDie();
     if (def.puddle > 0) this.puddles.spawn(x, y);
@@ -573,6 +583,7 @@ export class World {
   }
 
   private onBossDown(): void {
+    this.economy.credit(B.BOSS_GOLD);
     this.fx.burst(this.boss.x, this.boss.y, { count: 60, color: PALETTE.bossBody, speed: 260, life: 0.8, size: 1.6 });
     this.fx.shake(16);
     this.sfx.bossDie();
@@ -691,6 +702,7 @@ export class World {
     this.phase = 'night';
     this.t = 0;
     this.spawner.load(level.def.nights[index]);
+    this.economy.beginNight();
     this.playing = true;
   }
 

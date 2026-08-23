@@ -11,6 +11,8 @@ export interface ResultView {
   cribHp: number;
   cribMax: number;
   run: RunStats;
+  /** Or total gagné sur le niveau — la mesure de ce que le joueur a « produit ». */
+  goldEarned: number;
   record: boolean;
   /** Une nuit a été lancée : on peut la rejouer sans reperdre le niveau entier. */
   canRetryNight: boolean;
@@ -80,7 +82,8 @@ export class Screens {
         ${v.record ? '<p class="record">★ Nouveau record</p>' : ''}
         <p class="sub">${where} · ${fmt(v.timeSec)} de nuit${v.victory ? `<br>berceau à ${Math.ceil(v.cribHp)}/${Math.round(v.cribMax)}` : ''}</p>
         <p class="result-stats">
-          ${v.run.kills} ennemis repoussés · ${v.run.picked} objets ramassés<br>
+          ${v.run.kills} ennemis repoussés · ${Math.round(v.goldEarned)} pièces d’or<br>
+          ${v.run.picked} objets ramassés ·
           ${v.run.pins === 0 ? 'jamais cloué au sol' : `cloué ${v.run.pins} fois`}
           · engluement max ${Math.round(v.run.maxGrip * 100)} %
         </p>

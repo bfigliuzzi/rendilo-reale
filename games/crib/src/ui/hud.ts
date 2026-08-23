@@ -30,6 +30,7 @@ export class Hud {
   private readonly bossBar: HTMLElement;
   private readonly bossFill: HTMLElement;
   private readonly info: HTMLElement;
+  private readonly gold: HTMLElement;
   private readonly buffs: HTMLElement;
   private readonly live: HTMLElement;
   private readonly root: HTMLElement;
@@ -42,6 +43,7 @@ export class Hud {
   private frames = 0;
   private fpsAcc = 0;
   private lastInfo = '';
+  private lastGold = -1;
   private lastBuffs = '';
   private lastLive = '';
 
@@ -54,6 +56,7 @@ export class Hud {
     this.bossBar = document.getElementById('hud-boss')!;
     this.bossFill = document.getElementById('hud-boss-fill')!;
     this.info = document.getElementById('hud-info')!;
+    this.gold = document.getElementById('hud-gold')!;
     this.buffs = document.getElementById('hud-buffs')!;
     this.live = document.getElementById('hud-live')!;
     this.launch = document.getElementById('hud-launch') as HTMLButtonElement;
@@ -125,6 +128,11 @@ export class Hud {
 
     this.bossBar.hidden = s.bossHp <= 0;
     if (s.bossHp > 0) this.bossFill.style.width = `${((s.bossHp / s.bossMax) * 100).toFixed(1)}%`;
+
+    if (s.gold !== this.lastGold) {
+      this.gold.textContent = `\u{1F4B0} ${Math.floor(s.gold)}`;
+      this.lastGold = s.gold;
+    }
 
     const info =
       s.phase === 'day'

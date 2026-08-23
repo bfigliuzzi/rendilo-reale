@@ -72,6 +72,16 @@
     #hud-boss-fill { height: 100%; width: 100%; background: #b8443c; transition: width 0.12s linear; }
     #hud-boss .tag { font-size: 11px; font-weight: 700; text-align: center; margin-top: 2px; }
 
+    /* L'or : sous le compteur de fps, à gauche, hors du chemin du pouce. Toujours
+       visible — de jour comme de nuit, c'est la ressource qui décide de tout. */
+    #hud-gold {
+      position: absolute; left: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 26px);
+      font-size: 15px; font-weight: 800; color: #f2c14e;
+      background: rgba(0, 0, 0, 0.4); border-radius: 8px; padding: 4px 9px;
+      font-variant-numeric: tabular-nums; display: none;
+    }
+    #hud.in-game #hud-gold { display: block; }
+
     #hud-info, #hud-buffs {
       position: absolute; right: 8px;
       font-size: 12px; line-height: 1.5; text-align: right;
@@ -182,6 +192,7 @@
       <div class="track"><div id="hud-boss-fill"></div></div>
       <div class="tag">🧹 ASPIRATEUR GÉANT</div>
     </div>
+    <div id="hud-gold"></div>
     <div id="hud-info"></div>
     <div id="hud-buffs"></div>
     <button id="hud-launch" type="button">

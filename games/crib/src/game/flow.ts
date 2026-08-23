@@ -163,6 +163,7 @@ export class Flow {
       cribHp: this.world.crib.hp,
       cribMax: this.world.crib.maxHp,
       run: this.world.run,
+      goldEarned: this.world.economy.earnedTotal,
       record: better,
       canRetryNight: false,
     });
@@ -182,6 +183,7 @@ export class Flow {
       cribHp: 0,
       cribMax: this.world.crib.maxHp,
       run: this.world.run,
+      goldEarned: this.world.economy.earnedTotal,
       record: false,
       // deux issues, et c'est un choix de design : recommencer tout le niveau après
       // une erreur de placement de la dernière nuit serait la punition la plus

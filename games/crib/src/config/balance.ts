@@ -176,6 +176,13 @@ export interface EnemyDef {
   color: number;
   /** Probabilité de lâcher un ramassable. */
   dropChance: number;
+  /**
+   * Or crédité à la mort. Règle de dérivation à respecter : **`gold ≈ hp / 3`**.
+   * Le revenu d'une nuit est ainsi DÉRIVÉ de son contenu — un designer qui ajoute
+   * une vague la finance automatiquement, et la courbe économique suit la courbe de
+   * difficulté sans qu'on ait à les tenir alignées à la main.
+   */
+  gold: number;
 }
 
 /**
@@ -199,6 +206,9 @@ export const ENEMY_KINDS = [
     puddle: 0,
     color: 0xc9b4d4,
     dropChance: 0.34,
+    // le tank paie bien : le tuer coûte du temps LOIN du berceau, et sans prime on
+    // apprendrait vite à l'ignorer — or l'ignorer, c'est se faire clouer
+    gold: 15,
   },
   {
     id: 'nappy',
@@ -219,6 +229,7 @@ export const ENEMY_KINDS = [
     puddle: 46, // punit le farm au corps-à-corps : le terrain devient collant
     color: 0x9a8a4e,
     dropChance: 0.12,
+    gold: 4, // le gros du revenu, par le volume
   },
   {
     id: 'broccoli',
@@ -236,6 +247,7 @@ export const ENEMY_KINDS = [
     puddle: 0,
     color: 0x6f9a44,
     dropChance: 0.22,
+    gold: 9,
   },
   {
     id: 'dust',
@@ -251,6 +263,10 @@ export const ENEMY_KINDS = [
     puddle: 0,
     color: 0x9b9384,
     dropChance: 0,
+    // EXPLICITEMENT zéro : le boss enragé en recrache trois toutes les 2,6 s. À
+    // trois pièces l'unité, il deviendrait une pompe à or et la phase de boss
+    // financerait la partie au lieu de la conclure.
+    gold: 0,
   },
 ] as const satisfies readonly EnemyDef[];
 
@@ -363,6 +379,9 @@ export const PACIFIER_HEAL = 40;
  * boss en demandait 40. Aucun déplacement ne rattrape ça — mesuré au bot, qui
  * arrivait au boss avec un berceau INTACT et le perdait quand même.
  */
+/** Prime du boss. Une nuit de boss doit financer la carte suivante, pas la refaire. */
+export const BOSS_GOLD = 80;
+
 export const BOSS_HP = 420;
 export const BOSS_SPEED = 27;
 export const BOSS_RADIUS = 34;
