@@ -1,4 +1,5 @@
 import type { LevelDef } from '../config/levels';
+import { Terrain } from './terrain';
 
 /**
  * Le niveau EN COURS, sous sa forme runtime : la définition de données plus tout ce
@@ -13,12 +14,26 @@ import type { LevelDef } from '../config/levels';
  */
 export interface Level {
   readonly def: LevelDef;
+  readonly terrain: Terrain;
   readonly w: number;
   readonly h: number;
   readonly cribX: number;
   readonly cribY: number;
 }
 
+/**
+ * Le bake du terrain coûte quelques millisecondes ; il est CACHÉ par identifiant de
+ * carte pour que le redémarrage instantané (↻) ne le repaie pas.
+ */
+const cache = new Map<string, Terrain>();
+
 export function makeLevel(def: LevelDef): Level {
-  return { def, w: def.arenaW, h: def.arenaH, cribX: def.cribX, cribY: def.cribY };
+  const map = def.map;
+  let terrain = cache.get(map.id);
+  if (!terrain) {
+    terrain = new Terrain(map);
+    cache.set(map.id, terrain);
+  }
+  terrain.clearBlocks();
+  return { def, terrain, w: map.w, h: map.h, cribX: map.cribX, cribY: map.cribY };
 }

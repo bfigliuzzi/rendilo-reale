@@ -5,6 +5,7 @@ import { persist, type SaveData } from '../meta/save';
 import type { Decor } from '../render/decor';
 import type { Hud } from '../ui/hud';
 import type { Screens } from '../ui/screens';
+import { makeLevel, type Level } from './level';
 import type { World } from './world';
 
 export type FlowState = 'menu' | 'playing' | 'result';
@@ -20,6 +21,8 @@ export type FlowState = 'menu' | 'playing' | 'result';
  */
 export class Flow {
   state: FlowState = 'menu';
+  /** Hook de l'overlay `?debug` : appelé après chaque chargement de niveau. */
+  onLevelLoaded: ((level: Level) => void) | null = null;
   /** Seed de la partie courante — rejouable à l'identique, et lisible par le bot. */
   seed = 0xbebe;
 
@@ -52,13 +55,14 @@ export class Flow {
    */
   startLevel(seed?: number): void {
     this.seed = seed ?? (Math.floor(Math.random() * 0xffffff) | 1);
-    const def = makeTestLevel(this.seed);
+    const level = makeLevel(makeTestLevel(this.seed));
     this.screens.hide();
-    this.decor.setup(def);
-    this.world.loadLevel(def);
+    this.decor.setup(level);
+    this.world.loadLevel(level);
     this.steer.setEnabled(true);
     this.hud.setInGame(true);
     this.state = 'playing';
+    this.onLevelLoaded?.(level);
   }
 
   /** `?stress` : mesure du budget de rendu, hors de toute condition de fin. */

@@ -9,6 +9,7 @@ import { Steer } from './input/steer';
 import { loadSave } from './meta/save';
 import { Decor } from './render/decor';
 import { Fx } from './render/fx';
+import { DebugView } from './render/debugView';
 import { Layers } from './render/layers';
 import { OverlayView } from './render/overlayView';
 import { buildAtlas, PALETTE } from './render/textures';
@@ -58,7 +59,14 @@ async function boot(): Promise<void> {
   const overlay = new OverlayView(layers.overlay, atlas);
   const flow = new Flow(world, screens, hud, decor, steer, save, sfx);
 
-  if (new URLSearchParams(location.search).has('stress')) flow.startStress();
+  const params = new URLSearchParams(location.search);
+  // `?debug` : le masque de terrain tel que la simulation le voit. Voir DebugView.
+  if (params.has('debug')) {
+    const dbg = new DebugView(layers.marks);
+    flow.onLevelLoaded = (level) => dbg.setup(level);
+  }
+
+  if (params.has('stress')) flow.startStress();
   else flow.showMenu();
 
   // hook de debug pour `tools/verify-crib.mjs` et la console
@@ -66,6 +74,7 @@ async function boot(): Promise<void> {
     world,
     flow,
     app,
+    layers,
     save,
     steer,
     hero: world.hero,

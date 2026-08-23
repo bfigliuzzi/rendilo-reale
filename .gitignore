@@ -11,3 +11,6 @@ dist/
 # une simple mesure d'équilibrage salit l'arbre de travail.
 /verify.png
 /shot.png
+
+# Scripts jetables des mesures locales (captures, sondes) — jamais versionnés.
+/tools/.scratch/

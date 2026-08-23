@@ -1,7 +1,8 @@
 import { Container, Sprite } from 'pixi.js';
 import { mulberry32 } from '@shared/rng';
 import * as B from '../config/balance';
-import type { LevelDef } from '../config/levels';
+import type { Level } from '../game/level';
+import { T_ENEMY, T_LANE } from '../game/terrain';
 import type { Atlas, DecorProp } from './textures';
 
 const PARK = -9999;
@@ -53,6 +54,7 @@ export class Decor {
   private clock = 0;
   private cribX = 0;
   private cribY = 0;
+  private level: Level | null = null;
 
   constructor(
     propLayer: Container,
@@ -75,10 +77,12 @@ export class Decor {
     }
   }
 
-  setup(def: LevelDef): void {
+  setup(level: Level): void {
+    const def = level.def;
     const rand = mulberry32(decorSeed(def.id) ^ def.seed);
-    this.cribX = def.cribX;
-    this.cribY = def.cribY;
+    this.level = level;
+    this.cribX = level.cribX;
+    this.cribY = level.cribY;
     for (let i = 0; i < this.count; i++) this.props[i].position.set(PARK, PARK);
     this.count = 0;
 
@@ -89,8 +93,8 @@ export class Decor {
       // placement invalide. Un prop manquant ne se voit pas ; un prop dans le
       // berceau, oui.
       for (let t = 0; t < TRIES; t++) {
-        const x = 24 + rand() * (def.arenaW - 48);
-        const y = 24 + rand() * (def.arenaH - 48);
+        const x = 24 + rand() * (level.w - 48);
+        const y = 24 + rand() * (level.h - 48);
         if (!this.clear(x, y)) continue;
         this.place(prop, x, y, rand);
         break;
@@ -119,6 +123,9 @@ export class Decor {
   }
 
   private clear(x: number, y: number): boolean {
+    // rien sur une voie ni dans un massif : un buisson au milieu du chemin MENT sur
+    // la passabilité, et le joueur apprendrait à se méfier du sol
+    if (this.level && (this.level.terrain.flagsAt(x, y) & (T_ENEMY | T_LANE)) !== 0) return false;
     const cdx = x - this.cribX;
     const cdy = y - this.cribY;
     if (cdx * cdx + cdy * cdy < CRIB_CLEAR * CRIB_CLEAR) return false;

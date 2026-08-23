@@ -394,6 +394,45 @@ export const BOSS_DUST_COUNT = 3;
 /** Le cône englue aussi : être aspiré, c'est déjà commencer à coller. */
 export const BOSS_SUCK_GRIP = 0.35;
 
+// -------------------------------------------------------------- voies & terrain
+
+/**
+ * Demi-largeur minimale d'une voie. Le boss fait 34 px de rayon : sous 44, il
+ * raclerait les bords et s'éjecterait tout seul. Vérifié au chargement.
+ */
+export const LANE_MIN_HALF = 44;
+
+/** Distance max d'un emplacement de construction à la voie qu'il est censé couvrir. */
+export const SLOT_MAX_LANE_DIST = 190;
+
+/**
+ * Vitesse du bébé dans une haie. Traverser doit être un ÉCHANGE — chemin plus court
+ * contre vitesse moindre — et pas un cadeau : à 1, camper dans une haie serait
+ * strictement meilleur que se tenir à côté, et le jeu se réduirait à trouver le bon
+ * buisson.
+ */
+export const HEDGE_SLOW = 0.62;
+
+/**
+ * Distance à laquelle une chasseuse (`target: 'hero'`) quitte sa voie pour foncer
+ * sur le bébé. Calé JUSTE au-delà de sa portée de tir (195) : l'aggro ne doit jamais
+ * partir avant qu'il puisse riposter, sinon on est mordu par surprise.
+ */
+export const ENEMY_AGGRO_RANGE = 200;
+/** Au-delà, elle décroche et rejoint sa voie. */
+export const ENEMY_AGGRO_DROP = 260;
+
+/**
+ * Une chasseuse dont la distance au bébé ne décroît plus pendant ce temps abandonne
+ * et rejoint sa voie. GARDE-FOU : sans lui, un bébé posté derrière une haie possède
+ * une zone sûre PERMANENTE — la horde s'entasse contre le buisson et le jeu est mort
+ * comme design.
+ */
+export const ENEMY_LOST_TIME = 2.5;
+
+/** Étagement longitudinal des rangs au spawn, en px (anti-file indienne). */
+export const SPAWN_STAGGER = 26;
+
 // -------------------------------------------------- améliorations du bébé (niveau)
 
 export type BabyUpgradeId = 'dps' | 'rate' | 'range' | 'speed' | 'grit';

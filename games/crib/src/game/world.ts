@@ -4,7 +4,6 @@ import { mulberry32 } from '@shared/rng';
 import { SpatialGrid } from '@shared/spatialGrid';
 import type { Sfx } from '../audio/sfx';
 import * as B from '../config/balance';
-import type { LevelDef } from '../config/levels';
 import type { Fx } from '../render/fx';
 import type { Layers } from '../render/layers';
 import { MARKER_RING_MARGIN, PALETTE, type Atlas } from '../render/textures';
@@ -15,7 +14,7 @@ import { resetLoadout } from './loadout';
 import { Crib } from './crib';
 import { EnemyPool } from './enemies';
 import { Hero } from './hero';
-import { makeLevel, type Level } from './level';
+import type { Level } from './level';
 import { Peas } from './peas';
 import { Pickups } from './pickups';
 import { Puddles } from './puddles';
@@ -134,9 +133,9 @@ export class World {
 
   // ------------------------------------------------------------------ cycle
 
-  loadLevel(def: LevelDef): void {
-    this.level = makeLevel(def);
-    const level = this.level;
+  loadLevel(level: Level): void {
+    this.level = level;
+    const def = level.def;
     this.t = 0;
     // seed dérivé de celui du niveau : les drops sont reproductibles au même seed,
     // et indépendants des angles de spawn (rejouer un tirage rejoue tout à

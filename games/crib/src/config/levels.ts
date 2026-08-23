@@ -1,6 +1,7 @@
 import { mulberry32 } from '@shared/rng';
 import * as B from './balance';
 import type { EnemyKindId, PickupKindId } from './balance';
+import { GARDEN, type MapDef } from './maps';
 
 /**
  * Niveaux data-driven. Contrairement à horde (où `at` est une DISTANCE, le monde
@@ -30,11 +31,8 @@ export interface LevelDef {
   id: string;
   name: string;
   seed: number;
-  arenaW: number;
-  arenaH: number;
-  /** Position du berceau. Elle n'est plus au centre par nature : chaque carte la pose. */
-  cribX: number;
-  cribY: number;
+  /** La GÉOMÉTRIE : arène, berceau, voies, terrain, emplacements. */
+  map: MapDef;
   cribHp: number;
   /** Multiplicateur global de PV ennemis — le levier de difficulté le plus direct. */
   hpMul: number;
@@ -54,12 +52,9 @@ const TAU = Math.PI * 2;
 export function makeTestLevel(seed = 0xbebe): LevelDef {
   return {
     id: 'garden',
-    name: 'Le jardin',
+    name: GARDEN.name,
     seed,
-    arenaW: B.ARENA_W,
-    arenaH: B.ARENA_H,
-    cribX: B.CRIB_X,
-    cribY: B.CRIB_Y,
+    map: GARDEN,
     cribHp: B.CRIB_HP,
     hpMul: 1,
     events: [
@@ -69,28 +64,28 @@ export function makeTestLevel(seed = 0xbebe): LevelDef {
 
       // — Acte II : la mamie. Premier engluement, sur une seule cible tuable.
       { at: 18, type: 'wave', kind: 'granny', count: 2, arc: 0.9 },
-      { at: 24, type: 'pickup', variant: 'bottle', x: B.CRIB_X + 190, y: B.CRIB_Y - 150 },
+      { at: 24, type: 'pickup', variant: 'bottle', x: GARDEN.cribX + 190, y: GARDEN.cribY - 150 },
       { at: 27, type: 'wave', kind: 'nappy', count: 5, arc: 1.1 },
       { at: 32, type: 'wave', kind: 'granny', count: 1, arc: 0.3 },
 
       // — Acte III : le brocoli. On ne peut plus rester immobile.
       { at: 40, type: 'wave', kind: 'broccoli', count: 2, arc: 0.8 },
       { at: 48, type: 'wave', kind: 'nappy', count: 6, arc: 1.4 },
-      { at: 54, type: 'pickup', variant: 'blanket', x: B.CRIB_X - 210, y: B.CRIB_Y + 170 },
+      { at: 54, type: 'pickup', variant: 'blanket', x: GARDEN.cribX - 210, y: GARDEN.cribY + 170 },
       { at: 57, type: 'wave', kind: 'granny', count: 2, arc: 1.2 },
       { at: 60, type: 'wave', kind: 'broccoli', count: 2, arc: 1 },
 
       // — Acte IV : la mêlée. Les trois rôles ensemble, sur deux flancs.
       { at: 70, type: 'wave', kind: 'nappy', count: 7, arc: 1.6 },
       { at: 74, type: 'wave', kind: 'granny', count: 3, arc: 2.2 },
-      { at: 78, type: 'pickup', variant: 'pacifier', x: B.CRIB_X + 60, y: B.CRIB_Y + 260 },
+      { at: 78, type: 'pickup', variant: 'pacifier', x: GARDEN.cribX + 60, y: GARDEN.cribY + 260 },
       { at: 82, type: 'wave', kind: 'broccoli', count: 3, arc: 1.8 },
       { at: 88, type: 'wave', kind: 'nappy', count: 8, arc: 2.4 },
       { at: 94, type: 'wave', kind: 'granny', count: 2, arc: 0.8 },
 
       // — Respiration avant le boss : de quoi se refaire, pas de quoi souffler.
-      { at: 102, type: 'pickup', variant: 'bottle', x: B.CRIB_X - 120, y: B.CRIB_Y - 250 },
-      { at: 104, type: 'pickup', variant: 'pacifier', x: B.CRIB_X + 240, y: B.CRIB_Y + 90 },
+      { at: 102, type: 'pickup', variant: 'bottle', x: GARDEN.cribX - 120, y: GARDEN.cribY - 250 },
+      { at: 104, type: 'pickup', variant: 'pacifier', x: GARDEN.cribX + 240, y: GARDEN.cribY + 90 },
       { at: 108, type: 'wave', kind: 'nappy', count: 5, arc: 1.2 },
 
       // — Acte V : l'Aspirateur, escorté juste assez pour empêcher le duel propre.
