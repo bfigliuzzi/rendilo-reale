@@ -1,6 +1,7 @@
 import { Texture } from 'pixi.js';
 import { mulberry32 } from '@shared/rng';
 import * as B from '../config/balance';
+import type { BiomeId } from '../config/maps';
 import { M_HEDGE, M_LANE, M_WALL, M_WATER, type Terrain } from '../game/terrain';
 import { PALETTE, type Atlas } from './textures';
 
@@ -42,15 +43,37 @@ interface MatSkin {
   speck: number;
 }
 
-const SKINS: Record<number, MatSkin> = {
-  [M_LANE]: { body: PALETTE.path, light: PALETTE.pathAlt, dark: PALETTE.pathEdge, speck: 5 },
-  [M_HEDGE]: { body: PALETTE.hedgeBody, light: PALETTE.hedgeLight, dark: PALETTE.hedgeDark, speck: 7 },
-  [M_WALL]: { body: PALETTE.stone, light: PALETTE.stoneLight, dark: PALETTE.ink, speck: 3 },
-  [M_WATER]: { body: PALETTE.waterBody, light: PALETTE.waterEdge, dark: PALETTE.waterDeep, speck: 2 },
+/**
+ * Un jeu de matériaux par BIOME. Les rôles ne changent pas d'un biome à l'autre —
+ * une haie de jardin, une pile de linge et un tas de cartons bloquent tous la horde
+ * et laissent passer le bébé — seule la matière change. C'est ce qui garde le
+ * langage visuel apprenable : on apprend « ce vert sombre, je passe dessous » une
+ * fois, et la règle vaut ensuite pour le bleu du linge et le brun des cartons.
+ */
+const BIOME_SKINS: Record<BiomeId, Record<number, MatSkin>> = {
+  garden: {
+    [M_LANE]: { body: PALETTE.path, light: PALETTE.pathAlt, dark: PALETTE.pathEdge, speck: 5 },
+    [M_HEDGE]: { body: PALETTE.hedgeBody, light: PALETTE.hedgeLight, dark: PALETTE.hedgeDark, speck: 7 },
+    [M_WALL]: { body: PALETTE.stone, light: PALETTE.stoneLight, dark: PALETTE.ink, speck: 3 },
+    [M_WATER]: { body: PALETTE.waterBody, light: PALETTE.waterEdge, dark: PALETTE.waterDeep, speck: 2 },
+  },
+  kitchen: {
+    [M_LANE]: { body: PALETTE.kitchenPath, light: PALETTE.kitchenPathAlt, dark: PALETTE.kitchenPathEdge, speck: 4 },
+    [M_HEDGE]: { body: PALETTE.linenBody, light: PALETTE.linenLight, dark: PALETTE.linenDark, speck: 6 },
+    [M_WALL]: { body: PALETTE.stone, light: PALETTE.stoneLight, dark: PALETTE.ink, speck: 3 },
+    [M_WATER]: { body: PALETTE.waterBody, light: PALETTE.waterEdge, dark: PALETTE.waterDeep, speck: 2 },
+  },
+  attic: {
+    [M_LANE]: { body: PALETTE.atticPath, light: PALETTE.atticPathAlt, dark: PALETTE.atticPathEdge, speck: 5 },
+    [M_HEDGE]: { body: PALETTE.cartonBody, light: PALETTE.cartonLight, dark: PALETTE.cartonDark, speck: 5 },
+    [M_WALL]: { body: PALETTE.woodDark, light: PALETTE.wood, dark: PALETTE.ink, speck: 4 },
+    [M_WATER]: { body: PALETTE.waterBody, light: PALETTE.waterEdge, dark: PALETTE.waterDeep, speck: 2 },
+  },
 };
 
 export function bakeMap(terrain: Terrain, atlas: Atlas): Texture {
   const map = terrain.def;
+  const SKINS = BIOME_SKINS[map.biome];
   const t = B.TERRAIN_TILE;
   const canvas = document.createElement('canvas');
   canvas.width = map.w;
@@ -61,7 +84,7 @@ export function bakeMap(terrain: Terrain, atlas: Atlas): Texture {
 
   // ① le sol : la tuile existante répétée. Tout le grain vient d'elle, donc c'est
   // un seul remplissage motif et pas une boucle sur 1,5 million de pixels.
-  const pattern = ctx.createPattern(atlas.groundCanvas, 'repeat');
+  const pattern = ctx.createPattern(atlas.grounds[map.biome], 'repeat');
   if (pattern) {
     ctx.fillStyle = pattern;
     ctx.fillRect(0, 0, map.w, map.h);
@@ -121,14 +144,15 @@ export function bakeMap(terrain: Terrain, atlas: Atlas): Texture {
       const py = cy * t + 4 + Math.floor((h * 7.3) % 1 * (t - 10));
       if (m === M_HEDGE) {
         // touffe : trois bulbes cernés d'encre, comme les props du décor
-        inkDisc(ctx, px, py, 6, PALETTE.hedgeLight);
-        inkDisc(ctx, px + 6, py + 3, 5, PALETTE.hedgeBody);
-        inkDisc(ctx, px - 5, py + 4, 4, PALETTE.hedgeLight);
+        const sk = SKINS[M_HEDGE];
+        inkDisc(ctx, px, py, 6, sk.light);
+        inkDisc(ctx, px + 6, py + 3, 5, sk.body);
+        inkDisc(ctx, px - 5, py + 4, 4, sk.light);
       } else if (m === M_WALL) {
         // appareillage : deux assises décalées, et une arête claire au sommet
-        ctx.fillStyle = hexOf(PALETTE.ink);
+        ctx.fillStyle = hexOf(SKINS[M_WALL].dark);
         ctx.fillRect(cx * t, cy * t + t / 2 - 1, t, 2);
-        ctx.fillStyle = hexOf(PALETTE.stoneLight);
+        ctx.fillStyle = hexOf(SKINS[M_WALL].light);
         ctx.fillRect(cx * t + 3, cy * t + 3, t - 10, 2);
       } else {
         // reflets d'eau : traits horizontaux clairs, JAMAIS un anneau

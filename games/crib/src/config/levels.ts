@@ -1,6 +1,6 @@
 import * as B from './balance';
 import type { EnemyKindId, PickupKindId } from './balance';
-import { GARDEN, type MapDef } from './maps';
+import { ATTIC, GARDEN, KITCHEN, type MapDef, type MapId } from './maps';
 
 /**
  * Niveaux data-driven.
@@ -74,14 +74,17 @@ export function makeGarden(seed = 0xbebe): LevelDef {
     name: GARDEN.name,
     seed,
     map: GARDEN,
-    // 280 et non 240 : la réserve doit désormais tenir QUATRE nuits, et la
-    // réparation au berceau (25 or les 40 PV) est le seul soin fiable — la tétine
-    // est un ramassable, donc un hasard.
-    cribHp: 280,
+    // 320 : la réserve doit tenir QUATRE nuits, et le jardin est le TUTORIEL de la
+    // campagne — sa nuit de boss doit rester un gain fiable pour qui a construit.
+    // Mesuré au bot : à 280 c'était un tirage à pile ou face, ce qui est le pire
+    // ressenti possible sur un premier niveau. La réparation au berceau (25 or les
+    // 40 PV) reste le seul soin fiable ; la tétine est un ramassable, donc un hasard.
+    cribHp: 320,
     hpMul: 1,
-    // exactement le prix d'UNE tourelle : le premier jour du jeu n'offre pas un
-    // choix, il offre un geste — aller à un emplacement et construire.
-    startGold: 70,
+    // le prix d'une tourelle, plus une barricade : le premier jour du jeu offre un
+    // GESTE (aller à un emplacement et construire) et un premier arbitrage, pas un
+    // achat forcé.
+    startGold: 110,
     nights: [
       {
         n: 1,
@@ -132,10 +135,13 @@ export function makeGarden(seed = 0xbebe): LevelDef {
           // auto vise le PLUS PROCHE et chaque couche vivante est du DPS volé.
           { at: 2, type: 'wave', kind: 'nappy', count: 7, lane: 'mures', spread: 0.85 },
           { at: 5, type: 'wave', kind: 'nappy', count: 4, lane: 'portail', spread: 0.7 },
-          { at: 11, type: 'wave', kind: 'granny', count: 3, lane: 'portail', spread: 0.85 },
+          // allégé après mesure : la nuit du boss du JARDIN doit rester un gain
+          // fiable pour qui a construit. C'est le tutoriel de la campagne — la
+          // cuisine et le grenier sont là pour mordre.
+          { at: 11, type: 'wave', kind: 'granny', count: 3, lane: 'portail', spread: 0.8 },
           { at: 15, type: 'pickup', variant: 'bottle', x: cx - 120, y: cy - 250 },
           { at: 19, type: 'wave', kind: 'broccoli', count: 3, lane: 'mures', spread: 0.7 },
-          { at: 25, type: 'wave', kind: 'nappy', count: 8, lane: 'portail', spread: 0.85 },
+          { at: 25, type: 'wave', kind: 'nappy', count: 7, lane: 'portail', spread: 0.85 },
           { at: 31, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.5 },
           { at: 35, type: 'pickup', variant: 'pacifier', x: cx + 240, y: cy + 90 },
           // il remonte l'allée du portail, la voie la plus longue : c'est ce qui
@@ -158,7 +164,239 @@ export function makeGarden(seed = 0xbebe): LevelDef {
   };
 }
 
-export const LEVELS: readonly ((seed?: number) => LevelDef)[] = [makeGarden];
+/**
+ * 🍳 La cuisine — cinq nuits, et le sujet est le GOULOT.
+ *
+ * Trois voies qui passent chacune par une porte de deux tuiles. Les vagues sont
+ * plus grosses qu'au jardin mais arrivent en file : ce qui coûte cher ici, ce n'est
+ * pas le nombre, c'est de tenir trois entrées à la fois. D'où la valeur double des
+ * barricades et du mobile musical, et d'où le tempo — deux voies simultanées dès la
+ * nuit 2.
+ */
+export function makeKitchen(seed = 0xbebe): LevelDef {
+  const cx = KITCHEN.cribX;
+  const cy = KITCHEN.cribY;
+  return {
+    id: 'kitchen',
+    name: KITCHEN.name,
+    seed,
+    map: KITCHEN,
+    cribHp: 300,
+    // 1,5 et non 1,15 : mesuré au bot, la cuisine se finissait à 297 PV sur 300.
+    // Les goulots CONCENTRENT la horde, donc les tours y travaillent mieux qu'au
+    // jardin — il faut compenser par les PV, pas par le nombre, sinon on paie le
+    // surcoût en images par seconde sans gagner une once de tension.
+    hpMul: 1.5,
+    startGold: 80,
+    nights: [
+      {
+        n: 1,
+        brief: 'deux entrées à la fois : la porte et l’évier',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 4, lane: 'porte', spread: 0.5 },
+          { at: 8, type: 'wave', kind: 'nappy', count: 4, lane: 'evier', spread: 0.5 },
+          { at: 16, type: 'wave', kind: 'granny', count: 2, lane: 'porte', spread: 0.4 },
+          { at: 22, type: 'pickup', variant: 'bottle', x: cx - 160, y: cy - 190 },
+          { at: 26, type: 'wave', kind: 'nappy', count: 5, lane: 'evier', spread: 0.7 },
+          { at: 34, type: 'clear' },
+        ],
+      },
+      {
+        n: 2,
+        brief: 'le placard s’ouvre, et les brocolis bombardent',
+        events: [
+          { at: 2, type: 'wave', kind: 'broccoli', count: 2, lane: 'evier', spread: 0.4 },
+          { at: 9, type: 'wave', kind: 'nappy', count: 6, lane: 'porte', spread: 0.8 },
+          { at: 16, type: 'wave', kind: 'granny', count: 2, lane: 'placard', spread: 0.5 },
+          { at: 22, type: 'pickup', variant: 'blanket', x: cx + 180, y: cy + 150 },
+          { at: 26, type: 'wave', kind: 'nappy', count: 5, lane: 'placard', spread: 0.7 },
+          { at: 33, type: 'wave', kind: 'nappy', count: 4, lane: 'evier', spread: 0.6 },
+          { at: 42, type: 'clear' },
+        ],
+      },
+      {
+        n: 3,
+        brief: 'trois voies en même temps',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 7, lane: 'porte', spread: 0.85 },
+          { at: 5, type: 'wave', kind: 'nappy', count: 5, lane: 'placard', spread: 0.7 },
+          { at: 12, type: 'wave', kind: 'granny', count: 3, lane: 'evier', spread: 0.6 },
+          { at: 19, type: 'wave', kind: 'broccoli', count: 2, lane: 'porte', spread: 0.5 },
+          { at: 24, type: 'pickup', variant: 'pacifier', x: cx, y: cy + 230 },
+          { at: 28, type: 'wave', kind: 'nappy', count: 6, lane: 'evier', spread: 0.8 },
+          { at: 36, type: 'wave', kind: 'granny', count: 2, lane: 'placard', spread: 0.5 },
+          { at: 46, type: 'clear' },
+        ],
+      },
+      {
+        n: 4,
+        brief: 'la nuit du linge sale : gros paquets, portes étroites',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 8, lane: 'evier', spread: 0.85 },
+          { at: 6, type: 'wave', kind: 'broccoli', count: 3, lane: 'placard', spread: 0.6 },
+          { at: 13, type: 'wave', kind: 'granny', count: 3, lane: 'porte', spread: 0.7 },
+          { at: 18, type: 'pickup', variant: 'bottle', x: cx - 200, y: cy + 60 },
+          { at: 22, type: 'wave', kind: 'nappy', count: 8, lane: 'porte', spread: 0.85 },
+          { at: 30, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.5 },
+          { at: 37, type: 'wave', kind: 'broccoli', count: 2, lane: 'evier', spread: 0.5 },
+          { at: 48, type: 'clear' },
+        ],
+      },
+      {
+        n: 5,
+        brief: 'le Robot ménager charge — sors de sa ligne',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 7, lane: 'placard', spread: 0.85 },
+          { at: 6, type: 'wave', kind: 'nappy', count: 6, lane: 'porte', spread: 0.8 },
+          { at: 13, type: 'wave', kind: 'granny', count: 3, lane: 'evier', spread: 0.7 },
+          { at: 18, type: 'pickup', variant: 'pacifier', x: cx + 150, y: cy - 170 },
+          { at: 22, type: 'wave', kind: 'broccoli', count: 3, lane: 'porte', spread: 0.6 },
+          { at: 30, type: 'wave', kind: 'nappy', count: 7, lane: 'evier', spread: 0.85 },
+          { at: 36, type: 'pickup', variant: 'bottle', x: cx - 120, y: cy + 200 },
+          { at: 44, type: 'boss', lane: 'porte' },
+          { at: 54, type: 'wave', kind: 'nappy', count: 4, lane: 'placard', spread: 0.6 },
+          { at: 64, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.6 },
+          { at: 74, type: 'wave', kind: 'nappy', count: 5, lane: 'porte', spread: 0.8 },
+          { at: 82, type: 'clear' },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * 🕯️ Le grenier — sept nuits, et le sujet est le DOS.
+ *
+ * Le conduit débouche à quelques pas du berceau : on ne le remonte jamais à temps,
+ * et c'est voulu. La carte oblige à DÉLÉGUER — une tour tient le conduit pendant
+ * que le bébé couvre les trois autres voies, ou bien on renonce à l'une d'elles.
+ * Sept nuits, donc l'arbre d'achat va enfin au bout : c'est ici qu'une tourelle de
+ * niveau 3 et un bébé à quatre paliers deviennent atteignables.
+ */
+export function makeAttic(seed = 0xbebe): LevelDef {
+  const cx = ATTIC.cribX;
+  const cy = ATTIC.cribY;
+  return {
+    id: 'attic',
+    name: ATTIC.name,
+    seed,
+    map: ATTIC,
+    cribHp: 340,
+    /** Le grenier est la fin de campagne : c'est la carte qui doit vraiment mordre. */
+    hpMul: 2,
+    startGold: 100,
+    nights: [
+      {
+        n: 1,
+        brief: 'l’escalier et la lucarne, pour commencer',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 5, lane: 'escalier', spread: 0.6 },
+          { at: 9, type: 'wave', kind: 'nappy', count: 5, lane: 'lucarne', spread: 0.6 },
+          { at: 17, type: 'wave', kind: 'granny', count: 2, lane: 'escalier', spread: 0.4 },
+          { at: 22, type: 'pickup', variant: 'bottle', x: cx + 180, y: cy - 200 },
+          { at: 27, type: 'wave', kind: 'nappy', count: 5, lane: 'lucarne', spread: 0.7 },
+          { at: 36, type: 'clear' },
+        ],
+      },
+      {
+        n: 2,
+        brief: 'la travée des malles s’ouvre',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 6, lane: 'malles', spread: 0.7 },
+          { at: 9, type: 'wave', kind: 'granny', count: 2, lane: 'lucarne', spread: 0.5 },
+          { at: 16, type: 'wave', kind: 'broccoli', count: 2, lane: 'escalier', spread: 0.5 },
+          { at: 22, type: 'pickup', variant: 'blanket', x: cx - 190, y: cy + 160 },
+          { at: 26, type: 'wave', kind: 'nappy', count: 6, lane: 'escalier', spread: 0.8 },
+          { at: 34, type: 'wave', kind: 'granny', count: 2, lane: 'malles', spread: 0.5 },
+          { at: 44, type: 'clear' },
+        ],
+      },
+      {
+        n: 3,
+        brief: 'LE CONDUIT s’ouvre — il débouche dans ton dos',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 4, lane: 'conduit', spread: 0.5 },
+          { at: 8, type: 'wave', kind: 'nappy', count: 6, lane: 'escalier', spread: 0.8 },
+          { at: 15, type: 'wave', kind: 'granny', count: 2, lane: 'conduit', spread: 0.4 },
+          { at: 21, type: 'pickup', variant: 'pacifier', x: cx - 40, y: cy - 230 },
+          { at: 25, type: 'wave', kind: 'broccoli', count: 2, lane: 'lucarne', spread: 0.5 },
+          { at: 32, type: 'wave', kind: 'nappy', count: 6, lane: 'malles', spread: 0.8 },
+          { at: 40, type: 'wave', kind: 'granny', count: 2, lane: 'escalier', spread: 0.5 },
+          { at: 50, type: 'clear' },
+        ],
+      },
+      {
+        n: 4,
+        brief: 'quatre voies, et personne pour t’aider',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 7, lane: 'lucarne', spread: 0.85 },
+          { at: 5, type: 'wave', kind: 'nappy', count: 5, lane: 'conduit', spread: 0.7 },
+          { at: 12, type: 'wave', kind: 'granny', count: 3, lane: 'malles', spread: 0.7 },
+          { at: 19, type: 'wave', kind: 'broccoli', count: 3, lane: 'escalier', spread: 0.6 },
+          { at: 24, type: 'pickup', variant: 'bottle', x: cx + 210, y: cy + 120 },
+          { at: 29, type: 'wave', kind: 'nappy', count: 7, lane: 'escalier', spread: 0.85 },
+          { at: 37, type: 'wave', kind: 'granny', count: 2, lane: 'conduit', spread: 0.5 },
+          { at: 48, type: 'clear' },
+        ],
+      },
+      {
+        n: 5,
+        brief: 'la nuit des mamies : elles arrivent par trois voies',
+        events: [
+          { at: 2, type: 'wave', kind: 'granny', count: 3, lane: 'escalier', spread: 0.7 },
+          { at: 6, type: 'wave', kind: 'granny', count: 3, lane: 'lucarne', spread: 0.7 },
+          { at: 13, type: 'wave', kind: 'nappy', count: 8, lane: 'malles', spread: 0.85 },
+          { at: 19, type: 'pickup', variant: 'blanket', x: cx + 60, y: cy + 220 },
+          { at: 23, type: 'wave', kind: 'granny', count: 3, lane: 'conduit', spread: 0.6 },
+          { at: 30, type: 'wave', kind: 'broccoli', count: 3, lane: 'lucarne', spread: 0.6 },
+          { at: 38, type: 'wave', kind: 'nappy', count: 8, lane: 'escalier', spread: 0.85 },
+          { at: 50, type: 'clear' },
+        ],
+      },
+      {
+        n: 6,
+        brief: 'tout à la fois, et le conduit ne désemplit pas',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 8, lane: 'conduit', spread: 0.8 },
+          { at: 6, type: 'wave', kind: 'nappy', count: 8, lane: 'escalier', spread: 0.85 },
+          { at: 12, type: 'wave', kind: 'granny', count: 3, lane: 'lucarne', spread: 0.7 },
+          { at: 18, type: 'wave', kind: 'broccoli', count: 3, lane: 'malles', spread: 0.6 },
+          { at: 23, type: 'pickup', variant: 'pacifier', x: cx - 210, y: cy - 60 },
+          { at: 28, type: 'wave', kind: 'nappy', count: 8, lane: 'lucarne', spread: 0.85 },
+          { at: 35, type: 'wave', kind: 'granny', count: 3, lane: 'conduit', spread: 0.6 },
+          { at: 42, type: 'wave', kind: 'broccoli', count: 3, lane: 'escalier', spread: 0.6 },
+          { at: 54, type: 'clear' },
+        ],
+      },
+      {
+        n: 7,
+        brief: 'la Machine à laver s’installe sur le berceau',
+        events: [
+          { at: 2, type: 'wave', kind: 'nappy', count: 8, lane: 'escalier', spread: 0.85 },
+          { at: 6, type: 'wave', kind: 'nappy', count: 7, lane: 'conduit', spread: 0.8 },
+          { at: 13, type: 'wave', kind: 'granny', count: 3, lane: 'malles', spread: 0.7 },
+          { at: 19, type: 'wave', kind: 'broccoli', count: 3, lane: 'lucarne', spread: 0.6 },
+          { at: 24, type: 'pickup', variant: 'bottle', x: cx - 150, y: cy - 210 },
+          { at: 29, type: 'wave', kind: 'nappy', count: 8, lane: 'lucarne', spread: 0.85 },
+          { at: 35, type: 'pickup', variant: 'pacifier', x: cx + 200, y: cy + 170 },
+          { at: 40, type: 'wave', kind: 'granny', count: 3, lane: 'escalier', spread: 0.7 },
+          { at: 48, type: 'boss', lane: 'lucarne' },
+          { at: 58, type: 'wave', kind: 'nappy', count: 5, lane: 'conduit', spread: 0.7 },
+          { at: 68, type: 'wave', kind: 'granny', count: 2, lane: 'malles', spread: 0.6 },
+          { at: 78, type: 'wave', kind: 'nappy', count: 5, lane: 'escalier', spread: 0.8 },
+          { at: 88, type: 'clear' },
+        ],
+      },
+    ],
+  };
+}
+
+/** Les trois niveaux, dans l'ORDRE de la campagne : c'est lui qui dérive le déblocage. */
+export const LEVELS: readonly { id: MapId; make: (seed?: number) => LevelDef }[] = [
+  { id: 'garden', make: makeGarden },
+  { id: 'kitchen', make: makeKitchen },
+  { id: 'attic', make: makeAttic },
+];
 
 /**
  * Or que RAPPORTE une nuit si le joueur tue tout. Le revenu étant dérivé du

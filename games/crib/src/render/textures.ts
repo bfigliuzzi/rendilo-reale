@@ -1,6 +1,7 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { mulberry32 } from '@shared/rng';
 import * as B from '../config/balance';
+import { BIOME_IDS, type BiomeId } from '../config/maps';
 
 /**
  * Toutes les textures sont générées en canvas au boot — aucun asset.
@@ -51,6 +52,26 @@ export const PALETTE = {
   waterEdge: 0x3c6b74,
   slab: 0x6d6455,
   slabEdge: 0x8a806c,
+  // — cuisine : lino gris-beige, couloir de passage usé, linge entassé
+  kitchenFloor: 0x6f6a5e,
+  kitchenFloorAlt: 0x787366,
+  kitchenGrout: 0x585349,
+  kitchenPath: 0x8a6a44,
+  kitchenPathAlt: 0x9a7a50,
+  kitchenPathEdge: 0x63492e,
+  linenBody: 0x4f5f6e,
+  linenLight: 0x63768a,
+  linenDark: 0x36414c,
+  // — grenier : plancher sombre, poussière tassée, cartons
+  atticFloor: 0x4a3b2c,
+  atticFloorAlt: 0x54432f,
+  atticSeam: 0x372a1e,
+  atticPath: 0x6b5f4a,
+  atticPathAlt: 0x7a6c53,
+  atticPathEdge: 0x453c2e,
+  cartonBody: 0x6b5c42,
+  cartonLight: 0x7d6c4e,
+  cartonDark: 0x4a3f2d,
   stone: 0x6f6857,
   stoneLight: 0x847c68,
   wood: 0x8a6240,
@@ -204,10 +225,10 @@ export interface Atlas {
   buildings: readonly (readonly Texture[])[];
   /** Chevron flottant au-dessus de l'emplacement à portée. */
   buildHint: Texture;
-  ground: Texture;
-  /** La TUILE de sol en canvas : le bake de carte la répète sur toute l'arène. */
-  groundCanvas: HTMLCanvasElement;
-  props: readonly DecorProp[];
+  /** La TUILE de sol par biome, en canvas : le bake de carte la répète sur l'arène. */
+  grounds: Record<BiomeId, HTMLCanvasElement>;
+  /** Planche de props par biome — le décor DÉRIVE du biome, il ne se déclare pas. */
+  props: Record<BiomeId, readonly DecorProp[]>;
   pollen: Texture;
 }
 
@@ -518,29 +539,61 @@ function drawPacifier(ctx: CanvasRenderingContext2D, ox: number, oy: number): vo
  * répétition, mouchetage déterministe (`mulberry32`) — jamais `Math.random` dans
  * une texture, sinon le décor change à chaque rechargement.
  */
-function buildGround(): HTMLCanvasElement {
+/**
+ * Tuile de sol, une par biome. Tout le GRAIN du monde vient d'ici : le bake de
+ * carte se contente de la répéter, ce qui lui évite une boucle sur un million et
+ * demi de pixels.
+ *
+ * Contraste des motifs volontairement À PEINE perceptible : au premier essai, les
+ * bandes de tonte du jardin en `grassDark` donnaient un velours côtelé qui criait
+ * plus fort que les entités.
+ */
+function buildGround(biome: BiomeId): HTMLCanvasElement {
   const size = 256;
   const ctx = ctx2d(size, size);
-  pxRect(ctx, 0, 0, size, size, PALETTE.grass);
-  const rand = mulberry32(0x6a5d);
-  // bandes de tonte : le motif qui donne « pelouse » plutôt qu'« aplat vert ». Le
-  // contraste doit rester À PEINE perceptible — au premier essai (grassDark) le sol
-  // devenait un velours côtelé qui criait plus fort que les entités.
-  for (let y = 0; y < size; y += 16) {
-    pxRect(ctx, 0, y, size, 8, PALETTE.grassStripe);
-  }
-  // brins : 3 px verticaux, deux valeurs, densité forte mais alpha porté par la couleur
-  for (let k = 0; k < 1400; k++) {
-    const x = Math.floor(rand() * size);
-    const y = Math.floor(rand() * size);
-    const c = rand() < 0.55 ? PALETTE.grassLight : PALETTE.grassPale;
-    pxRect(ctx, x, y, 1, 1 + Math.floor(rand() * 2), c);
-  }
-  // quelques cailloux, très épars : des points d'accroche pour l'œil en mouvement
-  for (let k = 0; k < 22; k++) {
-    const x = Math.floor(rand() * size);
-    const y = Math.floor(rand() * size);
-    pxDisc(ctx, x, y, 1 + Math.floor(rand() * 2), PALETTE.stone);
+  const rand = mulberry32(0x6a5d ^ biome.charCodeAt(0));
+
+  if (biome === 'garden') {
+    pxRect(ctx, 0, 0, size, size, PALETTE.grass);
+    for (let y = 0; y < size; y += 16) pxRect(ctx, 0, y, size, 8, PALETTE.grassStripe);
+    // brins : 3 px verticaux, deux valeurs, densité forte
+    for (let k = 0; k < 1400; k++) {
+      const x = Math.floor(rand() * size);
+      const y = Math.floor(rand() * size);
+      pxRect(ctx, x, y, 1, 1 + Math.floor(rand() * 2), rand() < 0.55 ? PALETTE.grassLight : PALETTE.grassPale);
+    }
+    for (let k = 0; k < 22; k++) {
+      pxDisc(ctx, Math.floor(rand() * size), Math.floor(rand() * size), 1 + Math.floor(rand() * 2), PALETTE.stone);
+    }
+  } else if (biome === 'kitchen') {
+    // carrelage : la GRILLE est le motif, pas le bruit. 32 px de côté, joints d'un
+    // pixel, et une dalle sur cinq d'une valeur voisine pour éviter le damier.
+    pxRect(ctx, 0, 0, size, size, PALETTE.kitchenFloor);
+    for (let ty = 0; ty < size; ty += 32) {
+      for (let tx = 0; tx < size; tx += 32) {
+        if ((tx * 7 + ty * 13) % 5 === 0) pxRect(ctx, tx, ty, 32, 32, PALETTE.kitchenFloorAlt);
+      }
+    }
+    for (let i = 0; i <= size; i += 32) {
+      pxRect(ctx, i, 0, 1, size, PALETTE.kitchenGrout);
+      pxRect(ctx, 0, i, size, 1, PALETTE.kitchenGrout);
+    }
+    for (let k = 0; k < 260; k++) {
+      pxRect(ctx, Math.floor(rand() * size), Math.floor(rand() * size), 1, 1, PALETTE.kitchenFloorAlt);
+    }
+  } else {
+    // plancher : lattes horizontales de 24 px, aboutées à des endroits variables
+    pxRect(ctx, 0, 0, size, size, PALETTE.atticFloor);
+    for (let y = 0; y < size; y += 24) {
+      if (((y / 24) | 0) % 2 === 0) pxRect(ctx, 0, y, size, 24, PALETTE.atticFloorAlt);
+      pxRect(ctx, 0, y, size, 2, PALETTE.atticSeam);
+      // about de latte : un seul trait vertical par rangée, décalé
+      pxRect(ctx, Math.floor(rand() * size), y, 2, 24, PALETTE.atticSeam);
+    }
+    // veinage : traits horizontaux longs et discrets
+    for (let k = 0; k < 200; k++) {
+      pxRect(ctx, Math.floor(rand() * size), Math.floor(rand() * size), 4 + Math.floor(rand() * 10), 1, PALETTE.atticSeam);
+    }
   }
   return ctx.canvas;
 }
@@ -627,12 +680,17 @@ function buildBuildHint(): Texture {
 }
 
 /**
- * Planche de props du jardin, packée en étagères. Le décor est 100 % NON
- * INTERACTIF et n'utilise JAMAIS les codes réservés aux dangers (pas de hachures
- * jaune/noir, pas d'anneaux, pas d'aplats blancs) — invariant partagé avec les
- * trois autres jeux.
+ * Planche de props d'UN biome, packée en étagères.
+ *
+ * Le décor est 100 % NON INTERACTIF et n'utilise JAMAIS les codes réservés aux
+ * dangers (pas de hachures jaune/noir, pas d'anneaux, pas d'aplats blancs) —
+ * invariant partagé avec les trois autres jeux du hub. Et il ne doit jamais IMITER
+ * un danger : voir la dalle de terre battue du jardin, assombrie parce qu'en tons
+ * clairs elle se lisait comme une flaque engluante.
  */
-function buildProps(): DecorProp[] {
+type PropFn = (w: number, h: number, sway: number, weight: number, draw: (x: number, y: number) => void) => void;
+
+function buildProps(biome: BiomeId): DecorProp[] {
   const W = 256;
   const ctx = ctx2d(W, 320);
   const source = Texture.from(ctx.canvas).source;
@@ -642,7 +700,7 @@ function buildProps(): DecorProp[] {
   let shelfY = 0;
   let shelfH = 0;
 
-  const prop = (w: number, h: number, sway: number, weight: number, draw: (x: number, y: number) => void): void => {
+  const prop: PropFn = (w, h, sway, weight, draw) => {
     if (shelfX + w + 2 > W) {
       shelfX = 0;
       shelfY += shelfH + 2;
@@ -653,6 +711,9 @@ function buildProps(): DecorProp[] {
     shelfX += w + 2;
     shelfH = Math.max(shelfH, h);
   };
+
+  if (biome === 'kitchen') return kitchenProps(ctx, source, prop, out);
+  if (biome === 'attic') return atticProps(ctx, source, prop, out);
 
   // buisson
   prop(40, 34, 0.05, 1, (x, y) => {
@@ -731,12 +792,95 @@ function buildProps(): DecorProp[] {
   return out;
 }
 
+/** Props de la cuisine : tout ce qu'un bébé voit au ras du carrelage. */
+function kitchenProps(
+  ctx: CanvasRenderingContext2D,
+  source: import('pixi.js').TextureSource,
+  prop: PropFn,
+  out: DecorProp[],
+): DecorProp[] {
+  // torchon tombé
+  prop(38, 26, 0.02, 1.2, (x, y) => {
+    inkEllipse(ctx, x + 19, y + 17, 16, 7, PALETTE.linenBody);
+    pxEllipse(ctx, x + 15, y + 15, 10, 4, PALETTE.linenLight);
+    pxRect(ctx, x + 8, y + 16, 22, 1, PALETTE.linenDark);
+  });
+  // boîte de conserve renversée
+  prop(26, 26, 0, 0.8, (x, y) => {
+    inkRect(ctx, x + 6, y + 10, 15, 13, PALETTE.stoneLight);
+    pxRect(ctx, x + 8, y + 13, 11, 4, PALETTE.pacifier);
+    pxRect(ctx, x + 6, y + 10, 15, 2, PALETTE.stone);
+  });
+  // tas de miettes
+  prop(24, 16, 0, 1.5, (x, y) => {
+    for (let i = 0; i < 7; i++) {
+      pxRect(ctx, x + 3 + ((i * 5) % 18), y + 6 + ((i * 3) % 7), 2, 2, PALETTE.nappy);
+    }
+  });
+  // cuillère en bois
+  prop(34, 18, 0, 0.7, (x, y) => {
+    inkEllipse(ctx, x + 9, y + 10, 6, 5, PALETTE.wood);
+    inkRect(ctx, x + 14, y + 9, 17, 3, PALETTE.woodDark);
+  });
+  // trace de farine — SOMBRE en bordure et mate : en aplat clair, elle se lirait
+  // comme une flaque engluante, exactement le piège de la dalle du jardin
+  prop(40, 22, 0, 0.6, (x, y) => {
+    pxEllipse(ctx, x + 20, y + 12, 18, 8, PALETTE.kitchenGrout);
+    pxEllipse(ctx, x + 18, y + 11, 12, 5, PALETTE.kitchenFloorAlt);
+  });
+  source.update();
+  return out;
+}
+
+/** Props du grenier : cartons, poussière et souvenirs. */
+function atticProps(
+  ctx: CanvasRenderingContext2D,
+  source: import('pixi.js').TextureSource,
+  prop: PropFn,
+  out: DecorProp[],
+): DecorProp[] {
+  // pile de livres
+  prop(30, 30, 0, 0.9, (x, y) => {
+    inkRect(ctx, x + 4, y + 20, 22, 6, PALETTE.grannyCardigan);
+    inkRect(ctx, x + 6, y + 13, 19, 6, PALETTE.broccoliTop);
+    inkRect(ctx, x + 5, y + 6, 20, 6, PALETTE.bossTrim);
+  });
+  // petit carton
+  prop(34, 28, 0, 1.3, (x, y) => {
+    inkRect(ctx, x + 4, y + 8, 26, 18, PALETTE.cartonBody);
+    pxRect(ctx, x + 4, y + 8, 26, 3, PALETTE.cartonLight);
+    pxRect(ctx, x + 15, y + 11, 4, 15, PALETTE.cartonDark);
+  });
+  // bobine de fil
+  prop(22, 22, 0, 0.8, (x, y) => {
+    inkRect(ctx, x + 6, y + 6, 11, 13, PALETTE.wood);
+    pxRect(ctx, x + 6, y + 10, 11, 5, PALETTE.doudou);
+  });
+  // moutons de poussière
+  prop(28, 18, 0.09, 1.6, (x, y) => {
+    pxEllipse(ctx, x + 14, y + 12, 11, 5, PALETTE.dust);
+    pxDisc(ctx, x + 9, y + 9, 3, PALETTE.dustLight);
+    pxDisc(ctx, x + 18, y + 10, 3, PALETTE.dustLight);
+  });
+  // valise oubliée
+  prop(42, 26, 0, 0.5, (x, y) => {
+    inkRect(ctx, x + 4, y + 8, 34, 16, PALETTE.woodDark);
+    pxRect(ctx, x + 4, y + 14, 34, 2, PALETTE.wood);
+    pxRect(ctx, x + 18, y + 5, 7, 4, PALETTE.stone);
+  });
+  source.update();
+  return out;
+}
+
 // -------------------------------------------------------------- construction
 
 export function buildAtlas(): Atlas {
-  const groundCv = buildGround();
-  const groundTex = Texture.from(groundCv);
-  groundTex.source.scaleMode = 'nearest';
+  const grounds = {} as Record<BiomeId, HTMLCanvasElement>;
+  const propsByBiome = {} as Record<BiomeId, DecorProp[]>;
+  for (const b of BIOME_IDS) {
+    grounds[b] = buildGround(b);
+    propsByBiome[b] = buildProps(b);
+  }
 
   // — atlas principal : tout ce qui alimente un ParticleContainer vit ici
   const AW = 384;
@@ -857,9 +1001,8 @@ export function buildAtlas(): Atlas {
     rangeRing: makeRingTexture(B.HERO_RANGE, false, PALETTE.blanket, 2),
     buildings: buildBuildings(),
     buildHint: buildBuildHint(),
-    ground: groundTex,
-    groundCanvas: groundCv,
-    props: buildProps(),
+    grounds,
+    props: propsByBiome,
     pollen,
   };
 }

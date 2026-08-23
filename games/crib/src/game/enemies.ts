@@ -202,6 +202,17 @@ export class EnemyPool {
     cribY: number,
     terrain: Terrain,
     slow: SlowField,
+    /**
+     * `true` dès que plus rien n'arrivera de la nuit. Les bombardiers postés
+     * AVANCENT alors jusqu'au berceau au lieu de rester à distance.
+     *
+     * C'est l'anti-enlisement, et ce n'est pas un détail de confort : sans lui, une
+     * nuit peut ne JAMAIS se terminer dès qu'un ennemi immobile se retrouve hors de
+     * portée de tout le monde. La condition « nuit tenue » exige une arène vide, et
+     * un seul survivant intouchable la bloque indéfiniment. Le garde-fou tient
+     * quelle que soit la valeur future de `shootRange`.
+     */
+    pressing: boolean,
     onShoot: (x: number, y: number, tx: number, ty: number) => void,
   ): void {
     for (let i = 0; i < this.count; i++) {
@@ -294,7 +305,7 @@ export class EnemyPool {
         if (bd <= B.BARRICADE_STOP + this.radius[i] + B.BARRICADE_RADIUS) go = 0;
       } else if (def.target === 'hero') {
         if (def.cling && heroD <= this.radius[i] + B.HERO_RADIUS + B.CLING_SLACK) go = 0;
-      } else if (def.shootRange > 0) {
+      } else if (def.shootRange > 0 && !pressing) {
         if (cribD <= def.shootRange) go = 0;
       } else if (cribD <= B.CRIB_BITE_RADIUS + this.radius[i]) {
         go = 0;
@@ -341,6 +352,15 @@ export class EnemyPool {
         ny = this.freeY[i];
         this.vx[i] = 0;
         this.vy[i] = 0;
+        // et on POUSSE d'un pas vers la cible de pilotage. Sans ce pas, une
+        // position libre coincée contre un obstacle se rejoue à l'identique frame
+        // après frame : l'ennemi oscille sur place et la nuit ne se termine jamais.
+        nx += (ddx / d) * 6;
+        ny += (ddy / d) * 6;
+        if (terrain.blockedEnemy(nx, ny)) {
+          nx = this.freeX[i];
+          ny = this.freeY[i];
+        }
       } else {
         this.freeX[i] = nx;
         this.freeY[i] = ny;

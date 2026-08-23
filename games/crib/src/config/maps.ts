@@ -72,6 +72,8 @@ export interface SlotDef {
 
 export type MapId = 'garden' | 'kitchen' | 'attic';
 export type BiomeId = 'garden' | 'kitchen' | 'attic';
+/** Ordre de référence : sert à construire les tables indexées par biome. */
+export const BIOME_IDS = ['garden', 'kitchen', 'attic'] as const satisfies readonly BiomeId[];
 
 export interface MapDef {
   id: MapId;
@@ -153,7 +155,154 @@ export const GARDEN: MapDef = {
   ],
 };
 
-export const MAPS: readonly MapDef[] = [GARDEN];
+/**
+ * 🍳 La cuisine — la carte des GOULOTS.
+ *
+ * Trois voies, et surtout des plans de travail qui les étranglent : chaque voie
+ * passe par une porte de deux tuiles où toute une vague se met en file. C'est là
+ * qu'une barricade ou un mobile musical valent le double, et c'est le sujet de la
+ * carte — le jardin enseignait le raccourci, la cuisine enseigne le pincement.
+ *
+ * Les piles de linge jouent le rôle des haies : le bébé rampe dessous, la horde
+ * contourne. Même règle, autre matière — c'est ce qui rend le langage apprenable.
+ */
+export const KITCHEN: MapDef = {
+  id: 'kitchen',
+  name: 'La cuisine',
+  emoji: '\u{1F373}',
+  w: 1152,
+  h: 1440,
+  cribX: 576,
+  cribY: 744,
+  biome: 'kitchen',
+  lanes: [
+    {
+      id: 'porte',
+      name: 'la porte du couloir',
+      pts: [192, -96, 192, 216, 312, 384, 312, 576, 456, 696, 552, 732],
+      halfWidth: 52,
+    },
+    {
+      id: 'evier',
+      name: 'le pied de l’évier',
+      pts: [1248, 456, 936, 456, 816, 576, 816, 672, 672, 720, 564, 738],
+      halfWidth: 52,
+    },
+    {
+      id: 'placard',
+      name: 'le placard du bas',
+      pts: [648, 1536, 648, 1224, 768, 1080, 768, 960, 624, 840, 582, 780],
+      halfWidth: 52,
+    },
+  ],
+  terrain: [
+    // les plans de travail : ils ÉTRANGLENT les voies. Une haie ou un mur tracé en
+    // travers laisse automatiquement une porte, parce que le carve des voies passe
+    // après — c'est exactement comme ça qu'on écrit un goulot.
+    { mat: 'wall', shape: { kind: 'rect', x: 0, y: 216, w: 528, h: 96 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 624, y: 216, w: 528, h: 96 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 864, y: 600, w: 288, h: 96 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 456, y: 1104, w: 480, h: 96 } },
+    // l'îlot central : il oblige à contourner pour passer d'une voie à l'autre
+    { mat: 'wall', shape: { kind: 'rect', x: 240, y: 792, w: 216, h: 168 } },
+    // la flaque de l'évier : infranchissable, et surtout PAS lisible comme une
+    // flaque engluante (pas d'anneau, corps froid et sombre — voir mapBake)
+    { mat: 'water', shape: { kind: 'disc', x: 984, y: 936, r: 120 } },
+    // le linge entassé : le raccourci du bébé
+    { mat: 'hedge', shape: { kind: 'band', pts: [96, 480, 96, 1080], width: 96 } },
+    { mat: 'hedge', shape: { kind: 'rect', x: 912, y: 1176, w: 216, h: 168 } },
+  ],
+  slots: [
+    { id: 0, x: 408, y: 456, accepts: 'tower', name: 'le tabouret' },
+    { id: 1, x: 936, y: 768, accepts: 'tower', name: 'l’égouttoir' },
+    { id: 2, x: 624, y: 1008, accepts: 'tower', name: 'la corbeille' },
+    { id: 3, x: 456, y: 840, accepts: 'tower', name: 'la chaise haute' },
+    { id: 4, x: 696, y: 636, accepts: 'tower', name: 'le micro-ondes' },
+    { id: 5, x: 312, y: 480, accepts: 'barricade', lane: 'porte', name: 'la barrière du couloir' },
+    { id: 6, x: 816, y: 624, accepts: 'barricade', lane: 'evier', name: 'le carton de l’évier' },
+    { id: 7, x: 768, y: 1020, accepts: 'barricade', lane: 'placard', name: 'la porte du placard' },
+  ],
+};
+
+/**
+ * 🕯️ Le grenier — la carte du DOS.
+ *
+ * Quatre voies, dont une, le conduit, qui débouche à quelques pas du berceau :
+ * elle est courte, on n'a jamais le temps de la remonter, et c'est tout son
+ * propos. Le grenier oblige à DÉLÉGUER — une tour couvre le conduit pendant que
+ * le bébé tient les trois autres, ou bien on renonce à l'une d'elles.
+ *
+ * C'est aussi la carte la plus longue (sept nuits) : c'est là que l'arbre d'achat
+ * va au bout.
+ */
+export const ATTIC: MapDef = {
+  id: 'attic',
+  name: 'Le grenier',
+  emoji: '\u{1F56F}',
+  w: 1200,
+  h: 1560,
+  cribX: 600,
+  cribY: 792,
+  biome: 'attic',
+  lanes: [
+    {
+      id: 'escalier',
+      name: 'la trappe de l’escalier',
+      pts: [456, 1656, 456, 1344, 336, 1176, 336, 1008, 480, 864, 570, 810],
+      halfWidth: 54,
+    },
+    {
+      id: 'lucarne',
+      name: 'la lucarne',
+      pts: [744, -96, 744, 216, 864, 384, 864, 552, 720, 696, 618, 762],
+      halfWidth: 54,
+    },
+    {
+      id: 'malles',
+      name: 'la travée des malles',
+      pts: [-96, 600, 216, 600, 336, 720, 480, 768, 564, 786],
+      halfWidth: 54,
+    },
+    {
+      // COURTE, et débouchant dans le dos du berceau : on ne la remonte jamais à
+      // temps. C'est l'axe de design de la carte, et la raison d'être des tours.
+      id: 'conduit',
+      name: 'le conduit d’aération',
+      pts: [1296, 984, 984, 984, 840, 912, 690, 828, 630, 810],
+      halfWidth: 50,
+    },
+  ],
+  terrain: [
+    // les malles et les armoires : elles cloisonnent, et le conduit débouche
+    // justement là où elles n'en protègent pas
+    { mat: 'wall', shape: { kind: 'rect', x: 96, y: 216, w: 384, h: 120 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 936, y: 168, w: 216, h: 288 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 120, y: 1272, w: 240, h: 120 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 792, y: 1200, w: 336, h: 120 } },
+    { mat: 'wall', shape: { kind: 'rect', x: 216, y: 840, w: 168, h: 120 } },
+    // la fuite du toit
+    { mat: 'water', shape: { kind: 'disc', x: 984, y: 672, r: 108 } },
+    // les cartons empilés : le raccourci du bébé, et le seul moyen de couper vers
+    // le conduit sans faire tout le tour
+    { mat: 'hedge', shape: { kind: 'rect', x: 672, y: 936, w: 216, h: 168 } },
+    { mat: 'hedge', shape: { kind: 'band', pts: [144, 456, 144, 1128], width: 96 } },
+    { mat: 'hedge', shape: { kind: 'rect', x: 456, y: 336, w: 216, h: 144 } },
+  ],
+  slots: [
+    { id: 0, x: 456, y: 984, accepts: 'tower', name: 'la caisse à jouets' },
+    { id: 1, x: 744, y: 744, accepts: 'tower', name: 'le vieux fauteuil' },
+    { id: 2, x: 456, y: 672, accepts: 'tower', name: 'le mannequin de couture' },
+    { id: 3, x: 888, y: 1032, accepts: 'tower', name: 'la lampe à pétrole' },
+    { id: 4, x: 216, y: 1104, accepts: 'tower', name: 'le tourne-disque' },
+    { id: 5, x: 720, y: 384, accepts: 'tower', name: 'le cheval à bascule' },
+    { id: 6, x: 336, y: 1128, accepts: 'barricade', lane: 'escalier', name: 'la rambarde' },
+    { id: 7, x: 864, y: 480, accepts: 'barricade', lane: 'lucarne', name: 'le volet' },
+    { id: 8, x: 336, y: 720, accepts: 'barricade', lane: 'malles', name: 'la malle en travers' },
+    { id: 9, x: 984, y: 984, accepts: 'barricade', lane: 'conduit', name: 'la grille du conduit' },
+  ],
+};
+
+export const MAPS: readonly MapDef[] = [GARDEN, KITCHEN, ATTIC];
 
 export function mapById(id: MapId): MapDef {
   const m = MAPS.find((x) => x.id === id);

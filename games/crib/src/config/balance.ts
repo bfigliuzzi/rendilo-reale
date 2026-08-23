@@ -243,7 +243,12 @@ export const ENEMY_KINDS = [
     // 0 : il ne mord jamais le berceau, il s'arrête bien avant. Sa pression sur le
     // berceau passe par ses POIS (PEA_CRIB_DMG) — d'où l'intérêt d'aller le chercher.
     cribDps: 0,
-    shootRange: 215, // s'arrête loin du berceau et bombarde : LA raison de bouger
+    // 190, et STRICTEMENT sous `HERO_RANGE` (195) : à 215, un brocoli garé se
+    // trouvait hors d'atteinte d'un bébé posté SUR le berceau, il visait le bébé
+    // (donc plus le berceau) et la nuit ne pouvait plus jamais se terminer. Mesuré
+    // au bot : `idle:kitchen` en timeout à la nuit 2, deux brocolis immortels.
+    // Vérifié par `assertBalanceSane`.
+    shootRange: 190,
     puddle: 0,
     color: 0x6f9a44,
     dropChance: 0.22,
@@ -276,6 +281,22 @@ export const KIND_BROCCOLI = 2;
 export const KIND_DUST = 3;
 
 /** Index de pool depuis l'id déclaré dans un `LevelDef` (données → runtime). */
+/**
+ * Garde-fous DEV du TUNING lui-même. Ils protègent des invariants qui ne sont
+ * visibles qu'après plusieurs minutes de jeu, et seulement dans certaines
+ * configurations — le pire profil de régression.
+ */
+export function assertBalanceSane(): void {
+  for (const k of ENEMY_KINDS) {
+    // un bombardier posté doit TOUJOURS être à portée d'un bébé qui garde le
+    // berceau, sinon il devient immortel et la nuit ne se termine pas
+    if (k.shootRange > 0 && k.shootRange >= HERO_RANGE) {
+      throw new Error(`${k.id} : shootRange ${k.shootRange} ≥ HERO_RANGE ${HERO_RANGE}`);
+    }
+    if (k.gold < 0) throw new Error(`${k.id} : or négatif`);
+  }
+}
+
 export function kindIndex(id: EnemyKindId): number {
   const i = ENEMY_KINDS.findIndex((k) => k.id === id);
   if (i < 0) throw new Error(`ennemi inconnu : ${id}`);

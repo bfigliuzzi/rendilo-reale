@@ -7,10 +7,11 @@
 //                   tombe à zéro, que son tir auto SEUL le libère, et que le grip
 //                   redescend à zéro. « Le bébé reste piégé » est le pire bug
 //                   possible de ce jeu : c'est ce scénario qui le voit.
-//   win[:seed]      bot qui joue un NIVEAU ENTIER : au jour il marche jusqu'aux
+//   win[:carte[:seed]]  bot qui joue un NIVEAU ENTIER : au jour il marche jusqu'aux
 //                   emplacements et achète, la nuit il défend. ATTEND une victoire.
-//   idle[:seed]     enchaîne les nuits SANS RIEN ACHETER, ATTEND une défaite — c'est
-//                   la mesure de la pression brute d'une carte.
+//                   Carte = `garden` | `kitchen` | `attic`, ou 1-3.
+//   idle[:carte[:seed]]  enchaîne les nuits SANS RIEN ACHETER, ATTEND une défaite —
+//                   c'est la mesure de la pression brute d'une carte.
 //   day             non-régression de la moitié économie : marcher à un emplacement,
 //                   acheter, vérifier que l'or décroît, que le bâtiment SURVIT à une
 //                   nuit, et que l'enchaînement jour → nuit → jour a bien lieu.
@@ -33,14 +34,30 @@ const URL = process.argv[2] ?? 'http://localhost:5199/games/crib/';
 const SCENARIO = process.argv[3] ?? 'grip';
 const SHOT = process.argv[4] ?? '';
 
-const [kind, arg] = SCENARIO.split(':');
+const [kind, arg, arg2] = SCENARIO.split(':');
 if (!['grip', 'win', 'idle', 'day', 'keyboard', 'stress'].includes(kind)) {
   console.error(`scénario inconnu : ${SCENARIO}`);
   process.exit(2);
 }
-const SEED = arg ? Number(arg) : 0xbebe;
+// `win`/`idle` prennent un NIVEAU : `win:kitchen`, `idle:3`, `win:attic:1234`.
+// Les autres scénarios ne prennent qu'un seed, comme avant.
+const LEVEL_IDS = ['garden', 'kitchen', 'attic'];
+let LEVEL = 0;
+let seedArg = arg;
+if ((kind === 'win' || kind === 'idle') && arg) {
+  const byName = LEVEL_IDS.indexOf(arg);
+  const byNum = Number(arg);
+  if (byName >= 0) LEVEL = byName;
+  else if (Number.isInteger(byNum) && byNum >= 1 && byNum <= LEVEL_IDS.length) LEVEL = byNum - 1;
+  else {
+    console.error(`niveau inconnu : ${arg} (attendu ${LEVEL_IDS.join(' | ')} ou 1-${LEVEL_IDS.length})`);
+    process.exit(2);
+  }
+  seedArg = arg2;
+}
+const SEED = seedArg ? Number(seedArg) : 0xbebe;
 if (Number.isNaN(SEED)) {
-  console.error(`seed invalide : ${arg}`);
+  console.error(`seed invalide : ${seedArg}`);
   process.exit(2);
 }
 
@@ -225,11 +242,22 @@ if (kind === 'grip') {
 
 if (kind === 'win' || kind === 'idle') {
   report.expected = kind === 'win' ? 'win' : 'lose';
-  await page.evaluate((seed) => window.__game.flow.startLevel(seed), SEED);
+  report.level = LEVEL_IDS[LEVEL];
+  // le harness DÉVERROUILLE toute la chaîne : `startCampaignLevel` clampe au
+  // déblocage, et sans ça on ne pourrait jamais mesurer la cuisine ni le grenier.
+  await page.evaluate(
+    ({ lvl, seed, ids }) => {
+      const g = window.__game;
+      for (const id of ids) g.save.levels[id].cleared = true;
+      g.flow.startCampaignLevel(lvl, seed);
+    },
+    { lvl: LEVEL, seed: SEED, ids: LEVEL_IDS },
+  );
 
   const samples = [];
   const t0 = Date.now();
-  const limitMs = 420000;
+  // sept nuits au grenier : le plafond doit suivre la plus longue campagne
+  const limitMs = 720000;
   let last = null;
   let lastNight = 0;
   let dayTicks = 0;

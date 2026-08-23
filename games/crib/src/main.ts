@@ -2,7 +2,7 @@ import { Application } from 'pixi.js';
 import { registerSW } from 'virtual:pwa-register';
 import { startLoop } from '@shared/loop';
 import { Sfx } from './audio/sfx';
-import { DESIGN_H, DESIGN_W } from './config/balance';
+import { assertBalanceSane, DESIGN_H, DESIGN_W } from './config/balance';
 import { Flow } from './game/flow';
 import { World } from './game/world';
 import { Steer } from './input/steer';
@@ -45,6 +45,7 @@ async function boot(): Promise<void> {
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);
 
+  if (import.meta.env.DEV) assertBalanceSane();
   const atlas = buildAtlas();
   const layers = new Layers(app.stage);
   // `scale` est lu en getter paresseux : le joystick doit diviser ses deltas par

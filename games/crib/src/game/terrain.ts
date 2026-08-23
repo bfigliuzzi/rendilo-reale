@@ -285,11 +285,29 @@ export class Terrain {
     }
   }
 
-  /** Les voies EFFACENT les bits bloquants et posent `T_LANE` : elles battent tout. */
+  /**
+   * Les voies EFFACENT les bits bloquants et posent `T_LANE` : elles battent tout.
+   *
+   * DEUX passes, et la première n'est pas cosmétique. Le masque est une grille de
+   * 24 px : une tuile n'est creusée que si son CENTRE est dans la bande, donc un
+   * point situé à `halfWidth - 8` de l'axe peut parfaitement tomber dans une tuile
+   * dont le centre est à `halfWidth + 9` — restée bloquante. Un ennemi écarté
+   * latéralement s'y faisait éjecter à chaque frame, oscillait sur place, et la nuit
+   * ne se terminait jamais (mesuré : `idle:kitchen` en timeout à la nuit 2).
+   *
+   * On creuse donc la passabilité avec UNE TUILE de marge — la demi-diagonale d'une
+   * tuile vaut 17, donc tout point à moins de `halfWidth` est garanti creusé — et on
+   * ne peint `T_LANE` (rendu, exclusion du décor) qu'à la largeur réelle. La voie a
+   * ainsi un accotement praticable mais non peint, exactement comme un vrai chemin.
+   */
   private carveLanes(lanes: readonly LaneDef[]): void {
-    this.matNow = M_LANE;
     for (const lane of lanes) {
       const pts = lane.pts;
+      this.matNow = 0;
+      for (let i = 0; i + 3 < pts.length; i += 2) {
+        this.fillBand(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], lane.halfWidth + B.TERRAIN_TILE, 0, true);
+      }
+      this.matNow = M_LANE;
       for (let i = 0; i + 3 < pts.length; i += 2) {
         this.fillBand(pts[i], pts[i + 1], pts[i + 2], pts[i + 3], lane.halfWidth, T_LANE, true);
       }

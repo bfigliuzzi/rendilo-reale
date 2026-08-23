@@ -1,7 +1,8 @@
 import type { Sfx } from '../audio/sfx';
-import { makeGarden, type LevelDef } from '../config/levels';
+import { LEVELS, type LevelDef } from '../config/levels';
+import type { MapId } from '../config/maps';
 import type { Steer } from '../input/steer';
-import { persist, type SaveData } from '../meta/save';
+import { levelUnlocked, persist, starsFor, type SaveData } from '../meta/save';
 import type { Decor } from '../render/decor';
 import type { Hud } from '../ui/hud';
 import type { BuildPanel } from '../ui/buildPanel';
@@ -9,7 +10,7 @@ import type { Screens } from '../ui/screens';
 import { makeLevel, type Level } from './level';
 import type { NightCheckpoint, World } from './world';
 
-export type FlowState = 'menu' | 'day' | 'night' | 'result';
+export type FlowState = 'menu' | 'levelSelect' | 'day' | 'night' | 'result';
 
 /**
  * Machine à états menu → jour ⇄ nuit → résultat, et SEUL endroit du jeu habilité à
@@ -30,10 +31,12 @@ export class Flow {
   seed = 0xbebe;
   /** Index 0-based de la nuit en cours ou à venir. */
   nightIndex = 0;
+  /** Index 0-based du niveau en cours dans la campagne. */
+  levelIdx = 0;
   /** Hook de l'overlay `?debug` : appelé après chaque chargement de niveau. */
   onLevelLoaded: ((level: Level) => void) | null = null;
 
-  private def: LevelDef = makeGarden();
+  private def: LevelDef = LEVELS[0].make();
   /** État du niveau au lancement de la nuit : c'est « Rejouer la nuit ». */
   private checkpoint: NightCheckpoint | null = null;
 
@@ -47,11 +50,13 @@ export class Flow {
     private readonly sfx: Sfx,
     private readonly buildPanel: BuildPanel,
   ) {
-    this.screens.onPlay = () => this.startLevel();
+    this.screens.onPlay = () => this.play();
     this.screens.onMenu = () => this.showMenu();
+    this.screens.onSelectLevel = (idx) => this.startCampaignLevel(idx);
+    this.screens.onLevelSelect = () => this.showLevelSelect();
     this.screens.onRetryNight = () => this.retryNight();
     this.screens.onToggleMute = () => this.toggleMute();
-    this.hud.onRestart = () => this.startLevel(this.seed);
+    this.hud.onRestart = () => this.startCampaignLevel(this.levelIdx, this.seed);
     this.hud.onLaunchNight = () => this.startNight();
     this.world.onNightCleared = (i, sec) => this.onNightCleared(i, sec);
     this.world.onCribFallen = () => this.onDefeat();
@@ -69,7 +74,37 @@ export class Flow {
   showMenu(): void {
     this.state = 'menu';
     this.leaveGame();
-    this.screens.showMenu();
+    this.screens.showMenu(this.save.levels.garden.cleared);
+  }
+
+  showLevelSelect(): void {
+    this.state = 'levelSelect';
+    this.leaveGame();
+    this.screens.showLevelSelect(
+      LEVELS.map(({ id, make }, i) => {
+        const def = make();
+        const rec = this.save.levels[id];
+        return {
+          idx: i,
+          name: def.name,
+          emoji: def.map.emoji,
+          nights: def.nights.length,
+          unlocked: levelUnlocked(this.save, id),
+          previous: i > 0 ? LEVELS[i - 1].id : null,
+          record: rec,
+        };
+      }),
+    );
+  }
+
+  /**
+   * « Jouer » depuis l'accueil. Tant que le jardin n'est pas terminé, on y va
+   * DIRECTEMENT : un écran de sélection à une seule entrée jouable est un obstacle
+   * pur, et le premier niveau est le tutoriel.
+   */
+  private play(): void {
+    if (this.save.levels.garden.cleared) this.showLevelSelect();
+    else this.startCampaignLevel(0);
   }
 
   /**
@@ -81,8 +116,20 @@ export class Flow {
    * déjà, ce qui est la condition pour que le scénario `grip` fonctionne inchangé.
    */
   startLevel(seed?: number): void {
+    this.startCampaignLevel(0, seed);
+  }
+
+  /**
+   * Entrée de campagne. `levelIdx` est CLAMPÉ au déblocage : rien, pas même un
+   * appel console, ne doit pouvoir sauter le tutoriel — le grenier à quatre voies
+   * donnerait une image fausse du jeu à quelqu'un qui n'a pas vu le jardin.
+   */
+  startCampaignLevel(levelIdx: number, seed?: number): void {
+    let idx = Math.max(0, Math.min(LEVELS.length - 1, Math.floor(levelIdx)));
+    while (idx > 0 && !levelUnlocked(this.save, LEVELS[idx].id)) idx--;
+    this.levelIdx = idx;
     this.seed = seed ?? (Math.floor(Math.random() * 0xffffff) | 1);
-    this.def = makeGarden(this.seed);
+    this.def = LEVELS[idx].make(this.seed);
     const level = makeLevel(this.def);
     this.screens.hide();
     this.decor.setup(level);
@@ -171,25 +218,33 @@ export class Flow {
     this.state = 'result';
     this.leaveGame();
     const timeSec = this.world.nightSecTotal;
+    const rec = this.save.levels[LEVELS[this.levelIdx].id as MapId];
 
     // une SEULE écriture par fin de NIVEAU, victoire comme défaite. Le redémarrage
     // ↻ et le retour menu ne flushent pas : assumé, c'est un abandon, pas un score.
     this.save.runs++;
     this.save.wins++;
+    rec.cleared = true;
+    rec.stars = Math.max(
+      rec.stars,
+      starsFor(this.world.crib.hp / this.world.crib.maxHp, this.world.buildings.lostBarricades),
+    );
     // le critère de record est le temps de nuit cumulé, mais les PV de berceau
     // départagent : finir vite en laissant le berceau en ruine n'est pas mieux
     const better =
-      this.save.bestTimeSec === null ||
-      timeSec < this.save.bestTimeSec ||
-      (Math.abs(timeSec - this.save.bestTimeSec) < 0.5 && this.world.crib.hp > this.save.bestCribHp);
+      rec.bestNightSec === null ||
+      timeSec < rec.bestNightSec ||
+      (Math.abs(timeSec - rec.bestNightSec) < 0.5 && this.world.crib.hp > rec.bestCribHp);
     if (better) {
-      this.save.bestTimeSec = timeSec;
-      this.save.bestCribHp = this.world.crib.hp;
+      rec.bestNightSec = timeSec;
+      rec.bestCribHp = this.world.crib.hp;
     }
     persist(this.save);
     this.sfx.victory();
     this.screens.showResult({
       victory: true,
+      levelName: this.def.name,
+      stars: rec.stars,
       night: this.def.nights.length,
       nights: this.def.nights.length,
       timeSec,
@@ -210,6 +265,8 @@ export class Flow {
     this.sfx.defeat();
     this.screens.showResult({
       victory: false,
+      levelName: this.def.name,
+      stars: 0,
       night: this.nightIndex + 1,
       nights: this.def.nights.length,
       timeSec: this.world.nightSecTotal,
@@ -229,7 +286,7 @@ export class Flow {
   /** Rejoue la nuit perdue à partir de l'instantané pris à son lancement. */
   private retryNight(): void {
     if (!this.checkpoint) {
-      this.startLevel(this.seed);
+      this.startCampaignLevel(this.levelIdx, this.seed);
       return;
     }
     this.screens.hide();
@@ -243,6 +300,6 @@ export class Flow {
     this.save.muted = !this.save.muted;
     this.sfx.setMuted(this.save.muted);
     persist(this.save);
-    this.screens.showMenu();
+    this.screens.showMenu(this.save.levels.garden.cleared);
   }
 }

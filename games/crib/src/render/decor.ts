@@ -55,6 +55,8 @@ export class Decor {
   private cribX = 0;
   private cribY = 0;
   private level: Level | null = null;
+  /** Planche de props du biome courant : le décor DÉRIVE de la carte. */
+  private pool: readonly DecorProp[] = [];
 
   constructor(
     propLayer: Container,
@@ -64,7 +66,7 @@ export class Decor {
     for (let i = 0; i < PROP_CAP; i++) {
       // ancre au PIED : le balancement pivote à la base, pas au centre — sans ça
       // les buissons ont l'air de flotter
-      const s = new Sprite({ texture: atlas.props[0].tex, anchor: { x: 0.5, y: 1 } });
+      const s = new Sprite({ texture: atlas.props.garden[0].tex, anchor: { x: 0.5, y: 1 } });
       s.position.set(PARK, PARK);
       this.props.push(s);
       propLayer.addChild(s);
@@ -83,6 +85,11 @@ export class Decor {
     this.level = level;
     this.cribX = level.cribX;
     this.cribY = level.cribY;
+    this.pool = this.atlas.props[def.map.biome];
+    // motes d'ambiance : pollen au jardin, vapeur en cuisine, poussière au grenier.
+    // Une teinte suffit — la forme est la même, et c'est l'AMBIANCE qui change.
+    const tint = def.map.biome === 'kitchen' ? 0xd8e2e6 : def.map.biome === 'attic' ? 0xbfae94 : 0xffffff;
+    for (const p of this.pollen) p.tint = tint;
     for (let i = 0; i < this.count; i++) this.props[i].position.set(PARK, PARK);
     this.count = 0;
 
@@ -113,13 +120,13 @@ export class Decor {
 
   private pick(rand: () => number): DecorProp {
     let total = 0;
-    for (const p of this.atlas.props) total += p.weight;
+    for (const p of this.pool) total += p.weight;
     let roll = rand() * total;
-    for (const p of this.atlas.props) {
+    for (const p of this.pool) {
       roll -= p.weight;
       if (roll <= 0) return p;
     }
-    return this.atlas.props[this.atlas.props.length - 1];
+    return this.pool[this.pool.length - 1];
   }
 
   private clear(x: number, y: number): boolean {

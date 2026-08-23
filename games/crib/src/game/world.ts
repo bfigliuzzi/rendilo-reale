@@ -260,7 +260,7 @@ export class World {
     const towerShots = this.buildings.update(dt, this.phase, this.hero, this.bullets, this.enemies, this.boss);
     this.enemies.update(
       dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y,
-      level.terrain, this.buildings, this.onEnemyShoot,
+      level.terrain, this.buildings, this.spawner.cleared, this.onEnemyShoot,
     );
     this.boss.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onDust);
 
@@ -605,7 +605,12 @@ export class World {
       // distance sur laquelle son budget de PV est calé. Le faire partir du bout de
       // la voie lui donnait quarante secondes d'approche contre vingt.
       const n = t.nodeWithin(lane, lv.cribX, lv.cribY, B.SPAWN_RING);
-      this.boss.spawn(t.nodeX[n], t.nodeY[n], B.BOSS_HP, lv.cribX, lv.cribY, lane, Math.min(n + 1, t.laneStart[lane] + t.laneCount[lane] - 1));
+      // le boss suit `hpMul` comme le reste du bestiaire : UN seul levier de
+      // difficulté par carte, sinon on se retrouve à équilibrer deux courbes.
+      this.boss.spawn(
+        t.nodeX[n], t.nodeY[n], B.BOSS_HP * lv.def.hpMul, lv.cribX, lv.cribY,
+        lane, Math.min(n + 1, t.laneStart[lane] + t.laneCount[lane] - 1),
+      );
       this.fx.shake(9);
       this.sfx.bossArrive();
     },

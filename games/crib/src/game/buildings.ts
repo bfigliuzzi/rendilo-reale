@@ -90,6 +90,9 @@ export class Buildings {
   /** Diviseur d'engluement dû au talc À LA POSITION DU BÉBÉ, recalculé au tick. */
   talcDiv = 1;
 
+  /** Barricades tombées sur le NIVEAU. Sert à la troisième étoile. */
+  lostBarricades = 0;
+
   private terrain: Terrain | null = null;
   private crib: Crib | null = null;
   private hero: Hero | null = null;
@@ -113,6 +116,7 @@ export class Buildings {
     this.nearSlot = -1;
     this.slowCount = 0;
     this.talcDiv = 1;
+    this.lostBarricades = 0;
     for (const def of level.def.map.slots) {
       const sprite = new Sprite({ texture: this.atlas.buildings[0][0], anchor: { x: 0.5, y: 0.78 } });
       sprite.position.set(def.x, def.y);
@@ -354,6 +358,7 @@ export class Buildings {
     s.level = 0;
     s.node = -1;
     s.sprite.visible = false;
+    this.lostBarricades++;
   }
 
   /**
