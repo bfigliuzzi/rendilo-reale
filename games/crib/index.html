@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Rendilo Reale — Berceau</title>
+  <meta name="theme-color" content="#27381f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="/pwa-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <style>
+    /* Palette : copie locale de PALETTE (render/textures.ts). Rien n'est partagé
+       entre les jeux du hub tant qu'un module n'a pas DEUX consommateurs. */
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #27381f;
+      overflow: hidden;
+      touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #stage { position: fixed; left: 50%; top: 50%; }
+    /* LE réglage qui décide du rendu pixel art : le letterbox met le canvas à
+       l'échelle en CSS, et par défaut le navigateur INTERPOLE — tous les liserés de
+       1 px partent en bouillie sur mobile. `pixelated` force le plus proche voisin.
+       Écart assumé avec les trois autres jeux, qui n'ont pas cette contrainte. */
+    #stage canvas { image-rendering: pixelated; }
+    #hud { position: fixed; inset: 0; pointer-events: none; color: #f4ead9; }
+
+    #hud-perf {
+      position: absolute; left: 8px; top: max(8px, env(safe-area-inset-top));
+      font-size: 12px; font-family: ui-monospace, monospace; color: #b9cdae;
+      background: rgba(0, 0, 0, 0.4); border-radius: 8px; padding: 4px 8px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Barre du berceau : en HAUT et large, c'est la seule condition de défaite.
+       Les trois paliers de teinte suivent exactement les trois états d'usure du
+       sprite du berceau (CRIB_WEAR) — HUD et monde racontent la même chose. */
+    #hud-crib {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      top: max(8px, env(safe-area-inset-top));
+      width: min(74vw, 300px);
+      display: none;
+    }
+    #hud.in-game #hud-crib { display: block; }
+    #hud-crib .track {
+      height: 14px; background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #2b2016; border-radius: 8px; overflow: hidden;
+    }
+    #hud-crib-fill { height: 100%; width: 100%; background: #b9cdae; transition: width 0.12s linear; }
+    #hud-crib[data-wear="1"] #hud-crib-fill { background: #f2c14e; }
+    #hud-crib[data-wear="2"] #hud-crib-fill { background: #b8443c; }
+    #hud-crib-label {
+      font-size: 12px; font-weight: 700; text-align: center; margin-top: 3px;
+      font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    #hud-boss {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+      width: min(74vw, 300px);
+    }
+    #hud-boss .track {
+      height: 9px; background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #2b2016; border-radius: 6px; overflow: hidden;
+    }
+    #hud-boss-fill { height: 100%; width: 100%; background: #b8443c; transition: width 0.12s linear; }
+    #hud-boss .tag { font-size: 11px; font-weight: 700; text-align: center; margin-top: 2px; }
+
+    #hud-info, #hud-buffs {
+      position: absolute; right: 8px;
+      font-size: 12px; line-height: 1.5; text-align: right;
+      background: rgba(0, 0, 0, 0.4); border-radius: 8px; padding: 5px 9px;
+      font-variant-numeric: tabular-nums; white-space: pre-line;
+      display: none;
+    }
+    #hud-info { top: max(8px, env(safe-area-inset-top)); }
+    #hud-buffs { top: calc(max(8px, env(safe-area-inset-top)) + 52px); color: #f2c14e; font-weight: 700; }
+    #hud.in-game #hud-info, #hud.in-game #hud-buffs { display: block; }
+
+    /* Redémarrage instantané : en bas à GAUCHE, zone pouce, loin du joystick que
+       l'on pose plutôt à droite — et hors du chemin d'un glissement de course. */
+    #hud-restart {
+      position: absolute; left: 10px; bottom: max(10px, env(safe-area-inset-bottom));
+      width: 46px; height: 46px; border-radius: 50%;
+      border: 2px solid #2b2016; background: rgba(0, 0, 0, 0.45);
+      color: #f4ead9; font-size: 20px; cursor: pointer;
+      display: none; pointer-events: auto;
+    }
+    #hud.in-game #hud-restart { display: block; }
+    #hud-restart:active { transform: translateY(2px); }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    /* Écrans (accueil, résultat) */
+    #ui {
+      position: fixed; inset: 0; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(20, 30, 16, 0.78);
+      color: #f4ead9;
+    }
+    #ui.visible { display: flex; }
+    .panel {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      width: min(86vw, 380px); max-height: 92vh; overflow-y: auto;
+      text-align: center; padding: 12px;
+      animation: panel-in 0.28s cubic-bezier(0.2, 1.2, 0.4, 1);
+    }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(26px) scale(0.96); } to { opacity: 1; transform: none; } }
+    .panel h1 {
+      margin: 0 0 6px; font-size: 44px; font-weight: 900; letter-spacing: 3px;
+      line-height: 1.05; color: #e8a87c; text-shadow: 0 3px 0 #8a4b28;
+    }
+    .panel h2 { margin: 0; font-size: 32px; font-weight: 900; letter-spacing: 2px; }
+    .panel h2.win {
+      color: #b9cdae; font-size: 40px;
+      text-shadow: 0 0 22px rgba(185, 205, 174, 0.55);
+      animation: pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1);
+    }
+    .panel h2.lose { color: #d97b72; animation: slam 0.35s ease-out; }
+    @keyframes pop { 0% { transform: scale(0.2); opacity: 0; } 70% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes slam { 0% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    h1:focus-visible, h2:focus-visible { outline: 3px solid #f2c14e; outline-offset: 6px; }
+    .sub { font-size: 15px; line-height: 1.55; opacity: 0.9; margin: 0; }
+    .sub.small { font-size: 12.5px; opacity: 0.7; }
+    .best { font-size: 14px; color: #f2c14e; font-weight: 700; margin: 0; }
+    .record { font-size: 16px; color: #f2c14e; font-weight: 800; margin: 0; }
+    .result-stats { font-size: 13.5px; line-height: 1.6; opacity: 0.88; margin: 0; }
+    .btn {
+      width: 100%; padding: 14px 18px; border: 0; border-radius: 12px;
+      font: inherit; font-size: 17px; font-weight: 700; color: #f4ead9;
+      background: #3d5634; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+    }
+    .btn:active { transform: translateY(2px); box-shadow: none; }
+    .btn.primary { background: #e8a87c; color: #2b2016; box-shadow: 0 3px 0 #a3623c; }
+    .btn.small { width: auto; padding: 8px 16px; font-size: 14px; background: #33482c; }
+    .btn:focus-visible { outline: 3px solid #f2c14e; outline-offset: 3px; }
+    a.hub-link { display: inline-block; text-decoration: none; text-align: center; opacity: 0.85; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .panel h2 { animation: none; }
+      #hud-crib-fill, #hud-boss-fill { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <div id="hud-perf"></div>
+    <div id="hud-crib" data-wear="0">
+      <div class="track"><div id="hud-crib-fill"></div></div>
+      <div id="hud-crib-label"></div>
+    </div>
+    <div id="hud-boss" hidden>
+      <div class="track"><div id="hud-boss-fill"></div></div>
+      <div class="tag">🧹 ASPIRATEUR GÉANT</div>
+    </div>
+    <div id="hud-info"></div>
+    <div id="hud-buffs"></div>
+    <button id="hud-restart" type="button" aria-label="Redémarrer le niveau">↻</button>
+    <p id="hud-live" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+  </div>
+  <div id="ui"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

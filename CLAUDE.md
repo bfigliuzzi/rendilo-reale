@@ -1,14 +1,16 @@
 # Rendilo Reale — hub de jeux web
 
 Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
-dans `games/<id>/` avec son propre `index.html` + `src/`. Trois jeux : **Horde**
+dans `games/<id>/` avec son propre `index.html` + `src/`. Quatre jeux : **Horde**
 (`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
 hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
 métaprogression (or, boutique, localStorage). **Essaim** (`/games/hive/`), conquête
-de nœuds façon Auralux (voir section dédiée). Et **Cerveau** (`/games/mind/`), un
-Mastermind à 3 difficultés avec un chat farceur (voir section dédiée) — le seul jeu du
-hub entièrement jouable au clavier. PixiJS v8 + TypeScript strict + Vite.
-Aucune autre dépendance runtime.
+de nœuds façon Auralux (voir section dédiée). **Cerveau** (`/games/mind/`), un
+Mastermind à 3 difficultés avec un chat farceur (voir section dédiée). Et **Berceau**
+(`/games/crib/`), défense de point top-down façon Kingshot/Thronefall — un bébé qu'on
+déplace, tir auto, et un ENGLUEMENT au lieu de PV (voir section dédiée) ; c'est le
+premier jeu d'action du hub jouable au clavier, et le premier avec une caméra.
+PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
 
@@ -343,6 +345,118 @@ d'ancrage), Difficile 5 pions / 8 couleurs / 10 essais + **pion vide JOUABLE**
   conteneur (rendu logiciel). `window.__game = {world, flow, app, save, hud, Board,
   computeFeedback, palette, pegs}`.
 
+## Berceau (`games/crib/`) — défense de berceau, héros bébé, engluement
+
+**Niveau de test uniquement** : une arène, une courbe de vagues scriptée, 3 archétypes
+et un boss. Pas de campagne, pas de succès, pas de monnaie — hors périmètre assumé de
+ce premier jet, qui sert à valider le *feeling* de la boucle.
+
+- **LA mécanique : le bébé n'a PAS de PV, il a du GRIP.** Le contact ennemi l'englue,
+  `vitesse = HERO_SPEED × (1 - grip)`, jusqu'à l'immobilisation. La seule défaite est
+  la chute du berceau : la punition n'est jamais « tu meurs », c'est « tu ne peux plus
+  défendre ». Le grip **CONVERGE** vers `charge / GRIP_LOAD_FOR_PIN` (charge = Σ des
+  `gripMul` des contacts, plafonnée à `GRIP_CONTACT_CAP` = 3 contacts), il ne s'intègre
+  PAS : le premier modèle intégrait sans borne, donc n'importe quel contact finissait
+  par clouer et l'engluement était BINAIRE — une mamie isolée immobilisait, et le tank
+  perdait son rôle de menace kitable. Barème obtenu : 1 mamie → 50 % de vitesse,
+  2 mamies → cloué, 1 couche au passage → 17 %, 3 sacs à poussière → 75 %.
+- **Quatre garde-fous non négociables** (le pendant de ceux du chat de Cerveau) :
+  ① le tir ne consulte JAMAIS le grip — cloué, le bébé tire à pleine portée et se
+  libère seul (sans ça `grip = 1` est un game-over déguisé) ; ② le plafond de contacts
+  borne la charge, donc abattre les trois plus proches suffit TOUJOURS — et comme
+  l'aim-assist tire aussi au plus proche, les ennemis comptés sont exactement ceux
+  qu'on abat ; ③ le decay démarre à la frame où la charge retombe, sans rampe ni
+  fenêtre de grâce ; ④ le doudou (`GRIP_IMMUNE_TIME`) est la porte de sortie d'un
+  pinning mal engagé.
+- **Quatre codes redondants de l'engluement**, jamais la couleur seule : l'anneau qui
+  se remplit autour du bébé (une FORME), la cadence de l'animation de rampe — indexée
+  sur la DISTANCE parcourue, donc elle ralentit toute seule et se fige à l'arrêt,
+  c'est ce détail qui fait lire la mécanique sans regarder la jauge —, les filets de
+  bave vers chaque colleur, et le pommeau du joystick qui ramollit + la vignette.
+- **Arène plus grande que l'écran** (`ARENA_W/H` 1080×1440 contre 540×960 de canvas),
+  berceau au centre, caméra qui suit le bébé avec deadzone et clamp aux bords. La
+  caméra déplace le CONTENEUR, jamais les entités. `SPAWN_RING` (560) est calé juste
+  au-delà de la demi-diagonale de l'écran (≈ 551) : un ennemi qui apparaît est
+  toujours hors champ. Corollaire OBLIGATOIRE du hors-champ (`render/overlayView.ts`,
+  espace écran) : chevrons de bord pour les menaces invisibles — priorisées par leur
+  proximité au BERCEAU, pas au bébé —, flèche vers le berceau dès qu'il frôle le bord,
+  liseré rouge pulsé quand il est mordu loin du regard. Sans ces trois signaux on perd
+  sans jamais comprendre pourquoi.
+- **Bestiaire — le CIBLAGE est l'axe de design** (`ENEMY_KINDS`, table typée
+  `as const satisfies`) : **Mamie bisous** vise le BÉBÉ, lente, grosse, s'agrippe
+  (`cling`) — elle ne touche jamais le berceau, sa menace est de te clouer pendant que
+  les autres passent ; **Couche sale** vise le BERCEAU, rapide, fragile, t'englue
+  seulement au passage et laisse une FLAQUE à sa mort (punit le farm au corps-à-corps) ;
+  **Brocoli** se poste à `shootRange` du berceau et bombarde — le bébé s'il est à
+  `PEA_AIM_RANGE`, LE BERCEAU sinon (sans ce repli il était ignorable : trop loin pour
+  toucher, incapable de mordre, donc gratuit). `cribDps` de la couche est LE terme
+  dominant du budget de dégâts et n'est borné par rien : à 6, six couches parvenues au
+  berceau le vidaient en 5 s sans recours. Ne pas le remonter sans retoucher `CRIB_HP`.
+- **Boss Aspirateur** (`game/boss.ts`) : le corps va au berceau quoi qu'il arrive,
+  mais l'embout PIVOTE vers le bébé à `BOSS_TURN` rad/s, comme un char. Il aspire ET
+  **gobe les projectiles entrant dans le cône** : invulnérable de face, il faut le
+  CONTOURNER. Tourner autour de près bat sa rotation (168/150 ≈ 1.12 > 1.1), de loin
+  non — la contre-attaque est donc « rentre dans la zone et strafe », ce qui met le
+  joueur là où les mamies font mal. Conséquence émergente assumée : garé sur le
+  berceau, il protège son escorte — mesuré au bot, qui se plantait devant l'embout et
+  ne tuait plus rien. Budget mesuré : ~20 s d'approche, ~70 % d'uptime de tir donc
+  ~21 DPS effectifs, 420 PV, 6 dégâts/s au berceau une fois garé. Le premier tuning
+  (900 PV, 22 dégâts/s) était injouable par ARITHMÉTIQUE et non par skill.
+- **Ramassables** (`game/pickups.ts`), pris en marchant dessus — seule progression, et
+  la seule cohérente avec « bouger est la seule action ». Biberon (cadence ×2, jamais
+  le DPS : il améliore la répartition, pas la puissance), doudou (immunité au grip),
+  tétine (soigne le berceau). Leur vraie fonction est le DÉTOUR : y aller, c'est
+  laisser la porte ouverte quelques secondes.
+- **Contrôles** (`input/steer.ts`) : joystick virtuel (écoute sur `window`, deltas
+  divisés par le scale du letterbox, origine qui SUIT le doigt au-delà du rayon) ET
+  clavier ZQSD/WASD/flèches par `event.code` (les deux familles mappées, aucune
+  détection de disposition). Les deux sources sont FUSIONNÉES, jamais additionnées :
+  la dernière active gagne — les mélanger produisait des diagonales fantômes quand une
+  touche restait collée. `blur` relâche tout. `Flow` arme/désarme via `setEnabled`.
+- **Pixel art** (`render/textures.ts`) : tout est plotté au PIXEL EXACT
+  (`pxEllipse`/`pxDisc` en scanline entière), jamais `arc()` qui antialiase ; le
+  liseré d'encre est la forme redessinée 1 px plus grande. Les frames sont
+  PARAMÉTRÉES (décalages de membres) — 4 directions × 3 frames de rampe pour le bébé
+  sortent d'une seule fonction. Ennemis : 2 frames + flip X selon `vx`, écart assumé
+  (4 directions × 4 archétypes serait hors budget d'un niveau de test). Trois réglages
+  décident de la netteté et sont solidaires : `antialias: false`, `scaleMode` **nearest**
+  sur les sources de sprites, et `image-rendering: pixelated` sur le canvas (le
+  letterbox met à l'échelle en CSS, et le navigateur interpole par défaut). Les
+  anneaux de marqueurs restent en `linear`, eux : ce sont des courbes supersamplées ×2.
+- **Décor** : un seul biome « jardin », pose unique au chargement avec rejection
+  sampling (modèle d'Essaim, arène fixe) et clearance de 110 px autour du berceau ;
+  pollen en espace écran au-dessus du monde. Interdits identiques aux autres jeux :
+  pas de hachures jaune/noir, pas d'anneaux, pas d'aplats blancs — codes réservés aux
+  dangers, et le décor ne doit jamais IMITER un danger (la dalle de terre en tons
+  clairs se lisait comme une flaque, d'où `earthLight` sombre).
+- **Piège de rendu vécu, à ne pas rejouer** : dans Pixi v8, `g.arc()` sans `moveTo`
+  préalable se relie au point courant du chemin — resté à l'ORIGINE DU MONDE — et
+  trace une balafre en travers de l'écran depuis le coin de l'arène. Vu sur la jauge
+  de grip et les arcs du cône ; les deux ont désormais leur `moveTo`.
+- Save `rendilo-reale:crib:save:v1` (`meta/save.ts`, pattern d'Essaim/Cerveau : clé
+  jamais renommée, version DANS le JSON, `structuredClone(DEFAULTS)` puis fusion champ
+  par champ avec garde de type, `resetSave` mute EN PLACE). Contenu minimal : `muted`,
+  `bestTimeSec`, `bestCribHp`, `wins`, `runs` — écrite UNIQUEMENT par `game/flow.ts`,
+  en UNE écriture par fin de partie (le ↻ et le retour menu ne flushent pas).
+- **Vérification** : `node tools/verify-crib.mjs <url> <scénario>` — `grip`,
+  `win[:seed]`, `idle[:seed]`, `keyboard`, `stress`. **`grip` est le test de
+  non-régression de la mécanique centrale et se lance après TOUTE retouche des `GRIP_*`
+  ou du tir** : trois phases, sept assertions (une meute cloue en < 2,5 s / cloué
+  signifie vitesse nulle / le tir auto SEUL libère / une mamie SEULE ne cloue jamais /
+  son palier vaut bien 1.6 ÷ 3.2 = 0,5 / il reste de quoi fuir / le doudou annule
+  tout). Le bot de `win` écrit directement `steer.dirX/dirY` (aucun événement d'entrée
+  ne survenant, `recompute` ne les écrase pas) et connaît les deux contre-jeux : sortir
+  du cône AVANT tout le reste, et repousser ce qui mord le berceau avant d'aller
+  chercher le boss.
+  Bande mesurée (conteneur, rendu logiciel, 2026-08 — les taux absolus dépendent de la
+  machine, lire en RELATIF, 2 runs minimum) : `grip` 7/7, `keyboard` 5/5 (focus perdu
+  0), `idle` défaite ~109 s, `win` victoire fiable ~156 s avec 83-173/240 de berceau
+  restant (le boss est la seule phase où le berceau saigne vraiment), `stress` ~20 fps
+  à 400 ennemis, 0 erreur console. Contrôle même machine : horde campagne N1 =
+  victoire, hub = 4 jeux listés.
+  `window.__game = {world, flow, app, save, steer, hero, crib, boss}`,
+  `world.postSpawn(kind, x, y)` scriptable.
+
 ## Déploiement
 
 - **Prod** : https://rendilo-reale.netlify.app — déploiement continu Netlify sur push
@@ -359,6 +473,7 @@ npm run build            # typecheck + vite build
 node tools/verify.mjs http://localhost:5199/games/horde/ campaign 90 shot.png   # partie pilotée headless
 node tools/verify-hive.mjs http://localhost:5199/games/hive/ win:2               # Essaim
 node tools/verify-mind.mjs http://localhost:5199/games/mind/ contrast            # Cerveau
+node tools/verify-crib.mjs http://localhost:5199/games/crib/ grip                # Berceau
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON

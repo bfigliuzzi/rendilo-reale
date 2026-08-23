@@ -38,6 +38,7 @@ export default defineConfig({
         horde: resolve(__dirname, 'games/horde/index.html'),
         hive: resolve(__dirname, 'games/hive/index.html'),
         mind: resolve(__dirname, 'games/mind/index.html'),
+        crib: resolve(__dirname, 'games/crib/index.html'),
       },
     },
   },
