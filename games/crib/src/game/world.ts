@@ -11,9 +11,11 @@ import { MARKER_RING_MARGIN, PALETTE, type Atlas } from '../render/textures';
 import type { Steer } from '../input/steer';
 import { Boss, type Pull } from './boss';
 import { Bullets } from './bullets';
+import { resetLoadout } from './loadout';
 import { Crib } from './crib';
 import { EnemyPool } from './enemies';
 import { Hero } from './hero';
+import { makeLevel, type Level } from './level';
 import { Peas } from './peas';
 import { Pickups } from './pickups';
 import { Puddles } from './puddles';
@@ -76,12 +78,14 @@ export class World {
 
   onGameOver: ((victory: boolean, timeSec: number) => void) | null = null;
 
-  camX = B.CRIB_X;
-  camY = B.CRIB_Y;
-  private prevCamX = B.CRIB_X;
-  private prevCamY = B.CRIB_Y;
+  camX = 0;
+  camY = 0;
+  private prevCamX = 0;
+  private prevCamY = 0;
 
-  private def: LevelDef | null = null;
+  /** Le niveau en cours sous sa forme runtime. `null` hors partie. */
+  level: Level | null = null;
+
   private rand: () => number = mulberry32(1);
   private readonly grid = new SpatialGrid(B.GRID_COLS, B.GRID_ROWS, B.GRID_CELL, B.GRID_MAX_PER_CELL);
   private readonly pull: Pull = { x: 0, y: 0, grip: 0 };
@@ -117,17 +121,22 @@ export class World {
     this.puddles = new Puddles(atlas, layers.puddles);
     this.boss = new Boss(atlas, layers.boss);
 
-    this.grid.setOrigin(0, 0);
+    // origine négative : voir GRID_MARGIN_CELLS — les amorces de voies posent des
+    // ennemis hors arène, et un insert hors bornes est ignoré EN SILENCE
+    this.grid.setOrigin(-B.GRID_MARGIN_CELLS * B.GRID_CELL, -B.GRID_MARGIN_CELLS * B.GRID_CELL);
     this.rangeRing = new Sprite({ texture: atlas.rangeRing, anchor: { x: 0.5, y: 0.5 }, alpha: 0.16 });
-    this.rangeScale = (B.HERO_RANGE * 2 * MARKER_RING_MARGIN) / atlas.rangeRing.width;
-    this.rangeRing.scale.set(this.rangeScale);
+    // facteur par PIXEL de portée : la portée est désormais une stat du bébé
+    // (améliorable en cours de niveau), l'échelle se recalcule donc par frame —
+    // figée au constructeur, l'anneau afficherait un mensonge après un achat
+    this.rangeScale = (2 * MARKER_RING_MARGIN) / atlas.rangeRing.width;
     layers.ranges.addChild(this.rangeRing);
   }
 
   // ------------------------------------------------------------------ cycle
 
   loadLevel(def: LevelDef): void {
-    this.def = def;
+    this.level = makeLevel(def);
+    const level = this.level;
     this.t = 0;
     // seed dérivé de celui du niveau : les drops sont reproductibles au même seed,
     // et indépendants des angles de spawn (rejouer un tirage rejoue tout à
@@ -140,11 +149,12 @@ export class World {
     this.puddles.clear();
     this.fx.clear();
     this.boss.retire();
-    this.crib.reset(def.cribHp);
-    this.hero.reset(B.CRIB_X, B.CRIB_Y + 90);
+    this.crib.reset(def.cribHp, level.cribX, level.cribY);
+    resetLoadout(this.hero.loadout);
+    this.hero.reset(level.cribX, level.cribY + 90);
     this.spawner.load(def);
-    this.camX = this.prevCamX = clamp(this.hero.x, B.DESIGN_W / 2, def.arenaW - B.DESIGN_W / 2);
-    this.camY = this.prevCamY = clamp(this.hero.y, B.DESIGN_H / 2, def.arenaH - B.DESIGN_H / 2);
+    this.camX = this.prevCamX = clamp(this.hero.x, B.DESIGN_W / 2, level.w - B.DESIGN_W / 2);
+    this.camY = this.prevCamY = clamp(this.hero.y, B.DESIGN_H / 2, level.h - B.DESIGN_H / 2);
     this.run.kills = 0;
     this.run.picked = 0;
     this.run.pins = 0;
@@ -156,8 +166,8 @@ export class World {
 
   update(dt: number): void {
     this.clock += dt;
-    if (!this.playing || !this.def) return;
-    const def = this.def;
+    if (!this.playing || !this.level) return;
+    const level = this.level;
     this.t += dt;
 
     this.spawner.update(this.t, this.sink);
@@ -169,7 +179,7 @@ export class World {
     this.resolveContacts();
     this.boss.suck(this.hero.x, this.hero.y, this.pull);
     const gripLoad = this.gripLoadTotal() + this.puddles.gripAt(this.hero.x, this.hero.y) + this.pull.grip;
-    this.hero.update(dt, this.steer.dirX, this.steer.dirY, gripLoad, this.pull.x, this.pull.y, def.arenaW, def.arenaH);
+    this.hero.update(dt, this.steer.dirX, this.steer.dirY, gripLoad, this.pull.x, this.pull.y, level.w, level.h);
     this.run.maxGrip = Math.max(this.run.maxGrip, this.hero.grip);
     if (this.hero.pinned && !this.wasPinned) {
       this.run.pins++;
@@ -195,7 +205,7 @@ export class World {
 
     this.enemies.sweepDead(this.onEnemyDeath);
 
-    this.updateCamera(dt, def);
+    this.updateCamera(dt, level);
     this.checkEnd();
   }
 
@@ -439,11 +449,13 @@ export class World {
         const a = angle + (count === 1 ? 0 : (k / (count - 1) - 0.5) * arc);
         // léger étagement radial : les rangs arrière n'entrent pas tous ensemble
         const r = B.SPAWN_RING + (k % 3) * 26;
+        const lv = this.level;
+        if (!lv) return;
         this.enemies.spawn(
           kind,
-          clamp(B.CRIB_X + Math.cos(a) * r, 16, B.ARENA_W - 16),
-          clamp(B.CRIB_Y + Math.sin(a) * r, 16, B.ARENA_H - 16),
-          this.def?.hpMul ?? 1,
+          clamp(lv.cribX + Math.cos(a) * r, 16, lv.w - 16),
+          clamp(lv.cribY + Math.sin(a) * r, 16, lv.h - 16),
+          lv.def.hpMul,
           k / Math.max(1, count),
         );
       }
@@ -451,13 +463,17 @@ export class World {
     },
     spawnPickup: (kind, x, y) => this.pickups.spawn(kind, x, y),
     spawnBoss: () => {
+      const lv = this.level;
+      if (!lv) return;
       // il entre par le bord le plus ÉLOIGNÉ du bébé : on doit le voir venir et
       // avoir le temps de nettoyer, pas le découvrir collé au berceau
       const a = Math.atan2(this.crib.y - this.hero.y, this.crib.x - this.hero.x);
       this.boss.spawn(
-        clamp(B.CRIB_X + Math.cos(a) * B.SPAWN_RING, 60, B.ARENA_W - 60),
-        clamp(B.CRIB_Y + Math.sin(a) * B.SPAWN_RING, 60, B.ARENA_H - 60),
+        clamp(lv.cribX + Math.cos(a) * B.SPAWN_RING, 60, lv.w - 60),
+        clamp(lv.cribY + Math.sin(a) * B.SPAWN_RING, 60, lv.h - 60),
         B.BOSS_HP,
+        lv.cribX,
+        lv.cribY,
       );
       this.fx.shake(9);
       this.sfx.bossArrive();
@@ -482,7 +498,7 @@ export class World {
 
   // ----------------------------------------------------------------- caméra
 
-  private updateCamera(dt: number, def: LevelDef): void {
+  private updateCamera(dt: number, level: Level): void {
     this.prevCamX = this.camX;
     this.prevCamY = this.camY;
     // deadzone : la caméra ne bouge que si le bébé sort du rectangle central. Sans
@@ -494,8 +510,8 @@ export class World {
     if (this.hero.y > this.camY + B.CAM_DEADZONE_Y) ty = this.hero.y - B.CAM_DEADZONE_Y;
     else if (this.hero.y < this.camY - B.CAM_DEADZONE_Y) ty = this.hero.y + B.CAM_DEADZONE_Y;
     const k = Math.min(1, dt * B.CAM_LERP);
-    this.camX = clamp(this.camX + (tx - this.camX) * k, B.DESIGN_W / 2, def.arenaW - B.DESIGN_W / 2);
-    this.camY = clamp(this.camY + (ty - this.camY) * k, B.DESIGN_H / 2, def.arenaH - B.DESIGN_H / 2);
+    this.camX = clamp(this.camX + (tx - this.camX) * k, B.DESIGN_W / 2, level.w - B.DESIGN_W / 2);
+    this.camY = clamp(this.camY + (ty - this.camY) * k, B.DESIGN_H / 2, level.h - B.DESIGN_H / 2);
   }
 
   // ------------------------------------------------------------------ rendu
@@ -512,6 +528,7 @@ export class World {
     const hy = lerp(this.hero.prevY, this.hero.y, alpha);
 
     this.rangeRing.position.set(hx, hy);
+    this.rangeRing.scale.set(this.hero.range * this.rangeScale);
     this.rangeRing.alpha = 0.1 + (this.hero.bottleT > 0 ? 0.12 : 0);
 
     // filets de bave vers chaque source comptée dans le grip : on voit QUI colle
@@ -581,7 +598,9 @@ export class World {
     for (let k = 0; k < B.STRESS_COUNT; k++) {
       const a = (k / B.STRESS_COUNT) * Math.PI * 2;
       const r = 120 + (k % 7) * 60;
-      this.enemies.spawn(k % 3, B.CRIB_X + Math.cos(a) * r, B.CRIB_Y + Math.sin(a) * r, 40, k / B.STRESS_COUNT);
+      const lv = this.level;
+      if (!lv) return;
+      this.enemies.spawn(k % 3, lv.cribX + Math.cos(a) * r, lv.cribY + Math.sin(a) * r, 40, k / B.STRESS_COUNT);
     }
   }
 }

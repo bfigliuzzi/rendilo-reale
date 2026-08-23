@@ -2,6 +2,8 @@ import { Sprite } from 'pixi.js';
 import { clamp, lerp } from '@shared/math';
 import * as B from '../config/balance';
 import type { Atlas } from '../render/textures';
+import type { Shooter } from './bullets';
+import { emptyLoadout, type Loadout } from './loadout';
 
 /**
  * Le bébé. C'est ici que vit la mécanique signature du jeu : il n'a PAS de PV, il
@@ -24,7 +26,7 @@ import type { Atlas } from '../render/textures';
  * L'animation est indexée sur la DISTANCE parcourue, pas sur le temps : la cadence
  * de rampe ralentit donc d'elle-même avec le grip et se figeage à l'arrêt.
  */
-export class Hero {
+export class Hero implements Shooter {
   x = 0;
   y = 0;
   prevX = 0;
@@ -46,6 +48,16 @@ export class Hero {
   /** Nombre d'ennemis effectivement comptés dans le grip ce tick (rendu des filets). */
   clung = 0;
 
+  /** Accumulateur de cadence — le bébé est un `Shooter` comme les tours. */
+  fireAcc = 0;
+
+  /**
+   * Améliorations achetées pendant CE niveau. `emptyLoadout()` est l'identité :
+   * une partie fraîche a exactement les stats du POC, ce qui est la condition
+   * pour que le scénario `grip` du bot mesure toujours les mêmes paliers.
+   */
+  loadout: Loadout = emptyLoadout();
+
   private readonly sprite: Sprite;
   private readonly shadow: Sprite;
 
@@ -60,7 +72,17 @@ export class Hero {
 
   /** Cadence de tir courante, en balles/s. Le grip n'entre PAS dans ce calcul. */
   get rate(): number {
-    return B.HERO_RATE * (this.bottleT > 0 ? B.BOTTLE_RATE_MUL : 1);
+    return B.HERO_RATE * this.loadout.rateMul * (this.bottleT > 0 ? B.BOTTLE_RATE_MUL : 1);
+  }
+
+  /** Dégâts/s. Les dégâts par balle en sont dérivés dans `Bullets`. */
+  get dps(): number {
+    return B.HERO_DPS * this.loadout.dpsMul;
+  }
+
+  /** Portée d'acquisition ET de vol des cubes. */
+  get range(): number {
+    return B.HERO_RANGE * this.loadout.rangeMul;
   }
 
   get pinned(): boolean {
@@ -69,7 +91,7 @@ export class Hero {
 
   /** Vitesse effective, en px/s — exposée pour le HUD et les assertions du bot. */
   get speed(): number {
-    return B.HERO_SPEED * (1 - this.grip);
+    return B.HERO_SPEED * this.loadout.speedMul * (1 - this.grip);
   }
 
   reset(x: number, y: number): void {
@@ -83,6 +105,7 @@ export class Hero {
     this.dir = 0;
     this.walk = 0;
     this.clung = 0;
+    this.fireAcc = 0;
   }
 
   /** Grip ponctuel (impact de pois). Sans effet sous doudou. */

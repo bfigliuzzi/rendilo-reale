@@ -22,6 +22,23 @@ export const DESIGN_H = 960;
 export const ARENA_W = 1080;
 export const ARENA_H = 1440;
 
+/**
+ * Borne SUPÉRIEURE des arènes. Elle ne décrit aucune carte : elle sert à
+ * dimensionner UNE FOIS la grille spatiale, qu'on ne réalloue donc jamais d'une
+ * carte à l'autre (les cellules extérieures d'une petite carte restent vides, c'est
+ * gratuit). Toute carte plus grande casserait la grille en silence.
+ */
+export const MAX_ARENA_W = 1920;
+export const MAX_ARENA_H = 2560;
+
+/**
+ * Côté d'une tuile du masque de terrain. 24 divise exactement 1080 et 1440, reste
+ * plus petit que le diamètre du bébé (26 px, donc aucun mur ne peut « rentrer » dans
+ * lui sans être vu par la sonde), et vaut 8× son déplacement maximal par tick
+ * (168 / 60 = 2,8 px) — aucun tunneling n'est possible, donc aucun test balayé.
+ */
+export const TERRAIN_TILE = 24;
+
 /** Le berceau est au centre exact de l'arène, immobile toute la partie. */
 export const CRIB_X = ARENA_W / 2;
 export const CRIB_Y = ARENA_H / 2;
@@ -377,6 +394,48 @@ export const BOSS_DUST_COUNT = 3;
 /** Le cône englue aussi : être aspiré, c'est déjà commencer à coller. */
 export const BOSS_SUCK_GRIP = 0.35;
 
+// -------------------------------------------------- améliorations du bébé (niveau)
+
+export type BabyUpgradeId = 'dps' | 'rate' | 'range' | 'speed' | 'grit';
+
+export interface BabyUpgradeDef {
+  id: BabyUpgradeId;
+  icon: string;
+  name: string;
+  desc: string;
+  /** 4 paliers : la course dure UN niveau, pas trente. */
+  maxLevel: number;
+  /** Gain par palier, appliqué en MULTIPLICATIF depuis le niveau (jamais cumulé). */
+  per: number;
+  /** Coût du palier `level` (0-based) : 50 / 80 / 128 / 205. */
+  cost: (level: number) => number;
+}
+
+const babyCost = (level: number): number => Math.round(50 * Math.pow(1.6, level));
+
+/**
+ * Achetées AU BERCEAU, valables pour le niveau seulement. Elles ne touchent jamais
+ * le save : l'absence de méta-progression est une décision de design, et c'est le
+ * schéma de sauvegarde qui la fait respecter (rien de tout ceci n'y figure).
+ *
+ * `grit` est la seule qui parle à la mécanique centrale : à 4 paliers, `gritDiv`
+ * vaut 1,6 — deux mamies ne clouent plus, trois oui. Volontairement le palier le
+ * plus cher en ressenti : rendre l'engluement indolore tuerait le jeu.
+ */
+export const BABY_UPGRADES = [
+  { id: 'dps', icon: '\u{1F9F8}', name: 'Cubes lourds', desc: 'Dégâts +18 % par palier', maxLevel: 4, per: 0.18, cost: babyCost },
+  { id: 'rate', icon: '\u{1F37C}', name: 'Petits bras vifs', desc: 'Cadence +12 % par palier', maxLevel: 4, per: 0.12, cost: babyCost },
+  { id: 'range', icon: '\u{1F441}', name: 'Bon oeil', desc: 'Portée +10 % par palier', maxLevel: 4, per: 0.1, cost: babyCost },
+  { id: 'speed', icon: '\u{1F45F}', name: 'Genoux rodés', desc: 'Vitesse +8 % par palier', maxLevel: 4, per: 0.08, cost: babyCost },
+  { id: 'grit', icon: '\u{1F9FC}', name: 'Peau savonnée', desc: 'Engluement divisé par 1,15 par palier', maxLevel: 4, per: 0.15, cost: babyCost },
+] as const satisfies readonly BabyUpgradeDef[];
+
+export function babyUpgrade(id: BabyUpgradeId): BabyUpgradeDef {
+  const d = BABY_UPGRADES.find((u) => u.id === id);
+  if (!d) throw new Error(`amélioration inconnue : ${id}`);
+  return d;
+}
+
 // ----------------------------------------------------------------- pools/grille
 
 export const MAX_ENEMIES = 460;
@@ -386,8 +445,18 @@ export const MAX_PICKUPS = 28;
 export const MAX_PUDDLES = 36;
 
 export const GRID_CELL = 64;
-export const GRID_COLS = Math.ceil(ARENA_W / GRID_CELL) + 1;
-export const GRID_ROWS = Math.ceil(ARENA_H / GRID_CELL) + 1;
+/**
+ * Marge NÉGATIVE de la grille, en cellules. Les amorces de voies posent les ennemis
+ * HORS de l'arène (coordonnées négatives) et `SpatialGrid.insert` ignore
+ * SILENCIEUSEMENT tout index hors bornes : un ennemi ignoré devient un « fantôme »
+ * qui agit sans être ciblable — exactement le bug d'équité mesuré dans Essaim. Le
+ * bébé posté au bord tire à 195 px dans l'amorce, il faut donc que la grille l'y
+ * couvre.
+ */
+export const GRID_MARGIN_CELLS = 6;
+/** Dimensionnée sur la PLUS GRANDE arène : jamais réallouée d'une carte à l'autre. */
+export const GRID_COLS = Math.ceil(MAX_ARENA_W / GRID_CELL) + 1 + GRID_MARGIN_CELLS * 2;
+export const GRID_ROWS = Math.ceil(MAX_ARENA_H / GRID_CELL) + 1 + GRID_MARGIN_CELLS * 2;
 /**
  * DOIT rester large. Un insert au-delà du plafond est ignoré silencieusement par
  * `SpatialGrid` : l'entité devient un « fantôme » qui agit sans être ciblable —

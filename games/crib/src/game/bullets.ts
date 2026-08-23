@@ -3,7 +3,6 @@ import { lerp } from '@shared/math';
 import * as B from '../config/balance';
 import type { Atlas } from '../render/textures';
 import type { EnemyPool } from './enemies';
-import type { Hero } from './hero';
 
 const PARK = -9999;
 
@@ -17,7 +16,27 @@ export interface AimTarget {
 }
 
 /**
- * Cubes-hochets lancés par le bébé. Pool SoA, mêmes invariants que les autres.
+ * Ce dont `Bullets` a besoin d'un TIREUR — le bébé, ou une tour.
+ *
+ * `fireAcc` vit sur le tireur et pas sur le pool, et ce n'est pas un détail : avec
+ * un accumulateur unique partagé, le bébé et quatre tours tireraient en salve
+ * parfaitement synchrone à cadence divisée par cinq. C'est la seule modification
+ * structurelle qu'a demandée la généralisation.
+ */
+export interface Shooter {
+  x: number;
+  y: number;
+  /** balles/s */
+  rate: number;
+  /** dégâts/s ; les dégâts PAR BALLE en sont dérivés (`dps / rate`). */
+  dps: number;
+  range: number;
+  fireAcc: number;
+}
+
+/**
+ * Cubes-hochets lancés par le bébé et par les tours. Pool SoA, mêmes invariants que
+ * les autres.
  *
  * DEUX points de conception importants :
  *
@@ -41,7 +60,6 @@ export class Bullets {
   readonly dmg: Float32Array;
   readonly life: Float32Array;
   private readonly particles: Particle[] = [];
-  private fireAcc = 0;
   /** Sortie de `aim()`, préallouée : zéro allocation dans le tick. */
   private readonly target = { x: 0, y: 0, found: false };
 
@@ -65,7 +83,7 @@ export class Bullets {
     }
   }
 
-  private spawn(x: number, y: number, vx: number, vy: number, dmg: number): void {
+  private spawn(x: number, y: number, vx: number, vy: number, dmg: number, range: number): void {
     if (this.count >= this.cap) return;
     const i = this.count++;
     this.x[i] = this.prevX[i] = x;
@@ -73,7 +91,9 @@ export class Bullets {
     this.vx[i] = vx;
     this.vy[i] = vy;
     this.dmg[i] = dmg;
-    this.life[i] = (B.HERO_RANGE + B.BULLET_REACH_MARGIN) / B.BULLET_SPEED;
+    // durée de vie dérivée de la portée DU TIREUR : une tour à 220 verrait sinon
+    // ses balles s'évaporer en vol, calées sur la portée du bébé
+    this.life[i] = (range + B.BULLET_REACH_MARGIN) / B.BULLET_SPEED;
   }
 
   kill(i: number): void {
@@ -101,33 +121,33 @@ export class Bullets {
    *
    * Retourne le nombre de balles tirées ce tick, pour le son (throttlé en aval).
    */
-  autoFire(dt: number, hero: Hero, enemies: EnemyPool, boss: AimTarget): number {
-    const rate = hero.rate;
-    this.fireAcc += rate * dt;
-    if (this.fireAcc < 1) return 0;
-    this.aim(hero.x, hero.y, enemies, boss);
+  autoFire(dt: number, s: Shooter, enemies: EnemyPool, boss: AimTarget): number {
+    const rate = s.rate;
+    s.fireAcc += rate * dt;
+    if (s.fireAcc < 1) return 0;
+    this.aim(s.x, s.y, s.range, enemies, boss);
     if (!this.target.found) {
       // pas de cible : on garde au plus un tir « en réserve » pour que la première
       // balle sorte immédiatement à l'entrée en portée, sans rafale de rattrapage
-      this.fireAcc = Math.min(this.fireAcc, 1);
+      s.fireAcc = Math.min(s.fireAcc, 1);
       return 0;
     }
-    const dmg = B.HERO_DPS / rate;
+    const dmg = s.dps / rate;
     let fired = 0;
-    while (this.fireAcc >= 1) {
-      this.fireAcc -= 1;
-      const dx = this.target.x - hero.x;
-      const dy = this.target.y - hero.y;
+    while (s.fireAcc >= 1) {
+      s.fireAcc -= 1;
+      const dx = this.target.x - s.x;
+      const dy = this.target.y - s.y;
       const d = Math.hypot(dx, dy) || 1;
-      this.spawn(hero.x, hero.y - 4, (dx / d) * B.BULLET_SPEED, (dy / d) * B.BULLET_SPEED, dmg);
+      this.spawn(s.x, s.y - 4, (dx / d) * B.BULLET_SPEED, (dy / d) * B.BULLET_SPEED, dmg, s.range);
       fired++;
     }
     return fired;
   }
 
-  /** Menace vivante la plus proche dans `HERO_RANGE`, ennemis ET boss. */
-  private aim(hx: number, hy: number, enemies: EnemyPool, boss: AimTarget): void {
-    let bestD2 = B.HERO_RANGE * B.HERO_RANGE;
+  /** Menace vivante la plus proche dans `range`, ennemis ET boss. */
+  private aim(hx: number, hy: number, range: number, enemies: EnemyPool, boss: AimTarget): void {
+    let bestD2 = range * range;
     this.target.found = false;
     for (let i = 0; i < enemies.count; i++) {
       if (enemies.hp[i] <= 0) continue;
@@ -185,6 +205,5 @@ export class Bullets {
       this.particles[i].y = PARK;
     }
     this.count = 0;
-    this.fireAcc = 0;
   }
 }

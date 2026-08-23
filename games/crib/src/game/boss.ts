@@ -65,12 +65,12 @@ export class Boss {
     return this.rage ? B.BOSS_RAGE_HALF_ANGLE : B.BOSS_SUCK_HALF_ANGLE;
   }
 
-  spawn(x: number, y: number, hp: number): void {
+  spawn(x: number, y: number, hp: number, cribX: number, cribY: number): void {
     this.active = true;
     this.x = this.prevX = x;
     this.y = this.prevY = y;
     this.hp = this.maxHp = hp;
-    this.angle = this.prevAngle = Math.atan2(B.CRIB_Y - y, B.CRIB_X - x);
+    this.angle = this.prevAngle = Math.atan2(cribY - y, cribX - x);
     this.dustT = B.BOSS_DUST_INTERVAL;
     this.hitT = 0;
     this.sprite.visible = true;

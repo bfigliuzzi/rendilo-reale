@@ -32,6 +32,9 @@ export interface LevelDef {
   seed: number;
   arenaW: number;
   arenaH: number;
+  /** Position du berceau. Elle n'est plus au centre par nature : chaque carte la pose. */
+  cribX: number;
+  cribY: number;
   cribHp: number;
   /** Multiplicateur global de PV ennemis — le levier de difficulté le plus direct. */
   hpMul: number;
@@ -55,6 +58,8 @@ export function makeTestLevel(seed = 0xbebe): LevelDef {
     seed,
     arenaW: B.ARENA_W,
     arenaH: B.ARENA_H,
+    cribX: B.CRIB_X,
+    cribY: B.CRIB_Y,
     cribHp: B.CRIB_HP,
     hpMul: 1,
     events: [

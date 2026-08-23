@@ -14,8 +14,9 @@ import type { Atlas } from '../render/textures';
 export class Crib {
   hp = B.CRIB_HP;
   maxHp = B.CRIB_HP;
-  readonly x = B.CRIB_X;
-  readonly y = B.CRIB_Y;
+  /** Position POSÉE PAR LA CARTE (`reset`) : elle n'est plus au centre par nature. */
+  x = 0;
+  y = 0;
 
   /** Compte à rebours du tressaillement d'impact (rendu uniquement). */
   private hitT = 0;
@@ -29,13 +30,15 @@ export class Crib {
     parent: Container,
   ) {
     this.sprite = new Sprite({ texture: atlas.crib[0], anchor: { x: 0.5, y: 0.62 } });
-    this.sprite.position.set(this.x, this.y);
     parent.addChild(this.sprite);
   }
 
-  reset(maxHp: number): void {
+  reset(maxHp: number, x: number, y: number): void {
     this.maxHp = maxHp;
     this.hp = maxHp;
+    this.x = x;
+    this.y = y;
+    this.sprite.position.set(x, y);
     this.hitT = 0;
     this.recentDamage = 0;
   }

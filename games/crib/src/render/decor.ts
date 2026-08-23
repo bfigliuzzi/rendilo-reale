@@ -51,6 +51,8 @@ export class Decor {
   private readonly pollen: Sprite[] = [];
 
   private clock = 0;
+  private cribX = 0;
+  private cribY = 0;
 
   constructor(
     propLayer: Container,
@@ -75,6 +77,8 @@ export class Decor {
 
   setup(def: LevelDef): void {
     const rand = mulberry32(decorSeed(def.id) ^ def.seed);
+    this.cribX = def.cribX;
+    this.cribY = def.cribY;
     for (let i = 0; i < this.count; i++) this.props[i].position.set(PARK, PARK);
     this.count = 0;
 
@@ -115,8 +119,8 @@ export class Decor {
   }
 
   private clear(x: number, y: number): boolean {
-    const cdx = x - B.CRIB_X;
-    const cdy = y - B.CRIB_Y;
+    const cdx = x - this.cribX;
+    const cdy = y - this.cribY;
     if (cdx * cdx + cdy * cdy < CRIB_CLEAR * CRIB_CLEAR) return false;
     for (let i = 0; i < this.count; i++) {
       const dx = x - this.propX[i];
