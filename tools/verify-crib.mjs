@@ -7,8 +7,13 @@
 //                   tombe à zéro, que son tir auto SEUL le libère, et que le grip
 //                   redescend à zéro. « Le bébé reste piégé » est le pire bug
 //                   possible de ce jeu : c'est ce scénario qui le voit.
-//   win[:seed]      bot qui joue une partie complète, ATTEND une victoire.
-//   idle[:seed]     passif, ATTEND une défaite — mesure la pression brute.
+//   win[:seed]      bot qui joue un NIVEAU ENTIER : au jour il marche jusqu'aux
+//                   emplacements et achète, la nuit il défend. ATTEND une victoire.
+//   idle[:seed]     enchaîne les nuits SANS RIEN ACHETER, ATTEND une défaite — c'est
+//                   la mesure de la pression brute d'une carte.
+//   day             non-régression de la moitié économie : marcher à un emplacement,
+//                   acheter, vérifier que l'or décroît, que le bâtiment SURVIT à une
+//                   nuit, et que l'enchaînement jour → nuit → jour a bien lieu.
 //   keyboard        joue au clavier SEUL depuis l'accueil : vérifie les 8 directions,
 //                   qu'un contrôle reste atteignable au Tab en jeu, et que le focus
 //                   ne retombe JAMAIS sur <body> après un changement d'écran (le
@@ -29,7 +34,7 @@ const SCENARIO = process.argv[3] ?? 'grip';
 const SHOT = process.argv[4] ?? '';
 
 const [kind, arg] = SCENARIO.split(':');
-if (!['grip', 'win', 'idle', 'keyboard', 'stress'].includes(kind)) {
+if (!['grip', 'win', 'idle', 'day', 'keyboard', 'stress'].includes(kind)) {
   console.error(`scénario inconnu : ${SCENARIO}`);
   process.exit(2);
 }
@@ -227,6 +232,7 @@ if (kind === 'win' || kind === 'idle') {
   const limitMs = 420000;
   let last = null;
   let lastNight = 0;
+  let dayTicks = 0;
   while (Date.now() - t0 < limitMs) {
     await sleep(140);
     last = await snapshot();
@@ -234,7 +240,14 @@ if (kind === 'win' || kind === 'idle') {
     // ne construit pas encore (rien à acheter) — il enchaîne, ce qui est exactement
     // la mesure « sans achat » qu'on veut pour `idle`.
     if (last.state === 'day') {
-      await page.evaluate(() => window.__game.flow.startNight());
+      // `idle` ne dépense RIEN : c'est exactement la mesure qu'on veut de lui.
+      const done = kind === 'idle' ? true : await shop();
+      dayTicks++;
+      // garde-fou : un bot bloqué en route vers une dalle ne doit pas geler le run
+      if (done || dayTicks > 150) {
+        dayTicks = 0;
+        await page.evaluate(() => window.__game.flow.startNight());
+      }
       continue;
     }
     if (kind === 'win') await drive();
@@ -439,6 +452,141 @@ async function drive() {
     g.steer.dirX = dx;
     g.steer.dirY = dy;
   });
+}
+
+/**
+ * Le bot fait ses courses. Deux règles qui comptent plus que les priorités :
+ *
+ * ① il MARCHE jusqu'à la dalle. Un achat téléportable laisserait passer une
+ *    régression sur la mécanique « aller à l'emplacement », qui est la moitié du
+ *    design de la phase de jour.
+ * ② il n'implémente AUCUN coût en node. `buy` applique exactement les gardes du
+ *    bouton (jour + à portée + finançable), donc il n'existe pas de second chemin
+ *    d'achat non testé.
+ *
+ * Retourne `true` quand il n'y a plus rien d'abordable : le jour peut se terminer.
+ */
+async function shop() {
+  return page.evaluate(() => {
+    const g = window.__game;
+    const b = g.buildings;
+    const e = g.economy;
+    let best = null;
+    for (let i = 0; i < b.slots.length; i++) {
+      for (const o of b.offersFor(i, e)) {
+        if (!o.affordable) continue;
+        // améliorer d'abord (le meilleur or/dégât), puis tenir les voies, puis le
+        // confort. Le talc en dernier : il ne tue rien, et le bot ne se fait clouer
+        // que lorsqu'il a déjà échoué à nettoyer.
+        const prio = o.id === 'up' ? 0 : o.id === 'rattle' ? 1 : o.id === 'barricade' ? 2 : o.id === 'mobile' ? 3 : 4;
+        if (!best || prio < best.prio || (prio === best.prio && o.cost < best.cost)) {
+          best = { slot: i, offer: o.id, prio, cost: o.cost };
+        }
+      }
+    }
+    if (!best) {
+      g.steer.dirX = 0;
+      g.steer.dirY = 0;
+      return true;
+    }
+    if (b.nearSlot === best.slot) {
+      b.buy(best.slot, best.offer, e, g.world.phase);
+      return false;
+    }
+    const s = b.slots[best.slot].def;
+    const dx = s.x - g.world.hero.x;
+    const dy = s.y - g.world.hero.y;
+    const d = Math.hypot(dx, dy) || 1;
+    g.steer.dirX = dx / d;
+    g.steer.dirY = dy / d;
+    return false;
+  });
+}
+
+// ----------------------------------------------------------------------- day
+
+if (kind === 'day') {
+  report.expected = 'pass';
+  const checks = {};
+  await page.evaluate((seed) => window.__game.flow.startLevel(seed), SEED);
+
+  const gold0 = await page.evaluate(() => window.__game.economy.gold);
+  checks.startsOnDay = (await page.evaluate(() => window.__game.flow.state)) === 'day';
+
+  // ① marcher jusqu'à la dalle la plus proche, sans téléportation
+  let reached = false;
+  for (let k = 0; k < 220 && !reached; k++) {
+    await sleep(80);
+    reached = await page.evaluate(() => {
+      const g = window.__game;
+      const b = g.buildings;
+      if (b.nearSlot >= 0) {
+        g.steer.dirX = 0;
+        g.steer.dirY = 0;
+        return true;
+      }
+      // la dalle de tourelle la plus proche du berceau
+      let best = -1;
+      let bestD = Infinity;
+      for (let i = 0; i < b.slots.length; i++) {
+        const s = b.slots[i].def;
+        if (s.accepts !== 'tower') continue;
+        const d = Math.hypot(s.x - g.world.crib.x, s.y - g.world.crib.y);
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      const s = b.slots[best].def;
+      const dx = s.x - g.world.hero.x;
+      const dy = s.y - g.world.hero.y;
+      const d = Math.hypot(dx, dy) || 1;
+      g.steer.dirX = dx / d;
+      g.steer.dirY = dy / d;
+      return false;
+    });
+  }
+  checks.walkedToSlot = reached;
+
+  // ② la feuille d'achat s'ouvre TOUTE SEULE à la proximité
+  checks.panelOpens = await page.evaluate(() => !document.getElementById('hud-build').hidden);
+
+  // ③ acheter par le MÊME chemin que le bouton
+  const bought = await page.evaluate(() => {
+    const g = window.__game;
+    return g.buildings.buy(g.buildings.nearSlot, 'rattle', g.economy, g.world.phase);
+  });
+  const gold1 = await page.evaluate(() => window.__game.economy.gold);
+  checks.bought = bought;
+  checks.goldSpent = gold1 < gold0;
+
+  // ④ acheter la nuit doit être REFUSÉ : la garde est dans `buy`, pas dans l'UI
+  await page.evaluate(() => window.__game.flow.startNight());
+  await sleep(200);
+  checks.nightStarted = (await page.evaluate(() => window.__game.flow.state)) === 'night';
+  checks.buyRefusedAtNight = !(await page.evaluate(() => {
+    const g = window.__game;
+    return g.buildings.buy(0, 'rattle', g.economy, g.world.phase);
+  }));
+
+  // ⑤ la nuit passe, et le bâtiment SURVIT au retour du jour
+  for (let k = 0; k < 500; k++) {
+    await sleep(120);
+    await drive();
+    const st = await page.evaluate(() => window.__game.flow.state);
+    if (st === 'day' || st === 'result') break;
+  }
+  const after = await page.evaluate(() => {
+    const g = window.__game;
+    return { state: g.flow.state, built: g.buildings.slots.filter((s) => s.building >= 0).length };
+  });
+  checks.backToDay = after.state === 'day';
+  checks.buildingSurvivedNight = after.built >= 1;
+
+  detail.gold = { before: gold0, after: gold1 };
+  detail.after = after;
+  detail.checks = checks;
+  report.outcome = Object.values(checks).every(Boolean) ? 'pass' : 'fail';
 }
 
 // ------------------------------------------------------------------ keyboard

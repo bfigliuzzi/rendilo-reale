@@ -29,6 +29,8 @@ export class Layers {
   readonly ranges = new Container(); // anneau de portée du bébé, sous les entités
   readonly shadows: ParticleContainer; // ombres portées : ce qui vend le top-down
   readonly pickups: ParticleContainer;
+  /** Bâtiments : au-dessus du sol, sous les entités mobiles. */
+  readonly buildings = new Container();
   readonly crib = new Container();
   readonly enemies: ParticleContainer;
   readonly boss = new Container();
@@ -68,6 +70,7 @@ export class Layers {
       this.ranges,
       this.shadows,
       this.pickups,
+      this.buildings,
       this.crib,
       this.enemies,
       this.boss,

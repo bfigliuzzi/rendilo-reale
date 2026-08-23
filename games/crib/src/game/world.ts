@@ -10,6 +10,7 @@ import { bakeMap } from '../render/mapBake';
 import { MARKER_RING_MARGIN, PALETTE, type Atlas } from '../render/textures';
 import type { Steer } from '../input/steer';
 import { Boss, type Pull } from './boss';
+import { Buildings } from './buildings';
 import { Bullets } from './bullets';
 import { resetLoadout } from './loadout';
 import { Crib } from './crib';
@@ -110,6 +111,7 @@ export class World {
   readonly pickups: Pickups;
   readonly puddles: Puddles;
   readonly boss: Boss;
+  readonly buildings: Buildings;
   readonly spawner = new Spawner();
   /** La bourse du niveau. Remise à zéro par `loadLevel` seul — jamais par une nuit. */
   readonly economy = new Economy();
@@ -133,6 +135,8 @@ export class World {
   private readonly grid = new SpatialGrid(B.GRID_COLS, B.GRID_ROWS, B.GRID_CELL, B.GRID_MAX_PER_CELL);
   private readonly pull: Pull = { x: 0, y: 0, grip: 0 };
   private readonly rangeRing: Sprite;
+  /** Chevron flottant au-dessus de l'emplacement à portée. Une FORME, pas un anneau. */
+  private readonly buildHint: Sprite;
   private readonly rangeScale: number;
   private wasPinned = false;
 
@@ -166,6 +170,7 @@ export class World {
     this.pickups = new Pickups(layers.pickups, atlas);
     this.puddles = new Puddles(atlas, layers.puddles);
     this.boss = new Boss(atlas, layers.boss);
+    this.buildings = new Buildings(layers.buildings, atlas);
 
     // origine négative : voir GRID_MARGIN_CELLS — les amorces de voies posent des
     // ennemis hors arène, et un insert hors bornes est ignoré EN SILENCE
@@ -176,6 +181,8 @@ export class World {
     // figée au constructeur, l'anneau afficherait un mensonge après un achat
     this.rangeScale = (2 * MARKER_RING_MARGIN) / atlas.rangeRing.width;
     layers.ranges.addChild(this.rangeRing);
+    this.buildHint = new Sprite({ texture: atlas.buildHint, anchor: { x: 0.5, y: 1 }, visible: false });
+    layers.buildings.addChild(this.buildHint);
   }
 
   // ------------------------------------------------------------------ cycle
@@ -218,6 +225,7 @@ export class World {
 
     this.crib.reset(def.cribHp, level.cribX, level.cribY);
     this.economy.reset(def.startGold);
+    this.buildings.load(level);
     resetLoadout(this.hero.loadout);
     this.hero.reset(level.cribX, level.cribY + 90);
     this.spawner.unload();
@@ -247,13 +255,24 @@ export class World {
       this.spawner.update(this.t, this.sink);
     }
 
-    this.enemies.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onEnemyShoot);
+    // les bâtiments AVANT les ennemis : leurs auras de ralentissement sont
+    // recalculées ici, et les tours doivent tirer dans la même frame que le bébé
+    const towerShots = this.buildings.update(dt, this.phase, this.hero, this.bullets, this.enemies, this.boss);
+    this.enemies.update(
+      dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y,
+      level.terrain, this.buildings, this.onEnemyShoot,
+    );
     this.boss.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onDust);
 
     // --- engluement : la mécanique centrale
     this.resolveContacts();
     this.boss.suck(this.hero.x, this.hero.y, this.pull);
-    const gripLoad = this.gripLoadTotal() + this.puddles.gripAt(this.hero.x, this.hero.y) + this.pull.grip;
+    // le talc DIVISE la charge, et la division vit ICI, au site d'appel, pas dans
+    // `Hero` : c'est ce qui laisse le commentaire de `GRIP_LOAD_FOR_PIN` dire la
+    // vérité sur le modèle nu.
+    const gripLoad =
+      (this.gripLoadTotal() + this.puddles.gripAt(this.hero.x, this.hero.y) + this.pull.grip) /
+      (this.buildings.talcDiv * this.hero.loadout.gritDiv);
     this.hero.update(
       dt, this.steer.dirX, this.steer.dirY, gripLoad,
       this.pull.x, this.pull.y, level.w, level.h, level.terrain,
@@ -268,7 +287,7 @@ export class World {
     this.biteCrib(dt);
 
     // --- tir : ne consulte JAMAIS le grip (premier garde-fou)
-    if (this.bullets.autoFire(dt, this.hero, this.enemies, this.boss) > 0) this.sfx.throwToy();
+    if (this.bullets.autoFire(dt, this.hero, this.enemies, this.boss) + towerShots > 0) this.sfx.throwToy();
     this.bullets.update(dt);
     this.peas.update(dt);
     this.buildGrid();
@@ -279,6 +298,7 @@ export class World {
     this.pickups.collect(this.hero.x, this.hero.y, this.onPick);
     this.puddles.update(dt);
     this.crib.update(dt);
+    this.buildings.renderSync(this.clock);
     this.fx.update(dt);
 
     this.enemies.sweepDead(this.onEnemyDeath);
@@ -474,11 +494,30 @@ export class World {
     }
   }
 
-  /** Grignotage du berceau : ennemis à `cribDps` non nul, plus le boss. */
+  /**
+   * Grignotage : ennemis à `cribDps` non nul, plus le boss. Un fonceur arrêté par
+   * une barricade lui inflige EXACTEMENT ce qu'il infligerait au berceau — pas de
+   * seconde statistique à équilibrer, et la règle se lit en une partie.
+   */
   private biteCrib(dt: number): void {
+    const t = this.level?.terrain;
     for (let i = 0; i < this.enemies.count; i++) {
       const def = B.ENEMY_KINDS[this.enemies.kind[i]];
       if (def.cribDps <= 0 || this.enemies.hp[i] <= 0) continue;
+      const ln = this.enemies.lane[i];
+      if (t && ln >= 0) {
+        const bn = t.laneBlockNode[ln];
+        if (bn >= 0 && this.enemies.node[i] >= bn) {
+          const bdx = this.enemies.x[i] - t.laneBlockX[ln];
+          const bdy = this.enemies.y[i] - t.laneBlockY[ln];
+          const br = B.BARRICADE_STOP + this.enemies.radius[i] + B.BARRICADE_RADIUS;
+          if (bdx * bdx + bdy * bdy <= br * br) {
+            this.buildings.damage(t.laneBlockIdx[ln], def.cribDps * dt);
+            this.sfx.cribHit();
+          }
+          continue;
+        }
+      }
       const dx = this.enemies.x[i] - this.crib.x;
       const dy = this.enemies.y[i] - this.crib.y;
       const r = B.CRIB_BITE_RADIUS + this.enemies.radius[i];
@@ -619,6 +658,16 @@ export class World {
     g.clear();
     const hx = lerp(this.hero.prevX, this.hero.x, alpha);
     const hy = lerp(this.hero.prevY, this.hero.y, alpha);
+
+    // invite de construction : le chevron flotte au-dessus de la dalle. Un anneau
+    // aurait été plus voyant, mais l'anneau est le code des DANGERS — l'emprunter
+    // pour un chantier apprendrait au joueur à s'en méfier au mauvais moment.
+    const near = this.buildings.nearSlot;
+    this.buildHint.visible = near >= 0;
+    if (near >= 0) {
+      const slot = this.buildings.slots[near].def;
+      this.buildHint.position.set(slot.x, slot.y - 34 + Math.sin(this.clock * 5) * 4);
+    }
 
     this.rangeRing.position.set(hx, hy);
     this.rangeRing.scale.set(this.hero.range * this.rangeScale);

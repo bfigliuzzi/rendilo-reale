@@ -480,6 +480,118 @@ export const BARRICADE_STOP = 26;
 /** Rayon de collision d'une barricade (elle occupe la largeur de sa voie). */
 export const BARRICADE_RADIUS = 34;
 
+// ------------------------------------------------------------------ bâtiments
+
+export type BuildingId = 'rattle' | 'talc' | 'mobile' | 'barricade';
+
+export interface BuildingLevelDef {
+  /** Coût pour ATTEINDRE ce niveau depuis le précédent. */
+  cost: number;
+  /** Affiché tel quel au panneau — jamais recalculé côté interface. */
+  label: string;
+  dps?: number;
+  range?: number;
+  rate?: number;
+  hp?: number;
+  /** Aura : rayon d'effet. */
+  radius?: number;
+  /** Facteur de l'aura — diviseur d'engluement (talc) ou facteur de vitesse (mobile). */
+  mul?: number;
+}
+
+export interface BuildingDef {
+  id: BuildingId;
+  icon: string;
+  name: string;
+  desc: string;
+  /** Type d'emplacement accepté. Une dalle a UN rôle, déclaré par la carte. */
+  fits: 'tower' | 'barricade';
+  /** `levels[0]` est la construction initiale. */
+  levels: readonly BuildingLevelDef[];
+}
+
+/**
+ * Quatre bâtiments, et un seul choix vraiment opinionné : la BOÎTE À TALC.
+ *
+ * C'est le seul qui parle à la mécanique signature du jeu — elle divise la charge
+ * d'engluement du bébé dans son rayon — donc le seul qui pose une question de
+ * placement réellement intéressante : « où est-ce que je me fais clouer ? ». Une
+ * tourelle de plus n'aurait posé que « où passent-ils ? », question à laquelle la
+ * carte répond déjà.
+ *
+ * Tables explicites plutôt que courbe fermée : trois nombres ne méritent pas une
+ * closure, et l'arbre n'est pas le tapis roulant infini de horde. Les améliorations
+ * du BÉBÉ, elles, suivent bien une courbe (voir `BABY_UPGRADES`).
+ */
+export const BUILDINGS = [
+  {
+    id: 'rattle',
+    icon: '\u{1FA87}',
+    name: 'Tourelle à hochets',
+    desc: 'Tire toute seule sur ce qui passe',
+    fits: 'tower',
+    levels: [
+      { cost: 70, label: '10 dégâts/s · portée 170', dps: 10, range: 170, rate: 1.4 },
+      { cost: 120, label: '18 dégâts/s · portée 195', dps: 18, range: 195, rate: 1.6 },
+      { cost: 200, label: '30 dégâts/s · portée 220', dps: 30, range: 220, rate: 1.9 },
+    ],
+  },
+  {
+    id: 'talc',
+    icon: '\u{1F9F4}',
+    name: 'Boîte à talc',
+    desc: 'Dans son nuage, on colle beaucoup moins',
+    fits: 'tower',
+    levels: [
+      { cost: 90, label: 'engluement ÷ 1,8 · rayon 110', radius: 110, mul: 1.8 },
+      { cost: 150, label: 'engluement ÷ 2,5 · rayon 150', radius: 150, mul: 2.5 },
+    ],
+  },
+  {
+    id: 'mobile',
+    icon: '\u{1F3B5}',
+    name: 'Mobile musical',
+    desc: 'Endort la horde : elle ralentit, sans une égratignure',
+    fits: 'tower',
+    levels: [
+      { cost: 60, label: 'vitesse × 0,65 · rayon 130', radius: 130, mul: 0.65 },
+      { cost: 110, label: 'vitesse × 0,50 · rayon 160', radius: 160, mul: 0.5 },
+    ],
+  },
+  {
+    id: 'barricade',
+    icon: '\u{1F6A7}',
+    name: 'Barrière de parc',
+    desc: 'Bloque sa voie ; les fonceurs s’arrêtent pour la ronger',
+    fits: 'barricade',
+    levels: [
+      { cost: 40, label: '120 PV', hp: 120 },
+      { cost: 75, label: '240 PV', hp: 240 },
+    ],
+  },
+] as const satisfies readonly BuildingDef[];
+
+/**
+ * Accès TYPÉ à un palier. `as const satisfies` conserve les littéraux, donc les
+ * champs optionnels absents d'une entrée disparaissent du type de l'union : sans
+ * cette porte, chaque lecture de `radius`/`mul` demanderait une garde.
+ */
+export function buildingLevel(building: number, level: number): BuildingLevelDef {
+  return BUILDINGS[building].levels[level - 1] as BuildingLevelDef;
+}
+
+export function buildingIndex(id: BuildingId): number {
+  const i = BUILDINGS.findIndex((b) => b.id === id);
+  if (i < 0) throw new Error(`bâtiment inconnu : ${id}`);
+  return i;
+}
+
+/** Distance à laquelle le panneau d'achat d'un emplacement s'ouvre tout seul. */
+export const BUILD_REACH = 74;
+
+/** Nombre maximal d'emplacements par carte — borne les tableaux préalloués. */
+export const MAX_SLOTS = 16;
+
 // -------------------------------------------------- améliorations du bébé (niveau)
 
 export type BabyUpgradeId = 'dps' | 'rate' | 'range' | 'speed' | 'grit';

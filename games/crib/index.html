@@ -123,6 +123,42 @@
     #hud.in-game #hud-restart { display: block; }
     #hud-restart:active { transform: translateY(2px); }
 
+    /* Feuille d'achat : FIXE en bas d'écran, pas ancrée au monde (l'arène défile).
+       `pointer-events: auto` sur le CONTENEUR, pas seulement sur les boutons —
+       sinon un glissement démarré entre deux offres passe au travers et fait
+       courir le bébé sous le panneau. C'est la leçon de Cerveau, prise à l'envers. */
+    #hud-build {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      bottom: max(76px, calc(env(safe-area-inset-bottom) + 70px));
+      width: min(90vw, 400px); max-height: 46vh; overflow-y: auto;
+      background: rgba(20, 30, 16, 0.94); border: 2px solid #2b2016; border-radius: 14px;
+      padding: 8px; pointer-events: auto;
+    }
+    #hud-build[hidden] { display: none; }
+    #hud-build-title {
+      font-size: 13px; font-weight: 800; letter-spacing: 0.5px;
+      color: #f2c14e; text-transform: uppercase; margin: 2px 4px 6px;
+    }
+    .build-offer {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      margin: 0 0 6px; padding: 8px 10px; border: 0; border-radius: 10px;
+      font: inherit; text-align: left; color: #f4ead9; cursor: pointer;
+      background: #3d5634; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+    }
+    .build-offer:last-child { margin-bottom: 0; }
+    .build-offer:active { transform: translateY(2px); box-shadow: none; }
+    .build-offer:focus-visible { outline: 3px solid #f2c14e; outline-offset: 2px; }
+    /* insuffisant : `disabled` sort AUSSI de l'ordre de tabulation, ce qui est
+       exactement le comportement voulu — on ne tabule pas vers un achat impossible */
+    .build-offer[disabled] { background: #2f3a2b; color: #8c9686; cursor: default; box-shadow: none; }
+    .build-icon { font-size: 20px; flex: 0 0 auto; }
+    .build-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+    .build-name { font-size: 14px; font-weight: 700; }
+    .build-detail { font-size: 11.5px; opacity: 0.8; }
+    .build-cost { font-size: 13px; font-weight: 800; color: #f2c14e; flex: 0 0 auto; }
+    .build-offer[disabled] .build-cost { color: #8c9686; }
+    .build-none { margin: 4px; font-size: 12.5px; opacity: 0.75; }
+
     .sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -195,6 +231,10 @@
     <div id="hud-gold"></div>
     <div id="hud-info"></div>
     <div id="hud-buffs"></div>
+    <div id="hud-build" role="group" hidden>
+      <p id="hud-build-title"></p>
+      <div id="hud-build-list"></div>
+    </div>
     <button id="hud-launch" type="button">
       <span id="hud-launch-label"></span>
       <span id="hud-launch-brief"></span>

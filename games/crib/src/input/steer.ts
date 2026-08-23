@@ -75,6 +75,28 @@ export class Steer {
     if (!on) this.releaseAll();
   }
 
+  /**
+   * Tant que le focus est DANS cet élément, le clavier ne pilote plus le bébé.
+   *
+   * C'est le trou réel du panneau d'achat, et il ne se voit à aucun test au doigt :
+   * `onKeyDown` avale ZQSD/WASD et fait `preventDefault`, donc un joueur qui tabule
+   * dans la feuille ferait courir le bébé hors de portée et le panneau se
+   * refermerait sous ses doigts.
+   *
+   * Le POINTEUR, lui, reste actif : on doit pouvoir déplacer le bébé au doigt
+   * panneau ouvert. Et `Steer` ne connaît toujours aucun identifiant du HUD — on lui
+   * passe l'élément, il ne va pas le chercher.
+   */
+  setKeyboardBlocker(el: HTMLElement | null): void {
+    this.blocker = el;
+  }
+
+  private blocker: HTMLElement | null = null;
+
+  private get keyboardBlocked(): boolean {
+    return this.blocker !== null && document.activeElement !== null && this.blocker.contains(document.activeElement);
+  }
+
   destroy(): void {
     window.removeEventListener('pointerdown', this.onDown);
     window.removeEventListener('pointermove', this.onMove);
@@ -101,7 +123,11 @@ export class Steer {
   private readonly onDown = (e: PointerEvent): void => {
     if (!this.enabled || this.pointerId !== -1) return;
     // ne pas voler le geste aux boutons du HUD (bouton ↻, mute…)
-    if (e.target instanceof Element && e.target.closest('button, a, input')) return;
+    // ne pas voler le geste aux contrôles du HUD (↻, mute, lancement de nuit) NI au
+    // FOND de la feuille d'achat : elle est `pointer-events: auto` sur tout son
+    // conteneur, sinon un glissement démarré entre deux boutons passerait au travers
+    // et ferait courir le bébé sous le panneau.
+    if (e.target instanceof Element && e.target.closest('button, a, input, #hud-build')) return;
     this.pointerId = e.pointerId;
     const scale = this.getScale();
     this.originX = e.clientX / scale;
@@ -150,7 +176,7 @@ export class Steer {
   // ------------------------------------------------------------------- clavier
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
-    if (!this.enabled || !(e.code in KEY_VECTORS)) return;
+    if (!this.enabled || this.keyboardBlocked || !(e.code in KEY_VECTORS)) return;
     // les flèches font défiler la page sur desktop : on les consomme
     e.preventDefault();
     this.keys.add(e.code);

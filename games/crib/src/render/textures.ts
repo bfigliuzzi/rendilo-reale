@@ -200,6 +200,10 @@ export interface Atlas {
   puddleBody: Texture;
   /** Anneau plein marquant la portée de tir du bébé. */
   rangeRing: Texture;
+  /** [index de bâtiment][niveau - 1]. */
+  buildings: readonly (readonly Texture[])[];
+  /** Chevron flottant au-dessus de l'emplacement à portée. */
+  buildHint: Texture;
   ground: Texture;
   /** La TUILE de sol en canvas : le bake de carte la répète sur toute l'arène. */
   groundCanvas: HTMLCanvasElement;
@@ -542,6 +546,87 @@ function buildGround(): HTMLCanvasElement {
 }
 
 /**
+ * Planche des bâtiments : quatre familles, deux ou trois niveaux chacune.
+ *
+ * Le niveau se lit à la TAILLE et au nombre d'éléments, jamais à la seule teinte —
+ * même règle que partout ailleurs dans le hub. Aucun de ces sprites n'emprunte les
+ * codes réservés aux dangers (pas de hachures jaune/noir, pas d'anneau, pas d'aplat
+ * blanc) : un joueur doit pouvoir se fier au fait qu'un anneau au sol est une menace.
+ */
+function buildBuildings(): Texture[][] {
+  const CELL = 48;
+  const cols = 3;
+  const rows = B.BUILDINGS.length;
+  const ctx = ctx2d(CELL * cols, CELL * rows);
+  const source = Texture.from(ctx.canvas).source;
+  source.scaleMode = 'nearest';
+  const out: Texture[][] = [];
+
+  for (let r = 0; r < rows; r++) {
+    const def = B.BUILDINGS[r];
+    const row: Texture[] = [];
+    for (let c = 0; c < def.levels.length; c++) {
+      const ox = c * CELL + CELL / 2;
+      const oy = r * CELL + CELL - 6;
+      const k = c; // 0..2 : le niveau grossit et s'enrichit
+      if (def.id === 'rattle') {
+        // trépied + hochet : la boule grossit et gagne des perles par niveau
+        pxRect(ctx, ox - 9, oy - 4, 18, 4, PALETTE.woodDark);
+        pxRect(ctx, ox - 4, oy - 24, 8, 21, PALETTE.wood);
+        pxRect(ctx, ox - 4, oy - 24, 3, 21, PALETTE.woodDark);
+        inkDisc(ctx, ox, oy - 30 - k * 2, 8 + k * 2, PALETTE.toy);
+        pxDisc(ctx, ox - 3, oy - 32 - k * 2, 3 + k, PALETTE.toyEdge);
+        for (let i = 0; i <= k; i++) inkDisc(ctx, ox - 11 - i * 5, oy - 14, 3, PALETTE.onesie);
+      } else if (def.id === 'talc') {
+        // boîte + nuage : le nuage double au niveau 2
+        inkRect(ctx, ox - 11, oy - 22, 22, 22, PALETTE.blanket);
+        pxRect(ctx, ox - 7, oy - 18, 14, 4, PALETTE.blanketDark);
+        pxRect(ctx, ox - 7, oy - 11, 14, 3, PALETTE.blanketDark);
+        inkDisc(ctx, ox - 7, oy - 30 - k * 4, 6 + k * 2, PALETTE.blanket);
+        inkDisc(ctx, ox + 6, oy - 27 - k * 3, 5 + k * 2, PALETTE.blanket);
+      } else if (def.id === 'mobile') {
+        // portique + pendentifs : un de plus par niveau
+        pxRect(ctx, ox - 2, oy - 30, 4, 30, PALETTE.woodDark);
+        pxRect(ctx, ox - 16, oy - 33, 32, 4, PALETTE.wood);
+        for (let i = 0; i <= k + 1; i++) {
+          const px = Math.round(ox - 13 + i * (26 / (k + 1)));
+          pxRect(ctx, px - 1, oy - 29, 2, 7, PALETTE.woodDark);
+          inkDisc(ctx, px, oy - 18, 5, i % 2 === 0 ? PALETTE.doudou : PALETTE.pacifier);
+        }
+      } else {
+        // barrière : quatre montants, des lisses, une de plus au niveau 2
+        for (const px of [ox - 17, ox - 6, ox + 5, ox + 15]) {
+          inkRect(ctx, px, oy - 26, 4, 26, PALETTE.woodDark);
+        }
+        inkRect(ctx, ox - 19, oy - 10, 38, 6, PALETTE.wood);
+        if (k > 0) inkRect(ctx, ox - 19, oy - 22, 38, 6, PALETTE.wood);
+      }
+      row.push(new Texture({ source, frame: new Rectangle(c * CELL, r * CELL, CELL, CELL) }));
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Chevron d'invite au-dessus de l'emplacement à portée. Une FORME et un mouvement
+ * (il flotte), jamais un anneau : l'anneau est le code des dangers, et l'emprunter
+ * pour un chantier apprendrait au joueur à s'en méfier au mauvais moment.
+ */
+function buildBuildHint(): Texture {
+  const ctx = ctx2d(20, 16);
+  for (let i = 0; i < 7; i++) {
+    pxRect(ctx, 3 + i, 2 + i, 14 - i * 2, 2, PALETTE.ink);
+  }
+  for (let i = 0; i < 6; i++) {
+    pxRect(ctx, 4 + i, 3 + i, 12 - i * 2, 2, PALETTE.warn);
+  }
+  const tex = Texture.from(ctx.canvas);
+  tex.source.scaleMode = 'nearest';
+  return tex;
+}
+
+/**
  * Planche de props du jardin, packée en étagères. Le décor est 100 % NON
  * INTERACTIF et n'utilise JAMAIS les codes réservés aux dangers (pas de hachures
  * jaune/noir, pas d'anneaux, pas d'aplats blancs) — invariant partagé avec les
@@ -770,6 +855,8 @@ export function buildAtlas(): Atlas {
     // réservé aux menaces. En pointillé épais, cet anneau se lisait comme des
     // brindilles éparpillées au sol plutôt que comme une portée de tir.
     rangeRing: makeRingTexture(B.HERO_RANGE, false, PALETTE.blanket, 2),
+    buildings: buildBuildings(),
+    buildHint: buildBuildHint(),
     ground: groundTex,
     groundCanvas: groundCv,
     props: buildProps(),

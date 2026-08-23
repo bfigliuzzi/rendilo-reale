@@ -4,6 +4,7 @@ import type { Steer } from '../input/steer';
 import { persist, type SaveData } from '../meta/save';
 import type { Decor } from '../render/decor';
 import type { Hud } from '../ui/hud';
+import type { BuildPanel } from '../ui/buildPanel';
 import type { Screens } from '../ui/screens';
 import { makeLevel, type Level } from './level';
 import type { NightCheckpoint, World } from './world';
@@ -44,6 +45,7 @@ export class Flow {
     private readonly steer: Steer,
     private readonly save: SaveData,
     private readonly sfx: Sfx,
+    private readonly buildPanel: BuildPanel,
   ) {
     this.screens.onPlay = () => this.startLevel();
     this.screens.onMenu = () => this.showMenu();
@@ -53,6 +55,15 @@ export class Flow {
     this.hud.onLaunchNight = () => this.startNight();
     this.world.onNightCleared = (i, sec) => this.onNightCleared(i, sec);
     this.world.onCribFallen = () => this.onDefeat();
+    // LE seul chemin d'achat : le bouton du panneau et le bot passent par la même
+    // fonction, gardes comprises (jour + à portée + finançable). Pas de second
+    // chemin, donc pas de chemin non testé.
+    this.buildPanel.onBuy = (slotId, offerId) => {
+      if (this.world.buildings.buy(slotId, offerId, this.world.economy, this.world.phase)) {
+        this.sfx.pickup();
+        this.refreshBuildPanel();
+      }
+    };
   }
 
   showMenu(): void {
@@ -89,6 +100,7 @@ export class Flow {
     this.checkpoint = this.world.checkpoint();
     this.world.startNight(this.nightIndex);
     this.state = 'night';
+    this.buildPanel.setTarget(null, []);
     this.hud.setPhase('night', this.nightView());
     this.sfx.wave();
   }
@@ -99,6 +111,21 @@ export class Flow {
     this.world.startStress();
   }
 
+  /**
+   * Ouvre ou ferme la feuille d'achat selon la proximité. Appelée depuis la boucle
+   * de rendu (throttlée) et SYNCHRONEMENT après chaque achat : attendre la frame
+   * suivante laisserait une offre déjà payée affichée comme disponible.
+   */
+  refreshBuildPanel(): void {
+    if (this.state !== 'day') {
+      this.buildPanel.setTarget(null, []);
+      return;
+    }
+    const near = this.world.buildings.nearSlot;
+    const view = near >= 0 ? this.world.buildings.view(near) : null;
+    this.buildPanel.setTarget(view, view ? this.world.buildings.offersFor(near, this.world.economy) : []);
+  }
+
   private enterDay(): void {
     this.state = 'day';
     this.world.phase = 'day';
@@ -107,6 +134,11 @@ export class Flow {
     this.steer.setEnabled(true);
     this.hud.setInGame(true);
     this.hud.setPhase('day', this.nightView());
+    // les bâtiments entamés repartent à neuf, gratuitement : sans ça la dernière
+    // nuit se joue derrière un mur de ruines déjà payé, et le joueur ne peut plus
+    // que subir ce qu'il a acheté trois nuits plus tôt.
+    this.world.buildings.repairAll();
+    this.refreshBuildPanel();
   }
 
   private nightView(): { n: number; total: number; brief: string } {
@@ -118,6 +150,7 @@ export class Flow {
     this.world.playing = false;
     this.steer.setEnabled(false);
     this.hud.setInGame(false);
+    this.buildPanel.setTarget(null, []);
   }
 
   private onNightCleared(index: number, sec: number): void {

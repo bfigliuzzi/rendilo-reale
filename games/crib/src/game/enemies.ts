@@ -2,6 +2,7 @@ import { Particle, type ParticleContainer } from 'pixi.js';
 import { lerp } from '@shared/math';
 import * as B from '../config/balance';
 import type { Atlas } from '../render/textures';
+import type { SlowField } from './buildings';
 import type { Terrain } from './terrain';
 
 const PARK = -9999;
@@ -200,6 +201,7 @@ export class EnemyPool {
     cribX: number,
     cribY: number,
     terrain: Terrain,
+    slow: SlowField,
     onShoot: (x: number, y: number, tx: number, ty: number) => void,
   ): void {
     for (let i = 0; i < this.count; i++) {
@@ -301,9 +303,20 @@ export class EnemyPool {
       const ddx = tx - x;
       const ddy = ty - y;
       const d = Math.hypot(ddx, ddy) || 1;
+      // mobiles musicaux : le MEILLEUR ralentissement s'applique, ils ne se
+      // multiplient pas — deux mobiles superposés fixeraient la horde sur place et
+      // videraient la carte de son enjeu.
+      let mul = 1;
+      for (let k2 = 0; k2 < slow.slowCount; k2++) {
+        const sdx = slow.slowX[k2] - x;
+        const sdy = slow.slowY[k2] - y;
+        if (sdx * sdx + sdy * sdy <= slow.slowR2[k2]) mul = Math.min(mul, slow.slowMul[k2]);
+      }
+      const speed = this.spd[i] * mul;
+
       const k = Math.min(1, dt * B.ENEMY_TURN);
-      this.vx[i] += ((ddx / d) * this.spd[i] * go - this.vx[i]) * k;
-      this.vy[i] += ((ddy / d) * this.spd[i] * go - this.vy[i]) * k;
+      this.vx[i] += ((ddx / d) * speed * go - this.vx[i]) * k;
+      this.vy[i] += ((ddy / d) * speed * go - this.vy[i]) * k;
 
       let nx = x + this.vx[i] * dt;
       let ny = y + this.vy[i] * dt;

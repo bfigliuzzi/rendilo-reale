@@ -13,6 +13,7 @@ import { DebugView } from './render/debugView';
 import { Layers } from './render/layers';
 import { OverlayView } from './render/overlayView';
 import { buildAtlas, PALETTE } from './render/textures';
+import { BuildPanel } from './ui/buildPanel';
 import { Hud } from './ui/hud';
 import { Screens } from './ui/screens';
 
@@ -55,9 +56,13 @@ async function boot(): Promise<void> {
   const world = new World(layers, atlas, steer, fx, sfx);
   const decor = new Decor(layers.decor, layers.weather, atlas);
   const hud = new Hud();
+  const buildPanel = new BuildPanel();
+  // le clavier ne doit plus piloter le bébé quand le focus est DANS la feuille :
+  // sinon tabuler entre les offres le fait sortir de portée et le panneau se ferme
+  steer.setKeyboardBlocker(buildPanel.element);
   const screens = new Screens(document.getElementById('ui')!, save);
   const overlay = new OverlayView(layers.overlay, atlas);
-  const flow = new Flow(world, screens, hud, decor, steer, save, sfx);
+  const flow = new Flow(world, screens, hud, decor, steer, save, sfx, buildPanel);
 
   const params = new URLSearchParams(location.search);
   // `?debug` : le masque de terrain tel que la simulation le voit. Voir DebugView.
@@ -81,6 +86,7 @@ async function boot(): Promise<void> {
     crib: world.crib,
     boss: world.boss,
     economy: world.economy,
+    buildings: world.buildings,
     // exposé pour le bot : sans lui, sa règle anti-blocage ne peut pas être écrite
     get level() {
       return world.level;
@@ -101,7 +107,10 @@ async function boot(): Promise<void> {
       overlay.render(world, steer, frameMs / 1000);
       app.renderer.render(app.stage);
       hud.onFrame(frameMs);
-      if (world.playing) hud.maybeUpdate(frameMs, world.stats());
+      if (world.playing) {
+        hud.maybeUpdate(frameMs, world.stats());
+        flow.refreshBuildPanel();
+      }
     },
   );
 }
