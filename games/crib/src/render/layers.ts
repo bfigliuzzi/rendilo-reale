@@ -1,14 +1,15 @@
-import { Container, Graphics, ParticleContainer, TilingSprite } from 'pixi.js';
-import { DESIGN_H, DESIGN_W } from '../config/balance';
-import type { Atlas } from './textures';
+import { Container, Graphics, ParticleContainer, Sprite } from 'pixi.js';
 
 /**
  * Hiérarchie d'affichage.
  *
  * Trois espaces bien distincts, et il ne faut jamais les mélanger :
- *  - `ground` et `weather` sont en espace ÉCRAN (le sol défile par `tilePosition`) ;
+ *  - `weather` est en espace ÉCRAN ;
  *  - `world` est décalé par la caméra à chaque frame ; tout ce qu'il contient vit
- *    en coordonnées ARÈNE absolues, [0..ARENA_W] × [0..ARENA_H] ;
+ *    en coordonnées ARÈNE absolues. Le SOL en fait partie : c'est une texture cuite
+ *    aux dimensions de la carte (`render/mapBake.ts`), et plus une tuile défilante
+ *    en espace écran — avec trois cartes de géométries différentes, un motif
+ *    infini ne pourrait plus rien dire des voies ni du terrain ;
  *  - `overlay` est en espace écran et ne bouge jamais : joystick, boussole du
  *    berceau, vignette d'engluement.
  *
@@ -17,8 +18,10 @@ import type { Atlas } from './textures';
  * GPU à chaque frame pour rien.
  */
 export class Layers {
-  readonly ground: TilingSprite;
   readonly world = new Container();
+
+  /** Le sol baké de la carte courante. Posé par `setMap`, un seul draw call. */
+  readonly ground = new Sprite();
 
   readonly decor = new Container(); // props non interactifs, sous tout le gameplay
   readonly puddles = new Container(); // flaques engluantes, marqueurs au sol
@@ -39,9 +42,7 @@ export class Layers {
   readonly weather = new Container();
   readonly overlay = new Container();
 
-  constructor(stage: Container, atlas: Atlas) {
-    this.ground = new TilingSprite({ texture: atlas.ground, width: DESIGN_W, height: DESIGN_H });
-
+  constructor(stage: Container) {
     // ombres : `vertex` obligatoire — un slot réutilisé par un autre archétype
     // change de taille, et une ombre de mamie sous un sac à poussière se voit
     this.shadows = new ParticleContainer({ dynamicProperties: { position: true, vertex: true } });
@@ -58,8 +59,9 @@ export class Layers {
     this.peas = new ParticleContainer({ dynamicProperties: { position: true } });
     this.fx = new ParticleContainer({ dynamicProperties: { position: true, vertex: true, color: true } });
 
-    stage.addChild(this.ground, this.world, this.weather, this.overlay);
+    stage.addChild(this.world, this.weather, this.overlay);
     this.world.addChild(
+      this.ground,
       this.decor,
       this.puddles,
       this.cone,

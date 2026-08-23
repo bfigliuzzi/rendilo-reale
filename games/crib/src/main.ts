@@ -45,7 +45,7 @@ async function boot(): Promise<void> {
   window.addEventListener('orientationchange', resize);
 
   const atlas = buildAtlas();
-  const layers = new Layers(app.stage, atlas);
+  const layers = new Layers(app.stage);
   // `scale` est lu en getter paresseux : le joystick doit diviser ses deltas par
   // l'échelle COURANTE, et elle change à chaque rotation de l'écran
   const steer = new Steer(() => scale);

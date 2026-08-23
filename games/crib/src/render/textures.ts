@@ -33,6 +33,24 @@ export const PALETTE = {
   grassPale: 0x577140,
   earth: 0x4b3b2b,
   earthLight: 0x5a4634,
+  // — matériaux de carte (sol baké). Voies : un changement de MATIÈRE, jamais un
+  // code graphique (pas de contour, pas de pointillés, pas d'anneau) : les codes
+  // sont réservés aux dangers. Tons moyens, pour préserver la double lecture des
+  // marqueurs qui passeront par-dessus.
+  path: 0x6b5438,
+  pathAlt: 0x775e3f,
+  pathEdge: 0x4a3927,
+  hedgeDark: 0x22381f,
+  hedgeBody: 0x2c4726,
+  hedgeLight: 0x3b5c31,
+  // l'eau ne doit JAMAIS se lire comme une flaque engluante : le vocabulaire de
+  // danger du jeu, c'est « anneau pointillé + corps clair ». Elle n'a donc pas
+  // d'anneau, et son corps est nettement plus FROID et plus SOMBRE que la flaque.
+  waterDeep: 0x1e3b4a,
+  waterBody: 0x27505f,
+  waterEdge: 0x3c6b74,
+  slab: 0x6d6455,
+  slabEdge: 0x8a806c,
   stone: 0x6f6857,
   stoneLight: 0x847c68,
   wood: 0x8a6240,
@@ -183,6 +201,8 @@ export interface Atlas {
   /** Anneau plein marquant la portée de tir du bébé. */
   rangeRing: Texture;
   ground: Texture;
+  /** La TUILE de sol en canvas : le bake de carte la répète sur toute l'arène. */
+  groundCanvas: HTMLCanvasElement;
   props: readonly DecorProp[];
   pollen: Texture;
 }
@@ -494,7 +514,7 @@ function drawPacifier(ctx: CanvasRenderingContext2D, ox: number, oy: number): vo
  * répétition, mouchetage déterministe (`mulberry32`) — jamais `Math.random` dans
  * une texture, sinon le décor change à chaque rechargement.
  */
-function buildGround(): Texture {
+function buildGround(): HTMLCanvasElement {
   const size = 256;
   const ctx = ctx2d(size, size);
   pxRect(ctx, 0, 0, size, size, PALETTE.grass);
@@ -518,9 +538,7 @@ function buildGround(): Texture {
     const y = Math.floor(rand() * size);
     pxDisc(ctx, x, y, 1 + Math.floor(rand() * 2), PALETTE.stone);
   }
-  const tex = Texture.from(ctx.canvas);
-  tex.source.scaleMode = 'nearest';
-  return tex;
+  return ctx.canvas;
 }
 
 /**
@@ -631,6 +649,10 @@ function buildProps(): DecorProp[] {
 // -------------------------------------------------------------- construction
 
 export function buildAtlas(): Atlas {
+  const groundCv = buildGround();
+  const groundTex = Texture.from(groundCv);
+  groundTex.source.scaleMode = 'nearest';
+
   // — atlas principal : tout ce qui alimente un ParticleContainer vit ici
   const AW = 384;
   const AH = 352;
@@ -748,7 +770,8 @@ export function buildAtlas(): Atlas {
     // réservé aux menaces. En pointillé épais, cet anneau se lisait comme des
     // brindilles éparpillées au sol plutôt que comme une portée de tir.
     rangeRing: makeRingTexture(B.HERO_RANGE, false, PALETTE.blanket, 2),
-    ground: buildGround(),
+    ground: groundTex,
+    groundCanvas: groundCv,
     props: buildProps(),
     pollen,
   };

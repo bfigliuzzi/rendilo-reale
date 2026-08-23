@@ -16,6 +16,14 @@ const MAT_FLAGS: Record<string, number> = {
   water: T_ENEMY | T_HERO,
 };
 
+/** Identifiants de matériau du masque de RENDU. 0 = sol nu. */
+export const M_HEDGE = 1;
+export const M_WALL = 2;
+export const M_WATER = 3;
+export const M_LANE = 4;
+
+const MAT_ID: Record<string, number> = { hedge: M_HEDGE, wall: M_WALL, water: M_WATER };
+
 /**
  * Le terrain d'une carte : des VECTEURS écrits à la main, rasterisés UNE fois au
  * chargement en un masque de tuiles.
@@ -38,6 +46,13 @@ export class Terrain {
   readonly cols: number;
   readonly rows: number;
   readonly mask: Uint8Array;
+  /**
+   * Matériau par tuile, pour le RENDU seul. Le mur et l'eau partagent exactement les
+   * mêmes drapeaux de collision : sans cette seconde table, le sol baké ne saurait
+   * pas les distinguer. Et comme le rendu part du MÊME masque que la simulation, le
+   * joueur ne peut structurellement pas se tromper sur ce qui est franchissable.
+   */
+  readonly mat: Uint8Array;
 
   /** Voies APLATIES : tous les nœuds bout à bout, bornés par laneStart/laneCount. */
   readonly nodeX: Float32Array;
@@ -70,6 +85,7 @@ export class Terrain {
     this.cols = Math.ceil(def.w / tile);
     this.rows = Math.ceil(def.h / tile);
     this.mask = new Uint8Array(this.cols * this.rows);
+    this.mat = new Uint8Array(this.cols * this.rows);
 
     let total = 0;
     for (const l of def.lanes) total += l.pts.length >> 1;
@@ -255,6 +271,7 @@ export class Terrain {
 
   private stamp(patch: TerrainPatch): void {
     const flags = MAT_FLAGS[patch.mat];
+    this.matNow = MAT_ID[patch.mat];
     const sh = patch.shape;
     if (sh.kind === 'rect') {
       this.fillRect(sh.x, sh.y, sh.x + sh.w, sh.y + sh.h, flags, false);
@@ -270,6 +287,7 @@ export class Terrain {
 
   /** Les voies EFFACENT les bits bloquants et posent `T_LANE` : elles battent tout. */
   private carveLanes(lanes: readonly LaneDef[]): void {
+    this.matNow = M_LANE;
     for (const lane of lanes) {
       const pts = lane.pts;
       for (let i = 0; i + 3 < pts.length; i += 2) {
@@ -292,11 +310,14 @@ export class Terrain {
     }
   }
 
+  private matNow = 0;
+
   private set(cx: number, cy: number, flags: number, carve: boolean): void {
     if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return;
     const i = cy * this.cols + cx;
     if (carve) this.mask[i] = (this.mask[i] & ~(T_ENEMY | T_HERO | T_SLOW)) | flags;
     else this.mask[i] |= flags;
+    this.mat[i] = this.matNow;
   }
 
   private fillRect(x0: number, y0: number, x1: number, y1: number, flags: number, carve: boolean): void {

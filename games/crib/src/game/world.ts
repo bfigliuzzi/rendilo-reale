@@ -6,6 +6,7 @@ import type { Sfx } from '../audio/sfx';
 import * as B from '../config/balance';
 import type { Fx } from '../render/fx';
 import type { Layers } from '../render/layers';
+import { bakeMap } from '../render/mapBake';
 import { MARKER_RING_MARGIN, PALETTE, type Atlas } from '../render/textures';
 import type { Steer } from '../input/steer';
 import { Boss, type Pull } from './boss';
@@ -104,9 +105,12 @@ export class World {
   private readonly clingY = new Float32Array(B.GRIP_CONTACT_CAP);
   private clingCount = 0;
 
+  /** Textures de sol cuites, une par carte : le ↻ ne repaie jamais le bake. */
+  private readonly grounds = new Map<string, import('pixi.js').Texture>();
+
   constructor(
     private readonly layers: Layers,
-    atlas: Atlas,
+    private readonly atlas: Atlas,
     private readonly steer: Steer,
     private readonly fx: Fx,
     private readonly sfx: Sfx,
@@ -148,6 +152,13 @@ export class World {
     this.puddles.clear();
     this.fx.clear();
     this.boss.retire();
+    let ground = this.grounds.get(level.def.map.id);
+    if (!ground) {
+      ground = bakeMap(level.terrain, this.atlas);
+      this.grounds.set(level.def.map.id, ground);
+    }
+    this.layers.ground.texture = ground;
+
     this.crib.reset(def.cribHp, level.cribX, level.cribY);
     resetLoadout(this.hero.loadout);
     this.hero.reset(level.cribX, level.cribY + 90);
@@ -216,9 +227,15 @@ export class World {
     this.fx.syncRender(alpha);
     const cx = lerp(this.prevCamX, this.camX, alpha) + this.fx.shakeX.value;
     const cy = lerp(this.prevCamY, this.camY, alpha) + this.fx.shakeY.value;
-    // la caméra déplace le CONTENEUR, jamais les entités
-    this.layers.world.position.set(-cx + B.DESIGN_W / 2, -cy + B.DESIGN_H / 2);
-    this.layers.ground.tilePosition.set(-cx, -cy);
+    // la caméra déplace le CONTENEUR, jamais les entités — et sa position est
+    // ARRONDIE au pixel logique entier. Ce n'est pas un confort : sous une texture
+    // de sol pixel échantillonnée au plus proche voisin, un décalage fractionnaire
+    // duplique des lignes et des colonnes entières, qui rampent sur tout l'écran
+    // au moindre panoramique. L'arrondi stabilise aussi tous les sprites au passage.
+    this.layers.world.position.set(
+      Math.round(-cx + B.DESIGN_W / 2),
+      Math.round(-cy + B.DESIGN_H / 2),
+    );
 
     this.hero.renderSync(alpha, this.clock);
     this.enemies.syncRender(alpha);
