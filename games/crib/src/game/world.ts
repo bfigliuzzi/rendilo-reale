@@ -178,7 +178,10 @@ export class World {
     this.resolveContacts();
     this.boss.suck(this.hero.x, this.hero.y, this.pull);
     const gripLoad = this.gripLoadTotal() + this.puddles.gripAt(this.hero.x, this.hero.y) + this.pull.grip;
-    this.hero.update(dt, this.steer.dirX, this.steer.dirY, gripLoad, this.pull.x, this.pull.y, level.w, level.h);
+    this.hero.update(
+      dt, this.steer.dirX, this.steer.dirY, gripLoad,
+      this.pull.x, this.pull.y, level.w, level.h, level.terrain,
+    );
     this.run.maxGrip = Math.max(this.run.maxGrip, this.hero.grip);
     if (this.hero.pinned && !this.wasPinned) {
       this.run.pins++;

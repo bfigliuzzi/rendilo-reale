@@ -3,6 +3,8 @@ import { clamp, lerp } from '@shared/math';
 import * as B from '../config/balance';
 import type { Atlas } from '../render/textures';
 import type { Shooter } from './bullets';
+import type { Terrain } from './terrain';
+import { T_SLOW } from './terrain';
 import { emptyLoadout, type Loadout } from './loadout';
 
 /**
@@ -50,6 +52,9 @@ export class Hero implements Shooter {
 
   /** Accumulateur de cadence — le bébé est un `Shooter` comme les tours. */
   fireAcc = 0;
+
+  /** Dans une haie ce tick : lu par le HUD et par le bot, pas par la simulation. */
+  inHedge = false;
 
   /**
    * Améliorations achetées pendant CE niveau. `emptyLoadout()` est l'identité :
@@ -119,7 +124,9 @@ export class Hero implements Shooter {
    *   l'appelant à `GRIP_CONTACT_CAP` contacts (voir `World.resolveContacts`).
    * @param pullX,pullY Aspiration du boss, en px/s. S'ajoute APRÈS le lissage de
    *   vitesse : ce n'est pas une intention du joueur, elle ne doit ni accélérer ni
-   *   être freinée par l'inertie du bébé.
+   *   être freinée par l'inertie du bébé. Elle passe par la MÊME collision de
+   *   terrain que le déplacement : un mur protège donc du vide, contre-jeu
+   *   émergent qui ne coûte rien.
    */
   update(
     dt: number,
@@ -130,6 +137,7 @@ export class Hero implements Shooter {
     pullY: number,
     arenaW: number,
     arenaH: number,
+    terrain: Terrain,
   ): void {
     this.prevX = this.x;
     this.prevY = this.y;
@@ -158,16 +166,26 @@ export class Hero implements Shooter {
       this.dir = Math.abs(dirX) > Math.abs(dirY) ? (dirX < 0 ? 1 : 2) : dirY < 0 ? 3 : 0;
     }
 
-    const speed = this.speed;
+    // les haies : le bébé passe où la horde doit contourner, mais il y rampe. Le
+    // raccourci doit être un ÉCHANGE — sinon camper dans un buisson serait
+    // strictement meilleur que se tenir à côté.
+    this.inHedge = (terrain.flagsAt(this.x, this.y) & T_SLOW) !== 0;
+    const speed = this.speed * (this.inHedge ? B.HEDGE_SLOW : 1);
     const k = Math.min(1, dt * B.HERO_ACCEL);
     this.vx += (dirX * speed - this.vx) * k;
     this.vy += (dirY * speed - this.vy) * k;
 
     const m = B.HERO_RADIUS;
-    const nx = clamp(this.x + (this.vx + pullX) * dt, m, arenaW - m);
-    const ny = clamp(this.y + (this.vy + pullY) * dt, m, arenaH - m);
-    // la phase d'animation avance du déplacement RÉELLEMENT effectué (butées de
-    // l'arène et engluement inclus) : elle ne peut pas mentir sur la vitesse
+    let nx = clamp(this.x + (this.vx + pullX) * dt, m, arenaW - m);
+    let ny = clamp(this.y + (this.vy + pullY) * dt, m, arenaH - m);
+    // résolution SÉPARÉE par axe, et c'est elle qui donne le glissement le long
+    // d'un mur : sans elle, un joystick un rien de travers colle le bébé net et le
+    // jeu paraît cassé. Le clamp d'arène reste en ceinture-bretelles — la bordure
+    // du masque le bloque déjà, mais un bug de bake ne doit pas l'éjecter du monde.
+    if (terrain.blockedHeroBox(nx, this.y)) nx = this.x;
+    if (terrain.blockedHeroBox(nx, ny)) ny = this.y;
+    // la phase d'animation avance du déplacement RÉELLEMENT effectué (murs, butées
+    // de l'arène et engluement inclus) : elle ne peut pas mentir sur la vitesse
     this.walk += Math.hypot(nx - this.x, ny - this.y);
     this.x = nx;
     this.y = ny;

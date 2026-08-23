@@ -80,6 +80,13 @@ async function boot(): Promise<void> {
     hero: world.hero,
     crib: world.crib,
     boss: world.boss,
+    // exposé pour le bot : sans lui, sa règle anti-blocage ne peut pas être écrite
+    get level() {
+      return world.level;
+    },
+    get terrain() {
+      return world.level?.terrain ?? null;
+    },
   };
 
   startLoop(

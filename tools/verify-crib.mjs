@@ -395,6 +395,34 @@ async function drive() {
       if (Math.hypot(ddx, ddy) > 30) set(ddx, ddy);
     }
 
+    // ⑧ ANTI-BLOCAGE. Les cartes ont désormais des murs et des mares, et le bot
+    // pilote en ligne droite : poussé contre un obstacle il n'avance plus, sa
+    // direction ne change pas, et le run finit en `timeout` — ce qui ressemble
+    // TRAIT POUR TRAIT à une régression de difficulté. Sans cette règle, toute
+    // mesure d'équilibrage devient douteuse.
+    //
+    // On mémorise la position d'il y a quelques appels : si l'on pousse sans
+    // bouger, on tourne d'un quart de tour (toujours du même côté, pour longer
+    // l'obstacle au lieu d'osciller devant).
+    const st = (g.__bot ??= { lx: h.x, ly: h.y, stuck: 0, turn: 1 });
+    const moved = Math.hypot(h.x - st.lx, h.y - st.ly);
+    st.lx = h.x;
+    st.ly = h.y;
+    if ((dx !== 0 || dy !== 0) && moved < 0.6 && h.grip < 0.9) st.stuck++;
+    else if (moved > 2) st.stuck = 0;
+    if (st.stuck > 6) {
+      const a = st.turn * Math.PI * 0.5;
+      const rx = dx * Math.cos(a) - dy * Math.sin(a);
+      const ry = dx * Math.sin(a) + dy * Math.cos(a);
+      dx = rx;
+      dy = ry;
+      // au bout d'un moment, on tente l'autre côté : un coin piège un seul sens
+      if (st.stuck > 40) {
+        st.turn = -st.turn;
+        st.stuck = 7;
+      }
+    }
+
     g.steer.dirX = dx;
     g.steer.dirY = dy;
   });
