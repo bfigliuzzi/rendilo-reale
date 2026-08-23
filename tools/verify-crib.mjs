@@ -471,19 +471,32 @@ async function shop() {
     const g = window.__game;
     const b = g.buildings;
     const e = g.economy;
+    const crib = g.world.crib;
+    const frac = crib.hp / crib.maxHp;
     let best = null;
     for (let i = 0; i < b.slots.length; i++) {
       for (const o of b.offersFor(i, e)) {
         if (!o.affordable) continue;
-        // améliorer d'abord (le meilleur or/dégât), puis tenir les voies, puis le
-        // confort. Le talc en dernier : il ne tue rien, et le bot ne se fait clouer
-        // que lorsqu'il a déjà échoué à nettoyer.
-        const prio = o.id === 'up' ? 0 : o.id === 'rattle' ? 1 : o.id === 'barricade' ? 2 : o.id === 'mobile' ? 3 : 4;
+        // La réparation passe AVANT tout tant que le berceau est entamé : il n'y a
+        // pas de soin fiable en cours de nuit, donc chaque PV non réparé au jour est
+        // un PV perdu pour de bon. On s'arrête à 85 % pour ne pas y engloutir la
+        // bourse — au-delà, un point de dégâts vaut moins qu'un point de dégâts.
+        let prio;
+        if (o.id === 'repair') prio = frac < 0.85 ? 0 : 9;
+        else if (o.id === 'up') prio = 1;
+        else if (o.id === 'rattle') prio = 2;
+        else if (o.id === 'barricade') prio = 3;
+        else if (o.id === 'baby:dps') prio = 4;
+        else if (o.id === 'baby:rate') prio = 5;
+        else if (o.id === 'mobile') prio = 6;
+        else if (o.id === 'talc') prio = 7;
+        else prio = 8;
         if (!best || prio < best.prio || (prio === best.prio && o.cost < best.cost)) {
           best = { slot: i, offer: o.id, prio, cost: o.cost };
         }
       }
     }
+    if (best && best.prio >= 9) best = null;
     if (!best) {
       g.steer.dirX = 0;
       g.steer.dirY = 0;

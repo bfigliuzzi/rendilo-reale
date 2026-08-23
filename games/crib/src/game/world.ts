@@ -225,7 +225,7 @@ export class World {
 
     this.crib.reset(def.cribHp, level.cribX, level.cribY);
     this.economy.reset(def.startGold);
-    this.buildings.load(level);
+    this.buildings.load(level, this.crib, this.hero);
     resetLoadout(this.hero.loadout);
     this.hero.reset(level.cribX, level.cribY + 90);
     this.spawner.unload();

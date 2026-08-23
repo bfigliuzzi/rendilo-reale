@@ -74,7 +74,10 @@ export function makeGarden(seed = 0xbebe): LevelDef {
     name: GARDEN.name,
     seed,
     map: GARDEN,
-    cribHp: 240,
+    // 280 et non 240 : la réserve doit désormais tenir QUATRE nuits, et la
+    // réparation au berceau (25 or les 40 PV) est le seul soin fiable — la tétine
+    // est un ramassable, donc un hasard.
+    cribHp: 280,
     hpMul: 1,
     // exactement le prix d'UNE tourelle : le premier jour du jeu n'offre pas un
     // choix, il offre un geste — aller à un emplacement et construire.
@@ -137,15 +140,18 @@ export function makeGarden(seed = 0xbebe): LevelDef {
           { at: 35, type: 'pickup', variant: 'pacifier', x: cx + 240, y: cy + 90 },
           // il remonte l'allée du portail, la voie la plus longue : c'est ce qui
           // laisse le temps de nettoyer avant qu'il n'arrive.
-          { at: 40, type: 'boss', lane: 'portail' },
-          { at: 49, type: 'wave', kind: 'nappy', count: 4, lane: 'mures', spread: 0.6 },
-          { at: 57, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.7 },
-          { at: 65, type: 'wave', kind: 'broccoli', count: 2, lane: 'portail', spread: 0.6 },
-          { at: 73, type: 'wave', kind: 'nappy', count: 6, lane: 'mures', spread: 0.85 },
+          { at: 44, type: 'boss', lane: 'portail' },
+          // escorte VOLONTAIREMENT allégée après son arrivée. Mesuré au bot : à
+          // pleine charge, le bébé occupé à contourner l'embout laissait deux
+          // couches ronger le berceau en continu, soit près de sept points par
+          // seconde — la nuit se perdait par arithmétique, pas par adresse.
+          { at: 52, type: 'wave', kind: 'nappy', count: 3, lane: 'mures', spread: 0.6 },
+          { at: 62, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.7 },
+          { at: 72, type: 'wave', kind: 'nappy', count: 4, lane: 'mures', spread: 0.85 },
           // après ce point plus rien n'arrive : tuer le boss et nettoyer suffit. Un
           // joueur lent sur le boss n'est pas puni par de nouvelles vagues — c'est
           // le boss lui-même qui ronge le berceau, et cette pression-là suffit.
-          { at: 80, type: 'clear' },
+          { at: 78, type: 'clear' },
         ],
       },
     ],

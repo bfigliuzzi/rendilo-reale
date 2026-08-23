@@ -5,8 +5,10 @@ import type { Atlas } from '../render/textures';
 import type { AimTarget, Bullets, Shooter } from './bullets';
 import type { Economy } from './economy';
 import type { EnemyPool } from './enemies';
+import type { Crib } from './crib';
 import type { Hero } from './hero';
 import type { Level } from './level';
+import { applyUpgrade, canUpgrade, upgradeCost } from './loadout';
 import type { Terrain } from './terrain';
 
 /** Ce que le tick des ennemis a besoin de savoir des auras de ralentissement. */
@@ -32,7 +34,7 @@ export interface OfferView {
 export interface SlotView {
   id: number;
   name: string;
-  accepts: 'tower' | 'barricade';
+  accepts: 'tower' | 'barricade' | 'crib';
   /** Index dans `BUILDINGS`, ou -1 si l'emplacement est libre. */
   building: number;
   level: number;
@@ -89,13 +91,17 @@ export class Buildings {
   talcDiv = 1;
 
   private terrain: Terrain | null = null;
+  private crib: Crib | null = null;
+  private hero: Hero | null = null;
 
   constructor(
     private readonly layer: Container,
     private readonly atlas: Atlas,
   ) {}
 
-  load(level: Level): void {
+  load(level: Level, crib: Crib, hero: Hero): void {
+    this.crib = crib;
+    this.hero = hero;
     // on retire NOS sprites un par un, jamais `removeChildren()` : le calque porte
     // aussi le chevron d'invite, posé par World, qu'un vidage emporterait en silence
     for (const s of this.slots) {
@@ -124,6 +130,31 @@ export class Buildings {
         node: -1,
       });
     }
+    // Le BERCEAU est un emplacement comme un autre — virtuel, jamais déclaré par
+    // une carte. Ça économise un type de panneau, c'est découvrable (on y est déjà
+    // tout le temps), et c'est juste thématiquement : on répare le berceau AU
+    // berceau, et on améliore le bébé là où il dort.
+    const cribSlot: SlotDef = {
+      id: level.def.map.slots.length,
+      x: level.cribX,
+      y: level.cribY,
+      accepts: 'crib',
+      name: 'le berceau',
+    };
+    const sprite = new Sprite();
+    sprite.visible = false;
+    this.slots.push({
+      def: cribSlot,
+      building: -1,
+      level: 0,
+      hp: 0,
+      maxHp: 0,
+      shooter: { x: cribSlot.x, y: cribSlot.y, rate: 0, dps: 0, range: 0, fireAcc: 0 },
+      sprite,
+      lane: -1,
+      node: -1,
+    });
+
     level.terrain.clearBlocks();
   }
 
@@ -148,6 +179,7 @@ export class Buildings {
     const s = this.slots[slotId];
     if (!s) return [];
     const out: OfferView[] = [];
+    if (s.def.accepts === 'crib') return this.cribOffers(economy);
     if (s.building < 0) {
       for (let i = 0; i < B.BUILDINGS.length; i++) {
         const def = B.BUILDINGS[i];
@@ -180,6 +212,52 @@ export class Buildings {
   }
 
   /**
+   * La boutique du berceau : le réparer, l'agrandir, et améliorer le bébé.
+   *
+   * La réparation vient EN PREMIER et c'est délibéré : c'est le seul soin fiable du
+   * jeu, et sans lui le berceau saigne monotonement sur quatre nuits — la dernière
+   * se jouerait toujours sur une réserve entamée trois nuits plus tôt, quelle que
+   * soit l'adresse du joueur.
+   */
+  private cribOffers(economy: Economy): OfferView[] {
+    const crib = this.crib;
+    const hero = this.hero;
+    if (!crib || !hero) return [];
+    const out: OfferView[] = [];
+    if (crib.hp < crib.maxHp) {
+      out.push({
+        id: 'repair',
+        icon: '\u{1F527}',
+        name: 'Réparer le berceau',
+        detail: `+${B.CRIB_REPAIR_HP} PV (actuellement ${Math.ceil(crib.hp)}/${Math.round(crib.maxHp)})`,
+        cost: B.CRIB_REPAIR_COST,
+        affordable: economy.can(B.CRIB_REPAIR_COST),
+      });
+    }
+    out.push({
+      id: 'cribhp',
+      icon: '\u{1F6CF}',
+      name: 'Berceau renforcé',
+      detail: `+${B.CRIB_MAXHP_STEP} PV maximum, et autant de réparé`,
+      cost: B.CRIB_MAXHP_COST,
+      affordable: economy.can(B.CRIB_MAXHP_COST),
+    });
+    for (const def of B.BABY_UPGRADES) {
+      if (!canUpgrade(hero.loadout, def.id)) continue;
+      const cost = upgradeCost(hero.loadout, def.id);
+      out.push({
+        id: `baby:${def.id}`,
+        icon: def.icon,
+        name: `${def.name} ${hero.loadout.levels[def.id] + 1}/${def.maxLevel}`,
+        detail: def.desc,
+        cost,
+        affordable: economy.can(cost),
+      });
+    }
+    return out;
+  }
+
+  /**
    * LE seul chemin d'achat. Le bouton du panneau et le bot appellent exactement
    * cette fonction : il n'existe donc pas de second chemin non testé, et la garde
    * « jour + à portée + finançable » ne peut pas être contournée.
@@ -189,6 +267,7 @@ export class Buildings {
     if (slotId !== this.nearSlot) return false;
     const s = this.slots[slotId];
     if (!s) return false;
+    if (s.def.accepts === 'crib') return this.buyCrib(offerId, economy);
     if (offerId === 'up') {
       if (s.building < 0) return false;
       const def = B.BUILDINGS[s.building];
@@ -207,6 +286,29 @@ export class Buildings {
     s.building = idx;
     s.level = 1;
     this.applyLevel(s);
+    return true;
+  }
+
+  private buyCrib(offerId: string, economy: Economy): boolean {
+    const crib = this.crib;
+    const hero = this.hero;
+    if (!crib || !hero) return false;
+    if (offerId === 'repair') {
+      if (crib.hp >= crib.maxHp || !economy.trySpend(B.CRIB_REPAIR_COST)) return false;
+      crib.heal(B.CRIB_REPAIR_HP);
+      return true;
+    }
+    if (offerId === 'cribhp') {
+      if (!economy.trySpend(B.CRIB_MAXHP_COST)) return false;
+      crib.maxHp += B.CRIB_MAXHP_STEP;
+      crib.heal(B.CRIB_MAXHP_STEP);
+      return true;
+    }
+    if (!offerId.startsWith('baby:')) return false;
+    const id = offerId.slice(5) as B.BabyUpgradeId;
+    if (!B.BABY_UPGRADES.some((u) => u.id === id)) return false;
+    if (!canUpgrade(hero.loadout, id) || !economy.trySpend(upgradeCost(hero.loadout, id))) return false;
+    applyUpgrade(hero.loadout, id);
     return true;
   }
 
@@ -277,13 +379,14 @@ export class Buildings {
     // feu — et une feuille DOM qui apparaît en pleine vague masquerait le danger.
     this.nearSlot = -1;
     if (phase === 'day') {
-      let best = B.BUILD_REACH * B.BUILD_REACH;
+      let best = Infinity;
       for (let i = 0; i < this.slots.length; i++) {
         const d = this.slots[i].def;
+        const reach = d.accepts === 'crib' ? B.CRIB_SHOP_REACH : B.BUILD_REACH;
         const dx = d.x - hero.x;
         const dy = d.y - hero.y;
         const d2 = dx * dx + dy * dy;
-        if (d2 < best) {
+        if (d2 <= reach * reach && d2 < best) {
           best = d2;
           this.nearSlot = i;
         }

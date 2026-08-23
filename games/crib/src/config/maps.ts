@@ -57,8 +57,12 @@ export interface SlotDef {
   id: number;
   x: number;
   y: number;
-  /** Une dalle accepte UN rôle : tourelle en surplomb de voie, ou barricade EN travers. */
-  accepts: 'tower' | 'barricade';
+  /**
+   * Une dalle accepte UN rôle : tourelle en surplomb de voie, barricade EN travers,
+   * ou — pour l'emplacement VIRTUEL du berceau, qui n'est jamais déclaré par une
+   * carte — la boutique du bébé.
+   */
+  accepts: 'tower' | 'barricade' | 'crib';
   /** Voie bouchée — obligatoire pour une barricade, car près du berceau les voies
    *  se superposent et la déduire géométriquement serait ambigu. */
   lane?: string;
@@ -137,8 +141,15 @@ export const GARDEN: MapDef = {
     { id: 1, x: 216, y: 456, accepts: 'tower', name: 'la brouette' },
     { id: 2, x: 672, y: 900, accepts: 'tower', name: 'le pot de fleurs' },
     { id: 3, x: 960, y: 1044, accepts: 'tower', name: 'le banc' },
-    { id: 4, x: 336, y: 444, accepts: 'barricade', lane: 'portail', name: 'la barrière du portail' },
-    { id: 5, x: 792, y: 888, accepts: 'barricade', lane: 'mures', name: 'le grillage des mûres' },
+    // Deux dalles au PIED du berceau. Elles manquaient, et ça s'est vu au bot : les
+    // quatre premières couvrent les voies loin en amont, donc pendant la phase de
+    // boss — quand le bébé est occupé à contourner l'embout — plus rien ne défendait
+    // le berceau lui-même et deux couches suffisaient à le vider. Une carte doit
+    // toujours offrir la possibilité de tenir son objectif sans y être.
+    { id: 4, x: 432, y: 828, accepts: 'tower', name: 'le tapis d’éveil' },
+    { id: 5, x: 648, y: 612, accepts: 'tower', name: 'la table à langer' },
+    { id: 6, x: 336, y: 444, accepts: 'barricade', lane: 'portail', name: 'la barrière du portail' },
+    { id: 7, x: 792, y: 888, accepts: 'barricade', lane: 'mures', name: 'le grillage des mûres' },
   ],
 };
 

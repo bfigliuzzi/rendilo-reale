@@ -588,6 +588,19 @@ export function buildingIndex(id: BuildingId): number {
 
 /** Distance à laquelle le panneau d'achat d'un emplacement s'ouvre tout seul. */
 export const BUILD_REACH = 74;
+/** Idem pour le berceau, qui est plus gros — et qui EST la boutique du bébé. */
+export const CRIB_SHOP_REACH = 78;
+
+/**
+ * Réparation et renforcement du berceau. C'est le seul soin fiable du jeu (la
+ * tétine est un ramassable, donc un hasard), et sans lui le berceau saigne
+ * monotonement sur quatre nuits : la dernière se jouerait toujours sur une réserve
+ * entamée trois nuits plus tôt, quelle que soit l'adresse du joueur.
+ */
+export const CRIB_REPAIR_COST = 25;
+export const CRIB_REPAIR_HP = 40;
+export const CRIB_MAXHP_COST = 90;
+export const CRIB_MAXHP_STEP = 40;
 
 /** Nombre maximal d'emplacements par carte — borne les tableaux préalloués. */
 export const MAX_SLOTS = 16;
