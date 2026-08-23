@@ -1,5 +1,11 @@
 import * as B from '../config/balance';
-import type { Stats } from '../game/world';
+import type { Phase, Stats } from '../game/world';
+
+export interface NightView {
+  n: number;
+  total: number;
+  brief: string;
+}
 
 const UPDATE_MS = 100;
 
@@ -15,6 +21,7 @@ const UPDATE_MS = 100;
  */
 export class Hud {
   onRestart: (() => void) | null = null;
+  onLaunchNight: (() => void) | null = null;
 
   private readonly perf: HTMLElement;
   private readonly bar: HTMLElement;
@@ -26,6 +33,10 @@ export class Hud {
   private readonly buffs: HTMLElement;
   private readonly live: HTMLElement;
   private readonly root: HTMLElement;
+  private readonly launch: HTMLButtonElement;
+  private readonly launchLabel: HTMLElement;
+  private readonly launchBrief: HTMLElement;
+  private phase: Phase = 'day';
 
   private acc = 0;
   private frames = 0;
@@ -45,16 +56,46 @@ export class Hud {
     this.info = document.getElementById('hud-info')!;
     this.buffs = document.getElementById('hud-buffs')!;
     this.live = document.getElementById('hud-live')!;
+    this.launch = document.getElementById('hud-launch') as HTMLButtonElement;
+    this.launchLabel = document.getElementById('hud-launch-label')!;
+    this.launchBrief = document.getElementById('hud-launch-brief')!;
     document.getElementById('hud-restart')!.addEventListener('click', () => this.onRestart?.());
+    this.launch.addEventListener('click', () => this.onLaunchNight?.());
   }
 
   setInGame(on: boolean): void {
     this.root.classList.toggle('in-game', on);
     if (!on) {
+      this.root.classList.remove('day', 'night');
       this.bossBar.hidden = true;
       this.lastLive = '';
       this.live.textContent = '';
     }
+  }
+
+  /**
+   * Le HUD du jour et celui de la nuit ne portent pas les mêmes commandes : de
+   * jour, la seule action est « Lancer la nuit », et son libellé porte le RÉSUMÉ de
+   * la menace. C'est ce qui fait de la phase de jour une décision et pas un pari —
+   * on choisit ses achats en sachant ce qui arrive.
+   */
+  setPhase(phase: Phase, night: NightView): void {
+    this.phase = phase;
+    this.root.classList.toggle('day', phase === 'day');
+    this.root.classList.toggle('night', phase === 'night');
+    if (phase === 'day') {
+      this.launchLabel.textContent = `Lancer la nuit ${night.n} / ${night.total}`;
+      this.launchBrief.textContent = night.brief;
+      this.launch.setAttribute('aria-label', `Lancer la nuit ${night.n} sur ${night.total} : ${night.brief}`);
+    }
+    this.lastInfo = '';
+    this.lastLive = '';
+  }
+
+  /** Annonce ponctuelle au lecteur d'écran (franchissement, pas valeur continue). */
+  announce(text: string): void {
+    this.live.textContent = text;
+    this.lastLive = text;
   }
 
   /** Compteur de fps, lu par le bot de vérification autant que par nous. */
@@ -85,7 +126,10 @@ export class Hud {
     this.bossBar.hidden = s.bossHp <= 0;
     if (s.bossHp > 0) this.bossFill.style.width = `${((s.bossHp / s.bossMax) * 100).toFixed(1)}%`;
 
-    const info = `${this.fmt(s.time)}\n${s.enemies} ennemi${s.enemies > 1 ? 's' : ''}`;
+    const info =
+      s.phase === 'day'
+        ? `Jour ${s.night} / ${s.nights}\nconstruis, puis lance la nuit`
+        : `Nuit ${s.night} / ${s.nights}\n${this.fmt(s.time)} · ${s.enemies} ennemi${s.enemies > 1 ? 's' : ''}`;
     if (info !== this.lastInfo) {
       this.info.textContent = info;
       this.lastInfo = info;
@@ -103,6 +147,7 @@ export class Hud {
 
     // annonces au lecteur d'écran : uniquement les FRANCHISSEMENTS de palier, jamais
     // une valeur continue — un aria-live qui parle à chaque tick est inutilisable
+    if (this.phase === 'day') return;
     const milestone = s.cleared
       ? 'Dernière vague passée.'
       : s.bossHp > 0

@@ -446,6 +446,16 @@ export const LANE_SPREAD_MAX = 0.85;
  */
 export const ENEMY_SPEED_JITTER = 0.06;
 
+/**
+ * Rayon d'arrivée sur un waypoint. Le test principal reste un produit scalaire,
+ * mais il est mesuré depuis la cible DÉCALÉE de l'ennemi et pas depuis le nœud brut :
+ * mesuré depuis le nœud, un ennemi dont l'écartement latéral le pose en amont du
+ * plan du nœud se fige EXACTEMENT sur sa cible et n'avance plus jamais (vu au bot :
+ * neuf couches immobiles dans les coudes, nuit qui ne se terminait pas). Le rayon
+ * est le filet qui ferme le cas limite où le produit scalaire vaut zéro.
+ */
+export const LANE_NODE_REACH = 16;
+
 /** Distance d'arrêt devant une barricade, en plus du rayon de l'ennemi. */
 export const BARRICADE_STOP = 26;
 /** Rayon de collision d'une barricade (elle occupe la largeur de sa voie). */

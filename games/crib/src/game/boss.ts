@@ -123,7 +123,15 @@ export class Boss {
       tx = terrain.nodeX[n];
       ty = terrain.nodeY[n];
       const last = terrain.laneStart[this.lane] + terrain.laneCount[this.lane] - 1;
-      if (n < last && (this.x - tx) * terrain.segX[n] + (this.y - ty) * terrain.segY[n] > 0) this.node = n + 1;
+      const rx = this.x - tx;
+      const ry = this.y - ty;
+      if (
+        n < last &&
+        (rx * terrain.segX[n] + ry * terrain.segY[n] > 0 ||
+          rx * rx + ry * ry < B.LANE_NODE_REACH * B.LANE_NODE_REACH)
+      ) {
+        this.node = n + 1;
+      }
     }
     const cribD = Math.hypot(cribX - this.x, cribY - this.y) || 1;
     const dx = tx - this.x;

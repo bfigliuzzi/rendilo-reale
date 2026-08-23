@@ -224,14 +224,27 @@ if (kind === 'win' || kind === 'idle') {
 
   const samples = [];
   const t0 = Date.now();
-  const limitMs = 280000;
+  const limitMs = 420000;
   let last = null;
+  let lastNight = 0;
   while (Date.now() - t0 < limitMs) {
     await sleep(140);
-    if (kind === 'win') await drive();
     last = await snapshot();
-    if (samples.length === 0 || last.time - samples[samples.length - 1].time > 5) {
+    // le JOUR n'a pas d'horloge : il dure tant qu'on ne lance pas la nuit. Le bot
+    // ne construit pas encore (rien à acheter) — il enchaîne, ce qui est exactement
+    // la mesure « sans achat » qu'on veut pour `idle`.
+    if (last.state === 'day') {
+      await page.evaluate(() => window.__game.flow.startNight());
+      continue;
+    }
+    if (kind === 'win') await drive();
+    if (last.night !== lastNight) {
+      lastNight = last.night;
+      samples.push({ night: last.night, crib: Math.round(last.cribHp) });
+    }
+    if (samples.length === 0 || last.time - (samples[samples.length - 1].time ?? 0) > 6) {
       samples.push({
+        night: last.night,
         time: +last.time.toFixed(1),
         crib: Math.round(last.cribHp),
         enemies: last.enemies,
@@ -446,6 +459,16 @@ if (kind === 'keyboard') {
   await sleep(400);
   const started = await page.evaluate(() => window.__game.flow.state);
 
+  // La partie s'ouvre sur le JOUR : la seule commande est « Lancer la nuit », et
+  // elle doit être atteignable au Tab puis actionnable à Entrée. C'est le test de
+  // non-régression de la boucle jour/nuit au clavier — le jour serait injouable au
+  // clavier si le bouton n'était pas dans l'ordre de tabulation.
+  await page.keyboard.press('Tab');
+  const atDay = await focused();
+  await page.keyboard.press('Enter');
+  await sleep(400);
+  const launched = await page.evaluate(() => window.__game.flow.state);
+
   // les huit directions, une par une, en mesurant le déplacement RÉEL
   const dirs = [
     ['KeyW', 0, -1],
@@ -489,9 +512,13 @@ if (kind === 'keyboard') {
   detail.inGameTab = inGameTab;
   detail.atResult = atResult;
   detail.started = started;
+  detail.atDay = atDay;
+  detail.launched = launched;
   detail.moves = moves;
   detail.checks = {
-    started: started === 'playing',
+    started: started === 'day',
+    dayControlReachable: atDay.tag === 'BUTTON',
+    nightLaunched: launched === 'night',
     allMoved: moves.every((m) => m.ok),
     // LE test de non-régression RGAA : après un changement d'écran, le focus ne doit
     // jamais retomber sur <body> — c'est le manque relevé dans Essaim, et le piège

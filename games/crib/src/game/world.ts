@@ -20,9 +20,30 @@ import { Peas } from './peas';
 import { Pickups } from './pickups';
 import { Puddles } from './puddles';
 import { Spawner, type SpawnSink } from './spawner';
+import { assertLevelSane } from '../config/levels';
+
+export type Phase = 'day' | 'night';
+
+/**
+ * Ce qu'il faut sauvegarder au lancement d'une nuit pour pouvoir la REJOUER après
+ * une défaite. Struct plat, recopié par valeur : le panneau de défaite propose
+ * « Rejouer la nuit », et perdre huit minutes de construction sur une erreur de
+ * placement serait la punition la plus décourageante possible dans un jeu sans
+ * méta-progression, où recommencer n'apporte rien.
+ */
+export interface NightCheckpoint {
+  cribHp: number;
+  cribMaxHp: number;
+  /** Rembobiné aussi : sans ça, rejouer une nuit gonflerait le temps du record. */
+  nightSecTotal: number;
+}
 
 /** Instantané pour le HUD et le bot de vérification. */
 export interface Stats {
+  phase: Phase;
+  /** 1-based. */
+  night: number;
+  nights: number;
   time: number;
   cribHp: number;
   cribMax: number;
@@ -59,8 +80,23 @@ export interface RunStats {
  */
 export class World {
   playing = false;
-  /** Temps de jeu écoulé, en secondes. Pilote le spawner. */
+  /**
+   * Secondes depuis le début de LA NUIT en cours — plus depuis le début du niveau.
+   * C'est ce qui pilote le spawner, et c'est le seul changement de sémantique
+   * qu'a demandé la boucle jour/nuit.
+   */
   t = 0;
+  /**
+   * Cumul des secondes de nuit du niveau : c'est LUI le temps du record. Le jour
+   * n'est pas chronométré — le chronométrer récompenserait le joueur qui n'ouvre
+   * jamais le panneau d'achat.
+   */
+  nightSecTotal = 0;
+
+  /** Jour : aucun ennemi, on se déplace et on construit. Nuit : on défend. */
+  phase: Phase = 'day';
+  /** Index 0-based de la nuit en cours (ou de la prochaine, pendant le jour). */
+  nightIndex = 0;
   /** Horloge de rendu, pour les animations décoratives. */
   clock = 0;
 
@@ -76,7 +112,10 @@ export class World {
 
   readonly run: RunStats = { kills: 0, picked: 0, pins: 0, maxGrip: 0 };
 
-  onGameOver: ((victory: boolean, timeSec: number) => void) | null = null;
+  /** La nuit est tenue : plus rien n'arrive, l'arène est vide, le boss est tombé. */
+  onNightCleared: ((nightIndex: number, nightSec: number) => void) | null = null;
+  /** Le berceau est tombé. Flow seul décide de ce qu'est une victoire de niveau. */
+  onCribFallen: ((nightIndex: number, nightSecTotal: number) => void) | null = null;
 
   camX = 0;
   camY = 0;
@@ -137,10 +176,24 @@ export class World {
 
   // ------------------------------------------------------------------ cycle
 
+  /**
+   * Charge un niveau et le remet ENTIÈREMENT à zéro : phase, nuits, berceau,
+   * améliorations, et — dès qu'ils existeront — or et bâtiments.
+   *
+   * INVARIANT, et le refactor tentant le casse en silence : `startNight` et
+   * `endNight` ne touchent JAMAIS à ce qui se cumule sur un niveau. Seul
+   * `loadLevel` le remet à zéro. C'est par cette asymétrie — et pas par un flag —
+   * que les bâtiments persisteront d'une nuit à l'autre et disparaîtront d'un
+   * niveau à l'autre.
+   */
   loadLevel(level: Level): void {
     this.level = level;
     const def = level.def;
+    if (import.meta.env.DEV) assertLevelSane(def);
     this.t = 0;
+    this.nightSecTotal = 0;
+    this.phase = 'day';
+    this.nightIndex = 0;
     // seed dérivé de celui du niveau : les drops sont reproductibles au même seed,
     // et indépendants des angles de spawn (rejouer un tirage rejoue tout à
     // l'identique, mais changer une vague ne rebat pas les drops)
@@ -162,7 +215,7 @@ export class World {
     this.crib.reset(def.cribHp, level.cribX, level.cribY);
     resetLoadout(this.hero.loadout);
     this.hero.reset(level.cribX, level.cribY + 90);
-    this.spawner.load(def);
+    this.spawner.unload();
     this.camX = this.prevCamX = clamp(this.hero.x, B.DESIGN_W / 2, level.w - B.DESIGN_W / 2);
     this.camY = this.prevCamY = clamp(this.hero.y, B.DESIGN_H / 2, level.h - B.DESIGN_H / 2);
     this.run.kills = 0;
@@ -178,9 +231,16 @@ export class World {
     this.clock += dt;
     if (!this.playing || !this.level) return;
     const level = this.level;
-    this.t += dt;
-
-    this.spawner.update(this.t, this.sink);
+    // Le tick est STRICTEMENT IDENTIQUE de jour et de nuit — contacts, engluement,
+    // tir auto, collisions, ramassages, caméra. Trois seules différences : le
+    // spawner n'est alimenté qu'en nuit, la construction n'est ouverte qu'au jour,
+    // et la condition « nuit tenue » ne se teste qu'en nuit. C'est cette identité
+    // qui laisse le scénario `grip` du bot fonctionner sans une ligne de changement.
+    if (this.phase === 'night') {
+      this.t += dt;
+      this.nightSecTotal += dt;
+      this.spawner.update(this.t, this.sink);
+    }
 
     this.enemies.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onEnemyShoot);
     this.boss.update(dt, this.hero.x, this.hero.y, this.crib.x, this.crib.y, level.terrain, this.onDust);
@@ -251,6 +311,9 @@ export class World {
 
   stats(): Stats {
     return {
+      phase: this.phase,
+      night: this.nightIndex + 1,
+      nights: this.level?.def.nights.length ?? 0,
       time: this.t,
       cribHp: this.crib.hp,
       cribMax: this.crib.maxHp,
@@ -593,16 +656,55 @@ export class World {
     if (!this.playing) return;
     if (this.crib.fallen) {
       this.playing = false;
-      this.onGameOver?.(false, this.t);
+      this.onCribFallen?.(this.nightIndex, this.nightSecTotal);
       return;
     }
-    // victoire : le boss est tombé, plus rien n'arrivera, et l'arène est vide.
+    if (this.phase !== 'night') return;
+    // nuit tenue : le boss est tombé, plus rien n'arrivera, et l'arène est vide.
     // Les trois conditions ensemble — une arène momentanément vide entre deux
-    // vagues ne doit jamais terminer la partie.
+    // vagues ne doit jamais terminer la nuit.
     if (this.spawner.cleared && !this.boss.active && this.enemies.count === 0) {
-      this.playing = false;
-      this.onGameOver?.(true, this.t);
+      const sec = this.t;
+      this.endNight();
+      this.onNightCleared?.(this.nightIndex, sec);
     }
+  }
+
+  // ------------------------------------------------------------- jour / nuit
+
+  /** Instantané de l'état de niveau, pris au lancement de chaque nuit. */
+  checkpoint(): NightCheckpoint {
+    return { cribHp: this.crib.hp, cribMaxHp: this.crib.maxHp, nightSecTotal: this.nightSecTotal };
+  }
+
+  /** Restaure un instantané : c'est le bouton « Rejouer la nuit ». */
+  restore(cp: NightCheckpoint): void {
+    this.crib.maxHp = cp.cribMaxHp;
+    this.crib.hp = cp.cribHp;
+    this.nightSecTotal = cp.nightSecTotal;
+  }
+
+  startNight(index: number): void {
+    const level = this.level;
+    if (!level) return;
+    this.nightIndex = index;
+    this.phase = 'night';
+    this.t = 0;
+    this.spawner.load(level.def.nights[index]);
+    this.playing = true;
+  }
+
+  /** Rend la main au jour : on VIDE le champ de bataille, pas le niveau. */
+  endNight(): void {
+    this.phase = 'day';
+    this.t = 0;
+    this.spawner.unload();
+    this.enemies.clear();
+    this.bullets.clear();
+    this.peas.clear();
+    this.puddles.clear();
+    this.boss.retire();
+    this.hero.grip = 0;
   }
 
   // ------------------------------------------------------- hooks de test

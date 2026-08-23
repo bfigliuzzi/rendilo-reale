@@ -268,8 +268,17 @@ export class EnemyPool {
         tx = terrain.nodeX[n] + terrain.perpX[n] * this.slotOff[i] * half;
         ty = terrain.nodeY[n] + terrain.perpY[n] * this.slotOff[i] * half;
         const last = terrain.laneStart[ln] + terrain.laneCount[ln] - 1;
-        if (n < last && (x - terrain.nodeX[n]) * terrain.segX[n] + (y - terrain.nodeY[n]) * terrain.segY[n] > 0) {
-          this.node[i] = n + 1;
+        if (n < last) {
+          // mesuré depuis SA cible, pas depuis le nœud brut : un ennemi écarté
+          // latéralement se pose en amont du plan du nœud et s'y fige à jamais.
+          const rx = x - tx;
+          const ry = y - ty;
+          if (
+            rx * terrain.segX[n] + ry * terrain.segY[n] > 0 ||
+            rx * rx + ry * ry < B.LANE_NODE_REACH * B.LANE_NODE_REACH
+          ) {
+            this.node[i] = n + 1;
+          }
         }
       } else {
         tx = cribX;
