@@ -7,9 +7,10 @@ hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
 métaprogression (or, boutique, localStorage). **Essaim** (`/games/hive/`), conquête
 de nœuds façon Auralux (voir section dédiée). **Cerveau** (`/games/mind/`), un
 Mastermind à 3 difficultés avec un chat farceur (voir section dédiée). Et **Berceau**
-(`/games/crib/`), défense de point top-down façon Kingshot/Thronefall — un bébé qu'on
-déplace, tir auto, et un ENGLUEMENT au lieu de PV (voir section dédiée) ; c'est le
-premier jeu d'action du hub jouable au clavier, et le premier avec une caméra.
+(`/games/crib/`), tower-defense d'action façon Thronefall/Kingshot — trois cartes à
+voies tracées, boucle jour/nuit, monnaie et bâtiments, un bébé qu'on déplace, tir auto,
+et un ENGLUEMENT au lieu de PV (voir section dédiée) ; c'est le premier jeu d'action du
+hub jouable au clavier, et le premier avec une caméra et du terrain bloquant.
 PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
@@ -345,11 +346,16 @@ d'ancrage), Difficile 5 pions / 8 couleurs / 10 essais + **pion vide JOUABLE**
   conteneur (rendu logiciel). `window.__game = {world, flow, app, save, hud, Board,
   computeFeedback, palette, pegs}`.
 
-## Berceau (`games/crib/`) — défense de berceau, héros bébé, engluement
+## Berceau (`games/crib/`) — tower-defense d'action, jour/nuit, engluement
 
-**Niveau de test uniquement** : une arène, une courbe de vagues scriptée, 3 archétypes
-et un boss. Pas de campagne, pas de succès, pas de monnaie — hors périmètre assumé de
-ce premier jet, qui sert à valider le *feeling* de la boucle.
+**Trois cartes, trois sujets** (`config/maps.ts`, écrites entièrement à la main sur le
+modèle de `hive/config/maps.ts`) : 🌿 **Le jardin** (4 nuits) enseigne le RACCOURCI —
+le bébé passe sous les haies, la horde contourne ; 🍳 **La cuisine** (5 nuits)
+enseigne le GOULOT — trois voies qui passent chacune par une porte de deux tuiles
+taillée dans un plan de travail ; 🕯️ **Le grenier** (7 nuits) enseigne le DOS —
+quatre voies dont un conduit qui débouche à quelques pas du berceau et qu'on ne
+remonte jamais à temps, donc il faut DÉLÉGUER à une tour. Déblocage séquentiel dérivé
+du save. Pas de méta-progression : l'or et les achats meurent avec le niveau.
 
 - **LA mécanique : le bébé n'a PAS de PV, il a du GRIP.** Le contact ennemi l'englue,
   `vitesse = HERO_SPEED × (1 - grip)`, jusqu'à l'immobilisation. La seule défaite est
@@ -358,104 +364,287 @@ ce premier jet, qui sert à valider le *feeling* de la boucle.
   `gripMul` des contacts, plafonnée à `GRIP_CONTACT_CAP` = 3 contacts), il ne s'intègre
   PAS : le premier modèle intégrait sans borne, donc n'importe quel contact finissait
   par clouer et l'engluement était BINAIRE — une mamie isolée immobilisait, et le tank
-  perdait son rôle de menace kitable. Barème obtenu : 1 mamie → 50 % de vitesse,
-  2 mamies → cloué, 1 couche au passage → 17 %, 3 sacs à poussière → 75 %.
-- **Quatre garde-fous non négociables** (le pendant de ceux du chat de Cerveau) :
-  ① le tir ne consulte JAMAIS le grip — cloué, le bébé tire à pleine portée et se
-  libère seul (sans ça `grip = 1` est un game-over déguisé) ; ② le plafond de contacts
-  borne la charge, donc abattre les trois plus proches suffit TOUJOURS — et comme
-  l'aim-assist tire aussi au plus proche, les ennemis comptés sont exactement ceux
-  qu'on abat ; ③ le decay démarre à la frame où la charge retombe, sans rampe ni
-  fenêtre de grâce ; ④ le doudou (`GRIP_IMMUNE_TIME`) est la porte de sortie d'un
-  pinning mal engagé.
+  perdait son rôle de menace kitable. Barème : 1 mamie → 50 % de vitesse, 2 mamies →
+  cloué, 1 couche au passage → 17 %, 3 sacs à poussière → 75 %.
+- **Quatre garde-fous non négociables** : ① le tir ne consulte JAMAIS le grip — cloué,
+  le bébé tire à pleine portée et se libère seul ; ② le plafond de contacts borne la
+  charge, donc abattre les trois plus proches suffit TOUJOURS — et comme l'aim-assist
+  tire aussi au plus proche, les ennemis comptés sont exactement ceux qu'on abat ;
+  ③ le decay démarre à la frame où la charge retombe, sans rampe ; ④ le doudou
+  (`GRIP_IMMUNE_TIME`) est la porte de sortie d'un pinning mal engagé.
+  La **boîte à talc** (bâtiment) et l'amélioration **peau savonnée** DIVISENT la charge,
+  et cette division vit au SITE D'APPEL dans `World` — pas dans `Hero` — pour que le
+  commentaire de `GRIP_LOAD_FOR_PIN` continue de dire la vérité sur le modèle nu.
 - **Quatre codes redondants de l'engluement**, jamais la couleur seule : l'anneau qui
   se remplit autour du bébé (une FORME), la cadence de l'animation de rampe — indexée
-  sur la DISTANCE parcourue, donc elle ralentit toute seule et se fige à l'arrêt,
-  c'est ce détail qui fait lire la mécanique sans regarder la jauge —, les filets de
-  bave vers chaque colleur, et le pommeau du joystick qui ramollit + la vignette.
-- **Arène plus grande que l'écran** (`ARENA_W/H` 1080×1440 contre 540×960 de canvas),
-  berceau au centre, caméra qui suit le bébé avec deadzone et clamp aux bords. La
-  caméra déplace le CONTENEUR, jamais les entités. `SPAWN_RING` (560) est calé juste
-  au-delà de la demi-diagonale de l'écran (≈ 551) : un ennemi qui apparaît est
-  toujours hors champ. Corollaire OBLIGATOIRE du hors-champ (`render/overlayView.ts`,
-  espace écran) : chevrons de bord pour les menaces invisibles — priorisées par leur
-  proximité au BERCEAU, pas au bébé —, flèche vers le berceau dès qu'il frôle le bord,
-  liseré rouge pulsé quand il est mordu loin du regard. Sans ces trois signaux on perd
-  sans jamais comprendre pourquoi.
-- **Bestiaire — le CIBLAGE est l'axe de design** (`ENEMY_KINDS`, table typée
-  `as const satisfies`) : **Mamie bisous** vise le BÉBÉ, lente, grosse, s'agrippe
-  (`cling`) — elle ne touche jamais le berceau, sa menace est de te clouer pendant que
-  les autres passent ; **Couche sale** vise le BERCEAU, rapide, fragile, t'englue
-  seulement au passage et laisse une FLAQUE à sa mort (punit le farm au corps-à-corps) ;
-  **Brocoli** se poste à `shootRange` du berceau et bombarde — le bébé s'il est à
-  `PEA_AIM_RANGE`, LE BERCEAU sinon (sans ce repli il était ignorable : trop loin pour
-  toucher, incapable de mordre, donc gratuit). `cribDps` de la couche est LE terme
-  dominant du budget de dégâts et n'est borné par rien : à 6, six couches parvenues au
-  berceau le vidaient en 5 s sans recours. Ne pas le remonter sans retoucher `CRIB_HP`.
-- **Boss Aspirateur** (`game/boss.ts`) : le corps va au berceau quoi qu'il arrive,
-  mais l'embout PIVOTE vers le bébé à `BOSS_TURN` rad/s, comme un char. Il aspire ET
-  **gobe les projectiles entrant dans le cône** : invulnérable de face, il faut le
-  CONTOURNER. Tourner autour de près bat sa rotation (168/150 ≈ 1.12 > 1.1), de loin
-  non — la contre-attaque est donc « rentre dans la zone et strafe », ce qui met le
-  joueur là où les mamies font mal. Conséquence émergente assumée : garé sur le
-  berceau, il protège son escorte — mesuré au bot, qui se plantait devant l'embout et
-  ne tuait plus rien. Budget mesuré : ~20 s d'approche, ~70 % d'uptime de tir donc
-  ~21 DPS effectifs, 420 PV, 6 dégâts/s au berceau une fois garé. Le premier tuning
-  (900 PV, 22 dégâts/s) était injouable par ARITHMÉTIQUE et non par skill.
-- **Ramassables** (`game/pickups.ts`), pris en marchant dessus — seule progression, et
-  la seule cohérente avec « bouger est la seule action ». Biberon (cadence ×2, jamais
-  le DPS : il améliore la répartition, pas la puissance), doudou (immunité au grip),
-  tétine (soigne le berceau). Leur vraie fonction est le DÉTOUR : y aller, c'est
-  laisser la porte ouverte quelques secondes.
+  sur la DISTANCE parcourue, donc elle ralentit toute seule et se fige à l'arrêt —,
+  les filets de bave vers chaque colleur, et le pommeau du joystick + la vignette.
+
+### Boucle jour/nuit
+
+**Flow possède la PHASE, World possède l'HORLOGE DE NUIT.** `world.t` compte les
+secondes depuis le début de LA NUIT ; `nightSecTotal` cumule pour le record. Le jour
+n'a **aucune horloge** — il dure tant que le joueur n'appuie pas sur « Lancer la
+nuit » — et le chronométrer récompenserait celui qui n'ouvre jamais le panneau
+d'achat.
+
+**Le tick est STRICTEMENT IDENTIQUE de jour et de nuit** — contacts, engluement, tir
+auto, collisions, ramassages, caméra. Trois différences seulement : le spawner n'est
+alimenté qu'en nuit, la construction n'est ouverte qu'au jour, et « nuit tenue » ne se
+teste qu'en nuit. C'est cette identité qui laisse le scénario `grip` du bot
+fonctionner sans une ligne de changement.
+
+> **INVARIANT, écrit aussi dans `world.ts` car le refactor tentant le casse en
+> silence** : `startNight`/`endNight` ne touchent JAMAIS ce qui se cumule sur un
+> niveau (or, bâtiments, améliorations, PV du berceau). Seul `loadLevel` le remet à
+> zéro. C'est par cette asymétrie, et pas par un flag, que les bâtiments persistent
+> d'une nuit à l'autre et disparaissent d'un niveau à l'autre.
+
+Le `brief` de la nuit est affiché SUR le bouton de lancement : on choisit ses achats
+en sachant ce qui arrive, sinon la phase de jour est un pari et non une décision. Une
+défaite propose DEUX issues — « Rejouer la nuit » (instantané pris au lancement) et
+« Recommencer le niveau » : reperdre huit minutes de construction sur une erreur de
+placement serait la punition la plus décourageante possible dans un jeu sans
+méta-progression, où repartir de zéro n'apporte rien de nouveau. Les bâtiments
+entamés sont réparés gratuitement au lever du jour, sinon la dernière nuit se joue
+derrière un mur de ruines déjà payé.
+
+### Terrain : on écrit des vecteurs, on exécute un masque
+
+`config/maps.ts` déclare des polylignes, rectangles, disques et bandes ; `game/terrain.ts`
+les rasterise UNE fois au chargement dans un `Uint8Array` de tuiles de
+`TERRAIN_TILE = 24` px. Au tick, toute question de passabilité est UN index de
+tableau. Drapeaux : `T_ENEMY` · `T_HERO` · `T_SLOW` (haies) · `T_LANE`.
+
+**L'ORDRE du bake porte le sens** : sol → patchs → **voies (qui EFFACENT les bits
+bloquants)** → bordure (`T_HERO` seul, pour que les amorces de voies hors arène
+restent praticables par la horde). Une haie tracée en travers d'une voie laisse donc
+automatiquement une porte : c'est comme ça que s'écrit un goulot. Le carve de
+PASSABILITÉ prend **une tuile de marge** de plus que `halfWidth` — sinon un point à
+`halfWidth − 8` de l'axe peut tomber dans une tuile dont le centre est plus loin,
+restée bloquante, et l'ennemi s'y fait éjecter à chaque frame (mesuré : `idle:kitchen`
+en timeout) ; `T_LANE` n'est peint qu'à la largeur réelle, la voie a donc un
+accotement praticable non peint.
+
+**Trois matériaux et pas un de plus** : `hedge` bloque la horde et laisse passer le
+bébé (ralenti à `HEDGE_SLOW` — couper doit être un ÉCHANGE, pas un cadeau), `wall` et
+`water` bloquent tout le monde et ne diffèrent qu'au rendu. Les rôles ne changent pas
+d'un biome à l'autre — haie de jardin, pile de linge, tas de cartons — seule la
+matière change : c'est ce qui garde le langage visuel apprenable.
+
+**Sept assertions DEV** au chargement, chacune pour un bug qui ne se voit qu'en jeu et
+sur une seule carte. La plus importante interdit toute bande de moins de deux tuiles :
+c'est elle qui rend géométriquement impossible qu'un ennemi touche le bébé à travers
+un mur (portée de contact max 28 < 48), donc qui protège le garde-fou ② de
+l'engluement. Plus `assertBalanceSane` (tuning) et `assertLevelSane` (contenu).
+**`?debug` dessine le masque, les nœuds de voie et les emplacements tels que la
+simulation les voit** — un bake faux est invisible en jeu, on constate seulement que
+« les ennemis font n'importe quoi ».
+
+**Le bébé** teste le masque par une sonde aux QUATRE COINS de son AABB et résout **X
+puis Y séparément** : c'est cette séparation qui donne le glissement le long d'un mur,
+sans quoi un joystick un rien de travers le colle net. L'aspiration du boss passe par
+la même collision — un mur protège du vide. **Balles et pois IGNORENT le terrain**
+(décision explicite) : ça garde le garde-fou ② exactement vrai, évite tout raycast, et
+c'est l'avantage asymétrique du bébé.
+
+### Suivi de voie
+
+Cinq tableaux SoA de plus au pool (`lane`, `node`, `slotOff`, `spd`, `chase`,
+`lostD/lostT`, `freeX/Y`). **⚠️ Tous doivent être recopiés dans le swap-remove de
+`kill()`** — un ennemi qui hérite du `node` de l'occupant précédent se téléporte
+d'intention en pleine voie, et ça se lit comme « le pathfinding est cassé ».
+
+On n'a PAS réécrit le moteur de déplacement : on a remplacé une cible fixe par une
+cible mobile. Deux subtilités : le passage de nœud est un **produit scalaire** mesuré
+depuis la cible DÉCALÉE de l'ennemi et pas depuis le nœud brut (mesuré depuis le nœud,
+un ennemi écarté latéralement se fige EXACTEMENT sur sa cible et n'avance plus jamais),
+avec un rayon d'arrivée pour fermer le cas limite ; et la distance d'ARRÊT se mesure
+sur l'objectif, pas sur le waypoint.
+
+Anti-agglutination sans requête de voisinage (trop chère à 460 ennemis) : écartement
+latéral, étagement longitudinal, jitter de vitesse déterministe.
+
+Les agrippeuses quittent leur voie sous `ENEMY_AGGRO_RANGE` — c'est LE levier du
+joueur, il attire les mamies hors du chemin. Garde-fou obligatoire : décrochage après
+`ENEMY_LOST_TIME` sans progresser, sans quoi un bébé derrière une haie possède une
+zone sûre PERMANENTE et le jeu est mort comme design. Hors voie, la poursuite glisse
+par axe ; une éjection universelle vers la dernière position libre, suivie d'un pas de
+poussée vers la cible, rend sûre toute poussée présente ou future.
+
+**ANTI-ENLISEMENT** : dès que plus rien n'arrivera de la nuit, les bombardiers
+AVANCENT au lieu de rester postés. Sans ça, une nuit peut ne JAMAIS se terminer dès
+qu'un ennemi immobile est hors de portée de tout le monde — c'est exactement ce qui
+arrivait quand `broccoli.shootRange` (215) dépassait `HERO_RANGE` (195). Le garde-fou
+tient quelle que soit la valeur future de `shootRange`, et `assertBalanceSane` interdit
+en plus `shootRange ≥ HERO_RANGE`.
+
+### Économie et bâtiments
+
+- `game/economy.ts` : la bourse d'UN NIVEAU. Elle n'est **jamais** dans la sauvegarde —
+  l'absence de méta-progression est une décision de design, et le schéma de save est
+  l'endroit où on la fait respecter. L'or non dépensé se reporte d'une nuit à l'autre.
+- L'or tombe DIRECTEMENT au compteur à la mort : pas de pièce à ramasser, une pièce
+  perdue hors champ serait une punition invisible. Règle de dérivation
+  **`EnemyDef.gold ≈ hp / 3`**, donc le revenu d'une nuit est dérivé de son CONTENU et
+  ajouter une vague la finance automatiquement. Deux écarts assumés : la mamie paie
+  au-dessus du barème (l'ignorer, c'est se faire clouer), le sac à poussière ne paie
+  RIEN (le boss enragé en recrache trois toutes les 2,6 s, il serait une pompe à or).
+  Garde-fou DEV : le revenu doit être MONOTONE d'une nuit à l'autre.
+- **On construit en MARCHANT jusqu'à la dalle** : le panneau s'ouvre à la proximité,
+  jamais depuis un menu. Quatre bâtiments (`BUILDINGS`), et un seul choix vraiment
+  opinionné : la **boîte à talc** divise l'engluement dans son rayon, donc c'est le
+  seul qui pose une question de placement intéressante (« où est-ce que je me fais
+  clouer ? ») — une tourelle de plus n'aurait posé que « où passent-ils ? », à quoi la
+  carte répond déjà. Ni les talcs ni les mobiles ne se cumulent : le meilleur gagne.
+- Les **barricades** passent par `terrain.laneBlockNode` : deux comparaisons dans le
+  tick, pas une ligne de géométrie, et une barricade ne peut PHYSIQUEMENT pas être
+  contournée sur sa voie. Les agrippeuses l'ignorent — filtre pour les fonceurs de
+  berceau, règle qui se lit en une partie. Un fonceur arrêté lui inflige exactement son
+  `cribDps` : pas de seconde statistique à équilibrer. Détruite, la dalle se rachète au
+  prix plein : perdre un mur doit coûter.
+- **Le berceau EST la boutique du bébé** — un emplacement virtuel, jamais déclaré par
+  une carte. On y répare (25 or les 40 PV, le seul soin FIABLE du jeu : la tétine est
+  un ramassable, donc un hasard), on l'agrandit, et on achète les cinq améliorations du
+  bébé (`game/loadout.ts`, 4 paliers, courbe 50/80/128/205). **`emptyLoadout()` est
+  l'IDENTITÉ** : une partie fraîche a exactement les stats d'avant, ce qui est la
+  condition pour que `grip` mesure toujours les mêmes paliers.
+- `Bullets` accepte un **`Shooter`** (bébé ou tour) et `fireAcc` vit sur le TIREUR :
+  avec un accumulateur partagé, tout le monde tirerait en salve synchrone à cadence
+  divisée. La durée de vie d'une balle dérive de la portée du tireur.
+
+### Bestiaire et boss
+
+**Le CIBLAGE est l'axe de design** (`ENEMY_KINDS`) : **Mamie bisous** vise le BÉBÉ,
+lente, grosse, s'agrippe — elle ne touche jamais le berceau, sa menace est de te clouer
+pendant que les autres passent ; **Couche sale** vise le BERCEAU, rapide, fragile,
+t'englue au passage et laisse une FLAQUE à sa mort ; **Brocoli** se poste à
+`shootRange` du berceau et bombarde — le bébé s'il est à `PEA_AIM_RANGE`, LE BERCEAU
+sinon. `cribDps` de la couche est LE terme dominant du budget de dégâts et n'est borné
+par rien.
+
+**Trois boss, TROIS CONTRE-JEUX** (`BOSS_KINDS`, socle partagé, seul `update`
+diverge) — trois barres de PV avec des sprites différents n'auraient été qu'un seul
+combat répété trois fois :
+- 🧹 **Aspirateur** (jardin) : l'embout PIVOTE vers le bébé et **gobe les projectiles
+  du cône**. Invulnérable de face, il faut le CONTOURNER — tourner autour de près bat
+  sa rotation (168/150 ≈ 1.12 > 1.1), de loin non, ce qui met le joueur là où les
+  mamies font mal.
+- 🍳 **Robot ménager** (cuisine) : télégraphe court avec sa ligne dessinée au sol, dash
+  rapide, puis une récupération immobile qui EST la fenêtre de dégâts. Il ne charge
+  qu'une fois ARRIVÉ au berceau (ou si le bébé vient le chercher) — sans cette porte il
+  passait la nuit en allers-retours et ne rongeait jamais l'objectif. La charge
+  n'englue qu'UNE fois par passage : la punition doit être « tu es collé », pas « tu as
+  perdu ».
+- 🌀 **Machine à laver** (grenier) : se gare sur le berceau et pulse des anneaux de
+  mousse complets (compte IMPAIR, on passe entre deux mousses). Rien ne la fait taire :
+  il faut du DPS soutenu, donc des tours. C'est le boss qui valide l'équilibre 50/50.
+  Elle ne pivote PAS — un gros caisson carré incliné se lit comme un bug.
+
+`hpMul` porte aussi les PV du boss : UN seul levier de difficulté par carte. Marqueurs
+de danger au double codage habituel : une FORME (le couloir à sa largeur exacte de
+contact, l'anneau qui se remplit) et un MOUVEMENT (le strobe de fin de télégraphe).
+
+### Rendu
+
+- **Le sol de chaque carte est CUIT une fois** (`render/mapBake.ts`) à la taille de
+  l'arène : un sprite, un draw call, zéro coût au tick, caché par `map.id` pour que le
+  ↻ ne le repaie pas. On peint **DEPUIS LE MASQUE**, pas depuis les vecteurs : rendu et
+  simulation lisent la même table, il est donc structurellement impossible que le sol
+  montre une voie là où la horde ne passe pas. `Terrain.mat` distingue au rendu le mur
+  de l'eau, que la collision confond.
+- **ARRONDI PIXEL de la caméra**, obligatoire : sous une texture de sol échantillonnée
+  au plus proche voisin, un décalage fractionnaire duplique des lignes et des colonnes
+  entières qui rampent sur tout l'écran au moindre panoramique.
+- **Pixel art** : tout est plotté au PIXEL EXACT (`pxEllipse`/`pxDisc` en scanline),
+  jamais `arc()`. Trois réglages solidaires décident de la netteté : `antialias: false`,
+  `scaleMode` **nearest**, et `image-rendering: pixelated` sur le canvas.
+- **Piège de rendu vécu** : dans Pixi v8, `g.arc()` sans `moveTo` préalable se relie au
+  point courant du chemin — resté à l'ORIGINE DU MONDE — et trace une balafre en
+  travers de l'écran. Vu sur la jauge de grip et les arcs du cône.
+- **Trois biomes** (`garden`/`kitchen`/`attic`) : tuile de sol, matériau de voie,
+  planche de props et teinte des motes d'ambiance. Interdits identiques aux autres jeux
+  — pas de hachures jaune/noir, pas d'anneaux, pas d'aplats blancs — et le décor ne
+  doit jamais IMITER un danger : l'EAU n'a aucun anneau et son corps est nettement plus
+  froid et sombre que la flaque engluante (même piège que la dalle `earthLight`
+  assombrie). Une VOIE se marque par le MATÉRIAU, jamais par un code. Le décor refuse
+  de poser un prop sur une voie ou dans un massif : un buisson au milieu du chemin ment
+  sur la passabilité.
+
+### Interface et accessibilité
+
+- **Feuille d'achat FIXE en bas d'écran**, pas une bulle ancrée au monde : l'arène
+  défile (une bulle devrait être repositionnée chaque frame ET composer avec le
+  letterbox), et en 540×960 elle n'aurait nulle part où aller sur un emplacement du
+  haut. Une feuille fixe a un ordre de tabulation STABLE, et c'est ça qui rend la
+  conformité RGAA bon marché. On ne vole JAMAIS le focus à l'ouverture — elle s'ouvre
+  en marchant. Invite en jeu : un chevron qui FLOTTE au-dessus de la dalle, jamais un
+  anneau (code des dangers).
+- **`steer.setKeyboardBlocker`** : le trou réel, invisible à tout test au doigt.
+  `onKeyDown` avale ZQSD et fait `preventDefault`, donc tabuler dans la feuille faisait
+  courir le bébé hors de portée et le panneau se refermait sous les doigts. Le
+  pointeur, lui, reste actif. Et `#hud-build` est `pointer-events: auto` sur tout son
+  CONTENEUR, pas seulement ses boutons — sinon un glissement démarré entre deux offres
+  passe au travers (leçon de Cerveau prise à l'envers).
+- Une carte verrouillée de l'écran de sélection est un `<button disabled>` dont
+  l'`aria-label` NOMME le prérequis : un bouton muet qui ne répond pas est pire que pas
+  de bouton.
+- **Arène plus grande que l'écran**, caméra à deadzone clampée aux bords. Corollaire
+  OBLIGATOIRE du hors-champ (`render/overlayView.ts`, espace écran) : chevrons de bord
+  priorisés par proximité au BERCEAU, flèche vers le berceau, liseré rouge pulsé quand
+  il est mordu loin du regard. Sans ces trois signaux on perd sans comprendre pourquoi.
 - **Contrôles** (`input/steer.ts`) : joystick virtuel (écoute sur `window`, deltas
-  divisés par le scale du letterbox, origine qui SUIT le doigt au-delà du rayon) ET
-  clavier ZQSD/WASD/flèches par `event.code` (les deux familles mappées, aucune
-  détection de disposition). Les deux sources sont FUSIONNÉES, jamais additionnées :
-  la dernière active gagne — les mélanger produisait des diagonales fantômes quand une
-  touche restait collée. `blur` relâche tout. `Flow` arme/désarme via `setEnabled`.
-- **Pixel art** (`render/textures.ts`) : tout est plotté au PIXEL EXACT
-  (`pxEllipse`/`pxDisc` en scanline entière), jamais `arc()` qui antialiase ; le
-  liseré d'encre est la forme redessinée 1 px plus grande. Les frames sont
-  PARAMÉTRÉES (décalages de membres) — 4 directions × 3 frames de rampe pour le bébé
-  sortent d'une seule fonction. Ennemis : 2 frames + flip X selon `vx`, écart assumé
-  (4 directions × 4 archétypes serait hors budget d'un niveau de test). Trois réglages
-  décident de la netteté et sont solidaires : `antialias: false`, `scaleMode` **nearest**
-  sur les sources de sprites, et `image-rendering: pixelated` sur le canvas (le
-  letterbox met à l'échelle en CSS, et le navigateur interpole par défaut). Les
-  anneaux de marqueurs restent en `linear`, eux : ce sont des courbes supersamplées ×2.
-- **Décor** : un seul biome « jardin », pose unique au chargement avec rejection
-  sampling (modèle d'Essaim, arène fixe) et clearance de 110 px autour du berceau ;
-  pollen en espace écran au-dessus du monde. Interdits identiques aux autres jeux :
-  pas de hachures jaune/noir, pas d'anneaux, pas d'aplats blancs — codes réservés aux
-  dangers, et le décor ne doit jamais IMITER un danger (la dalle de terre en tons
-  clairs se lisait comme une flaque, d'où `earthLight` sombre).
-- **Piège de rendu vécu, à ne pas rejouer** : dans Pixi v8, `g.arc()` sans `moveTo`
-  préalable se relie au point courant du chemin — resté à l'ORIGINE DU MONDE — et
-  trace une balafre en travers de l'écran depuis le coin de l'arène. Vu sur la jauge
-  de grip et les arcs du cône ; les deux ont désormais leur `moveTo`.
-- Save `rendilo-reale:crib:save:v1` (`meta/save.ts`, pattern d'Essaim/Cerveau : clé
-  jamais renommée, version DANS le JSON, `structuredClone(DEFAULTS)` puis fusion champ
-  par champ avec garde de type, `resetSave` mute EN PLACE). Contenu minimal : `muted`,
-  `bestTimeSec`, `bestCribHp`, `wins`, `runs` — écrite UNIQUEMENT par `game/flow.ts`,
-  en UNE écriture par fin de partie (le ↻ et le retour menu ne flushent pas).
-- **Vérification** : `node tools/verify-crib.mjs <url> <scénario>` — `grip`,
-  `win[:seed]`, `idle[:seed]`, `keyboard`, `stress`. **`grip` est le test de
-  non-régression de la mécanique centrale et se lance après TOUTE retouche des `GRIP_*`
-  ou du tir** : trois phases, sept assertions (une meute cloue en < 2,5 s / cloué
-  signifie vitesse nulle / le tir auto SEUL libère / une mamie SEULE ne cloue jamais /
-  son palier vaut bien 1.6 ÷ 3.2 = 0,5 / il reste de quoi fuir / le doudou annule
-  tout). Le bot de `win` écrit directement `steer.dirX/dirY` (aucun événement d'entrée
-  ne survenant, `recompute` ne les écrase pas) et connaît les deux contre-jeux : sortir
-  du cône AVANT tout le reste, et repousser ce qui mord le berceau avant d'aller
-  chercher le boss.
-  Bande mesurée (conteneur, rendu logiciel, 2026-08 — les taux absolus dépendent de la
-  machine, lire en RELATIF, 2 runs minimum) : `grip` 7/7, `keyboard` 5/5 (focus perdu
-  0), `idle` défaite ~109 s, `win` victoire fiable ~156 s avec 83-173/240 de berceau
-  restant (le boss est la seule phase où le berceau saigne vraiment), `stress` ~20 fps
-  à 400 ennemis, 0 erreur console. Contrôle même machine : horde campagne N1 =
-  victoire, hub = 4 jeux listés.
-  `window.__game = {world, flow, app, save, steer, hero, crib, boss}`,
-  `world.postSpawn(kind, x, y)` scriptable.
+  divisés par le scale du letterbox) ET clavier ZQSD/WASD/flèches par `event.code`. Les
+  deux sources sont FUSIONNÉES, jamais additionnées : la dernière active gagne. `blur`
+  relâche tout.
+
+### Sauvegarde
+
+`rendilo-reale:crib:save:v1` (clé jamais renommée, version DANS le JSON, fusion champ
+par champ avec garde de type, `resetSave` mute EN PLACE). Schéma **v2** : `muted`,
+`wins`, `runs`, et par niveau `{cleared, bestNightSec, bestCribHp, stars}`.
+`levelUnlocked` DÉRIVE le déblocage séquentiel, il n'est jamais stocké — le stocker
+créerait deux sources de vérité dont une qu'un save corrompu contredit. Migration
+v1 → v2 : le niveau de test unique ÉTAIT le jardin, donc le vétéran retrouve sa
+victoire et le déblocage de la cuisine, avec UNE étoile seulement (son temps vient
+d'autres règles). Écrite UNIQUEMENT par `game/flow.ts`, en une écriture par fin de
+niveau ; le ↻ et le retour menu ne flushent pas.
+
+### Vérification
+
+`node tools/verify-crib.mjs <url> <scénario>` — `grip`, `day`, `win[:carte[:seed]]`,
+`idle[:carte[:seed]]`, `keyboard`, `stress`. Carte = `garden` | `kitchen` | `attic`,
+ou 1-3 ; le harness DÉVERROUILLE toute la chaîne, `startCampaignLevel` clampe sinon.
+
+- **`grip` est le test de non-régression de la mécanique centrale et se lance après
+  TOUTE retouche des `GRIP_*` ou du tir** : trois phases, sept assertions. Il survit
+  sans modification grâce à « le tick est identique jour/nuit ». Son contrat est écrit
+  en commentaire dans `world.ts` — ne pas le casser.
+- **`day` est son équivalent pour la moitié économie** : neuf assertions, dont
+  « acheter la nuit est REFUSÉ » (la garde est dans `buy`, pas dans l'UI) et « le
+  bâtiment survit à la nuit ».
+- Le bot MARCHE jusqu'aux dalles et n'implémente AUCUN coût en node : `buy` applique
+  exactement les gardes du bouton, il n'existe donc pas de second chemin non testé.
+  Un achat téléportable laisserait passer une régression sur la moitié du design de la
+  phase de jour. Il échantillonne à 90 ms : il pilote en boucle ouverte, donc sa
+  qualité de jeu suit la cadence — à 140 ms et 40 fps, l'issue d'un run dépendait du
+  bruit de la machine plus que de l'équilibrage.
+- **La mesure d'équilibrage est `run.cribDamage`, PAS les PV restants** : la réparation
+  ne coûte que 25 or les 40 PV, donc qui a de l'or termine presque toujours au maximum.
+  Le cumul mesure la carte, les PV restants ne mesurent que la dernière nuit. C'est lui
+  qui a montré que la cuisine ne prenait que 89 PV sur cinq nuits.
+
+Bande mesurée (conteneur, rendu logiciel, 2026-08 — taux absolus dépendants de la
+machine, lire en RELATIF, 2 runs minimum) : `grip` 7/7, `day` 9/9, `keyboard` 7/7,
+`stress` ~35 fps à 400 ennemis, 0 erreur console. `win` VICTOIRE sur les trois cartes,
+dégâts cumulés au berceau 337/320 (jardin), 168/300 (cuisine — la carte où bâtir
+paie), 359/340 (grenier) ; `idle` perd partout, nuit 4 au jardin, nuit 3 à la cuisine
+et au grenier. Règle de calage : **le jardin est le tutoriel, sa victoire doit être
+FIABLE** (mesuré 5/5 après calage) ; au-delà, la variance par carte est assumée.
+Contrôle même machine : hub = 4 jeux listés.
+
+`window.__game = {world, flow, app, layers, save, steer, hero, crib, boss, economy,
+buildings, level, terrain}`, `world.postSpawn(kind, x, y)` scriptable.
 
 ## Déploiement
 
@@ -474,6 +663,7 @@ node tools/verify.mjs http://localhost:5199/games/horde/ campaign 90 shot.png   
 node tools/verify-hive.mjs http://localhost:5199/games/hive/ win:2               # Essaim
 node tools/verify-mind.mjs http://localhost:5199/games/mind/ contrast            # Cerveau
 node tools/verify-crib.mjs http://localhost:5199/games/crib/ grip                # Berceau
+node tools/verify-crib.mjs http://localhost:5199/games/crib/ win:kitchen          # Berceau, carte 2
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON

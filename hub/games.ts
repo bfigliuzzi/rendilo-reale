@@ -34,7 +34,7 @@ export const GAMES: GameEntry[] = [
   {
     id: 'crib',
     title: 'Berceau',
-    tagline: 'Un bébé, ses cubes, et des mamies qui veulent un bisou.',
+    tagline: 'Le jour on construit, la nuit les mamies arrivent par les chemins.',
     path: '/games/crib/',
     emoji: '🍼',
   },
