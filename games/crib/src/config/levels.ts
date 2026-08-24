@@ -74,12 +74,16 @@ export function makeGarden(seed = 0xbebe): LevelDef {
     name: GARDEN.name,
     seed,
     map: GARDEN,
-    // 320 : la réserve doit tenir QUATRE nuits, et le jardin est le TUTORIEL de la
-    // campagne — sa nuit de boss doit rester un gain fiable pour qui a construit.
-    // Mesuré au bot : à 280 c'était un tirage à pile ou face, ce qui est le pire
-    // ressenti possible sur un premier niveau. La réparation au berceau (25 or les
-    // 40 PV) reste le seul soin fiable ; la tétine est un ramassable, donc un hasard.
-    cribHp: 320,
+    // 360, et c'est une décision de TUTORIEL, pas un aveu. Le bot encaisse ~310 PV
+    // cumulés sur les quatre nuits : à 320, la victoire tenait au fait d'avoir
+    // réparé au bon moment, donc à un tirage à pile ou face — le pire ressenti
+    // possible sur un premier niveau. La marge ne rend pas la nuit du boss facile
+    // (elle reste l'endroit où le berceau saigne vraiment), elle rend l'échec
+    // ATTRIBUABLE : on perd parce qu'on a mal placé, pas parce qu'on a eu la
+    // malchance de manquer trente points. La cuisine et le grenier sont là pour
+    // mordre. La réparation au berceau (25 or les 40 PV) reste le seul soin fiable ;
+    // la tétine est un ramassable, donc un hasard.
+    cribHp: 360,
     hpMul: 1,
     // le prix d'une tourelle, plus une barricade : le premier jour du jeu offre un
     // GESTE (aller à un emplacement et construire) et un premier arbitrage, pas un
@@ -153,7 +157,7 @@ export function makeGarden(seed = 0xbebe): LevelDef {
           // seconde — la nuit se perdait par arithmétique, pas par adresse.
           { at: 52, type: 'wave', kind: 'nappy', count: 3, lane: 'mures', spread: 0.6 },
           { at: 62, type: 'wave', kind: 'granny', count: 2, lane: 'mures', spread: 0.7 },
-          { at: 72, type: 'wave', kind: 'nappy', count: 4, lane: 'mures', spread: 0.85 },
+          { at: 72, type: 'wave', kind: 'nappy', count: 3, lane: 'mures', spread: 0.8 },
           // après ce point plus rien n'arrive : tuer le boss et nettoyer suffit. Un
           // joueur lent sur le boss n'est pas puni par de nouvelles vagues — c'est
           // le boss lui-même qui ronge le berceau, et cette pression-là suffit.

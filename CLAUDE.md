@@ -636,11 +636,19 @@ ou 1-3 ; le harness DÉVERROUILLE toute la chaîne, `startCampaignLevel` clampe 
 
 Bande mesurée (conteneur, rendu logiciel, 2026-08 — taux absolus dépendants de la
 machine, lire en RELATIF, 2 runs minimum) : `grip` 7/7, `day` 9/9, `keyboard` 7/7,
-`stress` ~35 fps à 400 ennemis, 0 erreur console. `win` VICTOIRE sur les trois cartes,
-dégâts cumulés au berceau 337/320 (jardin), 168/300 (cuisine — la carte où bâtir
-paie), 359/340 (grenier) ; `idle` perd partout, nuit 4 au jardin, nuit 3 à la cuisine
-et au grenier. Règle de calage : **le jardin est le tutoriel, sa victoire doit être
-FIABLE** (mesuré 5/5 après calage) ; au-delà, la variance par carte est assumée.
+`stress` ~32-35 fps à 400 ennemis, 0 erreur console.
+
+- **jardin** `win` 3/3, berceau restant 44-141 sur 360, dégâts cumulés 299-356 ;
+  `idle` défaite nuit 4 (401 de dégâts).
+- **cuisine** `win`, dégâts cumulés 168 sur 300 — la carte où bâtir paie ; `idle`
+  défaite nuit 3.
+- **grenier** `win`, dégâts cumulés 359 sur 340 ; `idle` défaite nuit 3.
+
+Règle de calage : **le jardin est le tutoriel, sa victoire doit être FIABLE**. À
+320 PV de berceau elle était à 2/3 — un tirage à pile ou face, le pire ressenti
+possible sur un premier niveau ; à 360 elle est à 3/3 sans que la nuit du boss cesse
+de mordre (44 PV restants sur l'un des trois runs). Au-delà du jardin, la variance
+par carte est assumée : le bot n'a ni retranchement ni adaptation.
 Contrôle même machine : hub = 4 jeux listés.
 
 `window.__game = {world, flow, app, layers, save, steer, hero, crib, boss, economy,
