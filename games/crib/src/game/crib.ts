@@ -22,6 +22,9 @@ export class Crib {
   private hitT = 0;
   /** Cumul de dégâts depuis la dernière lecture — sert au liseré d'alerte hors champ. */
   recentDamage = 0;
+  /** Second compteur, consommé par World pour le cumul de la partie. Deux lecteurs
+   *  indépendants, donc deux compteurs : partager celui de l'overlay le viderait. */
+  private tally = 0;
 
   private readonly sprite: Sprite;
 
@@ -41,6 +44,7 @@ export class Crib {
     this.sprite.position.set(x, y);
     this.hitT = 0;
     this.recentDamage = 0;
+    this.tally = 0;
   }
 
   get frac(): number {
@@ -64,10 +68,18 @@ export class Crib {
     this.hp = Math.max(0, this.hp - n);
     this.hitT = 0.22;
     this.recentDamage += n;
+    this.tally += n;
   }
 
   heal(n: number): void {
     this.hp = Math.min(this.maxHp, this.hp + n);
+  }
+
+  /** Consomme le cumul pour les statistiques de partie. */
+  takeTally(): number {
+    const d = this.tally;
+    this.tally = 0;
+    return d;
   }
 
   /** Consomme le cumul de dégâts : appelé une fois par frame par l'overlay. */

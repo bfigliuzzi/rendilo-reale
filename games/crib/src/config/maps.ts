@@ -216,11 +216,14 @@ export const KITCHEN: MapDef = {
     { id: 0, x: 408, y: 456, accepts: 'tower', name: 'le tabouret' },
     { id: 1, x: 936, y: 768, accepts: 'tower', name: 'l’égouttoir' },
     { id: 2, x: 624, y: 1008, accepts: 'tower', name: 'la corbeille' },
+    // QUATRE dalles de tour pour trois voies, et pas cinq : à cinq, les goulots
+    // concentraient la horde pile là où toutes tiraient, et la carte se finissait à
+    // 89 PV de dégâts sur cinq nuits — aucune tension. Une carte à goulots doit
+    // forcer un CHOIX de voie à sacrifier, pas permettre de tout couvrir.
     { id: 3, x: 456, y: 840, accepts: 'tower', name: 'la chaise haute' },
-    { id: 4, x: 696, y: 636, accepts: 'tower', name: 'le micro-ondes' },
-    { id: 5, x: 312, y: 480, accepts: 'barricade', lane: 'porte', name: 'la barrière du couloir' },
-    { id: 6, x: 816, y: 624, accepts: 'barricade', lane: 'evier', name: 'le carton de l’évier' },
-    { id: 7, x: 768, y: 1020, accepts: 'barricade', lane: 'placard', name: 'la porte du placard' },
+    { id: 4, x: 312, y: 480, accepts: 'barricade', lane: 'porte', name: 'la barrière du couloir' },
+    { id: 5, x: 816, y: 624, accepts: 'barricade', lane: 'evier', name: 'le carton de l’évier' },
+    { id: 6, x: 768, y: 1020, accepts: 'barricade', lane: 'placard', name: 'la porte du placard' },
   ],
 };
 

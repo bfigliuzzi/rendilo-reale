@@ -134,6 +134,7 @@ export class Screens {
         <p class="result-stats">
           ${v.run.kills} ennemis repoussés · ${Math.round(v.goldEarned)} pièces d’or<br>
           ${v.run.picked} objets ramassés ·
+          berceau touché de ${Math.round(v.run.cribDamage)} PV<br>
           ${v.run.pins === 0 ? 'jamais cloué au sol' : `cloué ${v.run.pins} fois`}
           · engluement max ${Math.round(v.run.maxGrip * 100)} %
         </p>

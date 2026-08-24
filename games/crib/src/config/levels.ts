@@ -1,5 +1,5 @@
 import * as B from './balance';
-import type { EnemyKindId, PickupKindId } from './balance';
+import type { BossKindId, EnemyKindId, PickupKindId } from './balance';
 import { ATTIC, GARDEN, KITCHEN, type MapDef, type MapId } from './maps';
 
 /**
@@ -27,7 +27,7 @@ export type NightEvent =
       spread?: number;
     }
   | { at: number; type: 'pickup'; variant: PickupKindId; x: number; y: number }
-  | { at: number; type: 'boss'; lane: string }
+  | { at: number; type: 'boss'; kind: BossKindId; lane: string }
   /** Dernier événement de CHAQUE nuit : il arme la condition « nuit tenue ». */
   | { at: number; type: 'clear' };
 
@@ -146,7 +146,7 @@ export function makeGarden(seed = 0xbebe): LevelDef {
           { at: 35, type: 'pickup', variant: 'pacifier', x: cx + 240, y: cy + 90 },
           // il remonte l'allée du portail, la voie la plus longue : c'est ce qui
           // laisse le temps de nettoyer avant qu'il n'arrive.
-          { at: 44, type: 'boss', lane: 'portail' },
+          { at: 44, type: 'boss', kind: 'vacuum', lane: 'portail' },
           // escorte VOLONTAIREMENT allégée après son arrivée. Mesuré au bot : à
           // pleine charge, le bébé occupé à contourner l'embout laissait deux
           // couches ronger le berceau en continu, soit près de sept points par
@@ -182,11 +182,11 @@ export function makeKitchen(seed = 0xbebe): LevelDef {
     seed,
     map: KITCHEN,
     cribHp: 300,
-    // 1,5 et non 1,15 : mesuré au bot, la cuisine se finissait à 297 PV sur 300.
-    // Les goulots CONCENTRENT la horde, donc les tours y travaillent mieux qu'au
-    // jardin — il faut compenser par les PV, pas par le nombre, sinon on paie le
-    // surcoût en images par seconde sans gagner une once de tension.
-    hpMul: 1.5,
+    // Mesuré au bot : à 1,15 la cuisine se finissait à 297 PV sur 300. Les goulots
+    // CONCENTRENT la horde, donc les tours y travaillent mieux qu'au jardin — il
+    // faut compenser par les PV, pas par le nombre, sinon on paie le surcoût en
+    // images par seconde sans gagner une once de tension.
+    hpMul: 1.8,
     startGold: 80,
     nights: [
       {
@@ -218,28 +218,30 @@ export function makeKitchen(seed = 0xbebe): LevelDef {
         n: 3,
         brief: 'trois voies en même temps',
         events: [
-          { at: 2, type: 'wave', kind: 'nappy', count: 7, lane: 'porte', spread: 0.85 },
-          { at: 5, type: 'wave', kind: 'nappy', count: 5, lane: 'placard', spread: 0.7 },
+          { at: 2, type: 'wave', kind: 'nappy', count: 8, lane: 'porte', spread: 0.85 },
+          { at: 5, type: 'wave', kind: 'nappy', count: 7, lane: 'placard', spread: 0.8 },
           { at: 12, type: 'wave', kind: 'granny', count: 3, lane: 'evier', spread: 0.6 },
           { at: 19, type: 'wave', kind: 'broccoli', count: 2, lane: 'porte', spread: 0.5 },
           { at: 24, type: 'pickup', variant: 'pacifier', x: cx, y: cy + 230 },
-          { at: 28, type: 'wave', kind: 'nappy', count: 6, lane: 'evier', spread: 0.8 },
-          { at: 36, type: 'wave', kind: 'granny', count: 2, lane: 'placard', spread: 0.5 },
-          { at: 46, type: 'clear' },
+          { at: 28, type: 'wave', kind: 'nappy', count: 8, lane: 'evier', spread: 0.85 },
+          { at: 32, type: 'wave', kind: 'nappy', count: 6, lane: 'porte', spread: 0.8 },
+          { at: 38, type: 'wave', kind: 'granny', count: 2, lane: 'placard', spread: 0.5 },
+          { at: 48, type: 'clear' },
         ],
       },
       {
         n: 4,
         brief: 'la nuit du linge sale : gros paquets, portes étroites',
         events: [
-          { at: 2, type: 'wave', kind: 'nappy', count: 8, lane: 'evier', spread: 0.85 },
-          { at: 6, type: 'wave', kind: 'broccoli', count: 3, lane: 'placard', spread: 0.6 },
-          { at: 13, type: 'wave', kind: 'granny', count: 3, lane: 'porte', spread: 0.7 },
-          { at: 18, type: 'pickup', variant: 'bottle', x: cx - 200, y: cy + 60 },
-          { at: 22, type: 'wave', kind: 'nappy', count: 8, lane: 'porte', spread: 0.85 },
-          { at: 30, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.5 },
-          { at: 37, type: 'wave', kind: 'broccoli', count: 2, lane: 'evier', spread: 0.5 },
-          { at: 48, type: 'clear' },
+          { at: 2, type: 'wave', kind: 'nappy', count: 9, lane: 'evier', spread: 0.85 },
+          { at: 5, type: 'wave', kind: 'nappy', count: 7, lane: 'placard', spread: 0.85 },
+          { at: 9, type: 'wave', kind: 'broccoli', count: 3, lane: 'placard', spread: 0.6 },
+          { at: 15, type: 'wave', kind: 'granny', count: 3, lane: 'porte', spread: 0.7 },
+          { at: 20, type: 'pickup', variant: 'bottle', x: cx - 200, y: cy + 60 },
+          { at: 24, type: 'wave', kind: 'nappy', count: 9, lane: 'porte', spread: 0.85 },
+          { at: 32, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.5 },
+          { at: 39, type: 'wave', kind: 'broccoli', count: 2, lane: 'evier', spread: 0.5 },
+          { at: 50, type: 'clear' },
         ],
       },
       {
@@ -253,11 +255,12 @@ export function makeKitchen(seed = 0xbebe): LevelDef {
           { at: 22, type: 'wave', kind: 'broccoli', count: 3, lane: 'porte', spread: 0.6 },
           { at: 30, type: 'wave', kind: 'nappy', count: 7, lane: 'evier', spread: 0.85 },
           { at: 36, type: 'pickup', variant: 'bottle', x: cx - 120, y: cy + 200 },
-          { at: 44, type: 'boss', lane: 'porte' },
-          { at: 54, type: 'wave', kind: 'nappy', count: 4, lane: 'placard', spread: 0.6 },
-          { at: 64, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.6 },
-          { at: 74, type: 'wave', kind: 'nappy', count: 5, lane: 'porte', spread: 0.8 },
-          { at: 82, type: 'clear' },
+          { at: 44, type: 'boss', kind: 'blender', lane: 'porte' },
+          { at: 54, type: 'wave', kind: 'nappy', count: 5, lane: 'placard', spread: 0.7 },
+          { at: 57, type: 'wave', kind: 'nappy', count: 5, lane: 'evier', spread: 0.7 },
+          { at: 66, type: 'wave', kind: 'granny', count: 2, lane: 'evier', spread: 0.6 },
+          { at: 74, type: 'wave', kind: 'nappy', count: 6, lane: 'porte', spread: 0.85 },
+          { at: 84, type: 'clear' },
         ],
       },
     ],
@@ -283,7 +286,7 @@ export function makeAttic(seed = 0xbebe): LevelDef {
     map: ATTIC,
     cribHp: 340,
     /** Le grenier est la fin de campagne : c'est la carte qui doit vraiment mordre. */
-    hpMul: 2,
+    hpMul: 2.4,
     startGold: 100,
     nights: [
       {
@@ -380,7 +383,7 @@ export function makeAttic(seed = 0xbebe): LevelDef {
           { at: 29, type: 'wave', kind: 'nappy', count: 8, lane: 'lucarne', spread: 0.85 },
           { at: 35, type: 'pickup', variant: 'pacifier', x: cx + 200, y: cy + 170 },
           { at: 40, type: 'wave', kind: 'granny', count: 3, lane: 'escalier', spread: 0.7 },
-          { at: 48, type: 'boss', lane: 'lucarne' },
+          { at: 48, type: 'boss', kind: 'washer', lane: 'lucarne' },
           { at: 58, type: 'wave', kind: 'nappy', count: 5, lane: 'conduit', spread: 0.7 },
           { at: 68, type: 'wave', kind: 'granny', count: 2, lane: 'malles', spread: 0.6 },
           { at: 78, type: 'wave', kind: 'nappy', count: 5, lane: 'escalier', spread: 0.8 },
@@ -408,7 +411,7 @@ export function nightIncome(night: NightDef): number {
   let total = 0;
   for (const ev of night.events) {
     if (ev.type === 'wave') total += B.ENEMY_KINDS[B.kindIndex(ev.kind)].gold * ev.count;
-    else if (ev.type === 'boss') total += B.BOSS_GOLD;
+    else if (ev.type === 'boss') total += B.BOSS_KINDS[B.bossIndex(ev.kind)].gold;
   }
   return total;
 }

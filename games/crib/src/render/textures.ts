@@ -213,8 +213,8 @@ export interface Atlas {
   pickups: readonly Texture[];
   /** Berceau : 3 états d'usure, du neuf au bord de la rupture. */
   crib: readonly Texture[];
-  boss: Texture;
-  bossRage: Texture;
+  /** [index de boss][0 = normal, 1 = enragé]. */
+  bosses: readonly (readonly Texture[])[];
   compass: Texture;
   /** Anneau pointillé d'une flaque, à la taille RÉELLE de son rayon. */
   puddleRing: Texture;
@@ -473,6 +473,48 @@ function drawCrib(ctx: CanvasRenderingContext2D, ox: number, oy: number, wear: n
  * pivoté au rendu vers sa direction de marche, comme un char — l'embout et le cône
  * d'aspiration doivent coïncider exactement.
  */
+/**
+ * Les trois boss, dessinés dans la MÊME cellule et tous « embout vers le haut » :
+ * le rendu applique une seule rotation, et le sprite doit donc partager la même
+ * convention d'orientation quel que soit l'archétype.
+ */
+function drawBossKind(ctx: CanvasRenderingContext2D, ox: number, oy: number, kind: number, rage: boolean): void {
+  if (kind === 0) return drawBoss(ctx, ox, oy, rage);
+  const cx = ox + 42;
+  const cy = oy + 46;
+  if (kind === 1) {
+    // Robot ménager : bol trapu, lame visible, et un bec qui pointe vers le haut —
+    // c'est LUI qui dit dans quelle direction la charge partira.
+    inkEllipse(ctx, cx, cy + 10, 22, 14, PALETTE.stoneLight);
+    inkRect(ctx, cx - 17, cy - 14, 34, 24, PALETTE.bossGlass);
+    pxRect(ctx, cx - 14, cy - 10, 28, 4, PALETTE.stone);
+    // la lame : deux pales croisées, elles tournent au rendu par le roulis
+    pxRect(ctx, cx - 13, cy - 2, 26, 4, rage ? PALETTE.bossTrim : PALETTE.bossDark);
+    pxRect(ctx, cx - 3, cy - 8, 6, 16, PALETTE.bossDark);
+    // bec de charge
+    inkRect(ctx, cx - 6, cy - 30, 12, 16, PALETTE.bossDark);
+    pxEllipse(ctx, cx, cy - 32, rage ? 11 : 8, 5, rage ? PALETTE.bossTrim : PALETTE.stone);
+    pxRect(ctx, cx - 7, cy - 6, 3, 3, PALETTE.ink);
+    pxRect(ctx, cx + 4, cy - 6, 3, 3, PALETTE.ink);
+    if (rage) {
+      pxRect(ctx, cx - 9, cy - 9, 5, 2, PALETTE.bossTrim);
+      pxRect(ctx, cx + 4, cy - 9, 5, 2, PALETTE.bossTrim);
+    }
+    return;
+  }
+  // Machine à laver : caisson carré et gros hublot rond. Massive, immobile — sa
+  // silhouette doit dire « elle ne bougera plus » dès qu'on la voit.
+  inkRect(ctx, cx - 24, cy - 24, 48, 50, PALETTE.bossBody);
+  pxRect(ctx, cx - 22, cy - 22, 44, 8, PALETTE.bossDark);
+  inkDisc(ctx, cx, cy + 4, 16, PALETTE.bossDark);
+  pxDisc(ctx, cx, cy + 4, 12, rage ? PALETTE.bossTrim : PALETTE.bossGlass);
+  pxDisc(ctx, cx - 4, cy, 4, PALETTE.blanket);
+  // trois boutons + un hublot qui tourne : la seule chose vivante là-dedans
+  for (let i = 0; i < 3; i++) pxDisc(ctx, cx - 14 + i * 14, cy - 18, 3, PALETTE.warn);
+  pxRect(ctx, cx - 26, cy + 24, 52, 4, PALETTE.bossDark);
+  if (rage) pxRect(ctx, cx - 22, cy - 30, 44, 4, PALETTE.bossTrim);
+}
+
 function drawBoss(ctx: CanvasRenderingContext2D, ox: number, oy: number, rage: boolean): void {
   const cx = ox + 42;
   const cy = oy + 46;
@@ -884,7 +926,7 @@ export function buildAtlas(): Atlas {
 
   // — atlas principal : tout ce qui alimente un ParticleContainer vit ici
   const AW = 384;
-  const AH = 352;
+  const AH = 400;
   const ctx = ctx2d(AW, AH);
   const source = Texture.from(ctx.canvas).source;
   // `nearest` : sans ça Pixi échantillonne en linéaire et le moindre squash/stretch
@@ -968,14 +1010,17 @@ export function buildAtlas(): Atlas {
     crib.push(frame(w * 78, 132, 78, 62));
   }
 
-  drawBoss(ctx, 0, 200, false);
-  drawBoss(ctx, 90, 200, true);
-  const boss = frame(0, 200, 84, 92);
-  const bossRage = frame(90, 200, 84, 92);
+  // trois boss × deux états (normal, enragé), rangés sur deux lignes
+  const bosses: Texture[][] = [];
+  for (let k = 0; k < B.BOSS_KINDS.length; k++) {
+    drawBossKind(ctx, k * 90, 200, k, false);
+    drawBossKind(ctx, k * 90, 292, k, true);
+    bosses.push([frame(k * 90, 200, 84, 92), frame(k * 90, 292, 84, 92)]);
+  }
 
   // pollen : le grain de météo, en espace écran
-  pxDisc(ctx, 200, 300, 2, PALETTE.bottle);
-  const pollen = frame(196, 296, 9, 9);
+  pxDisc(ctx, 300, 390, 2, PALETTE.bottle);
+  const pollen = frame(296, 386, 9, 9);
 
   source.update();
 
@@ -989,8 +1034,7 @@ export function buildAtlas(): Atlas {
     shadow,
     pickups,
     crib,
-    boss,
-    bossRage,
+    bosses,
     compass,
     // marqueurs : sources DÉDIÉES supersamplées, jamais une frame d'atlas étirée
     puddleRing: makeRingTexture(B.ENEMY_KINDS[B.KIND_NAPPY].puddle, true, PALETTE.warn),

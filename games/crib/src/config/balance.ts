@@ -400,13 +400,80 @@ export const PACIFIER_HEAL = 40;
  * boss en demandait 40. Aucun déplacement ne rattrape ça — mesuré au bot, qui
  * arrivait au boss avec un berceau INTACT et le perdait quand même.
  */
-/** Prime du boss. Une nuit de boss doit financer la carte suivante, pas la refaire. */
-export const BOSS_GOLD = 80;
+export type BossKindId = 'vacuum' | 'blender' | 'washer';
 
-export const BOSS_HP = 420;
+export interface BossDef {
+  id: BossKindId;
+  name: string;
+  emoji: string;
+  hp: number;
+  speed: number;
+  radius: number;
+  /** Dégâts/s au berceau une fois garé. */
+  cribDps: number;
+  /** Prime : une nuit de boss finance la carte suivante, elle ne la refait pas. */
+  gold: number;
+}
+
+/**
+ * Trois boss, TROIS CONTRE-JEUX distincts — et c'est le point : trois barres de PV
+ * avec des sprites différents n'auraient été qu'un seul combat répété trois fois.
+ *
+ *  🧹 **Aspirateur** — il GOBE les projectiles de son cône : invulnérable de face,
+ *     il faut le CONTOURNER, ce qui oblige à venir dans la zone dangereuse.
+ *  🍳 **Robot ménager** — il CHARGE en ligne droite après un télégraphe court, puis
+ *     reste ouvert pendant sa récupération. Contre-jeu : sortir de la ligne, puis
+ *     frapper. C'est le boss de la cuisine, où les goulots limitent justement les
+ *     esquives latérales.
+ *  🌀 **Machine à laver** — elle se GARE sur le berceau et vomit des anneaux de
+ *     mousse. Aucune esquive ne la fait taire : il faut du DPS sous pression, donc
+ *     des tours. C'est le boss qui valide l'équilibre 50/50 bébé/bâtiments, et il
+ *     tombe au grenier, la carte où l'arbre d'achat va au bout.
+ */
+export const BOSS_KINDS = [
+  { id: 'vacuum', name: 'Aspirateur géant', emoji: '\u{1F9F9}', hp: 420, speed: 27, radius: 34, cribDps: 6, gold: 80 },
+  { id: 'blender', name: 'Robot ménager', emoji: '\u{1F373}', hp: 380, speed: 24, radius: 30, cribDps: 9, gold: 95 },
+  { id: 'washer', name: 'Machine à laver', emoji: '\u{1F300}', hp: 540, speed: 22, radius: 38, cribDps: 8, gold: 120 },
+] as const satisfies readonly BossDef[];
+
+export function bossIndex(id: BossKindId): number {
+  const i = BOSS_KINDS.findIndex((b) => b.id === id);
+  if (i < 0) throw new Error(`boss inconnu : ${id}`);
+  return i;
+}
+
+// — Robot ménager
+/** Télégraphe de charge. Court, mais la ligne est dessinée : on a le temps d'en sortir. */
+export const BLENDER_TELEGRAPH = 0.85;
+export const BLENDER_DASH_SPEED = 420;
+export const BLENDER_DASH_TIME = 0.55;
+/** Récupération : LA fenêtre de dégâts. Sans elle, il n'y aurait pas de contre-jeu. */
+export const BLENDER_RECOVER = 1.5;
+/** Intervalle entre deux charges, hors télégraphe et récupération. */
+export const BLENDER_CHARGE_INTERVAL = 3.2;
+/** Grip posé d'un coup par une charge encaissée. Lourd : il faut sortir de la ligne. */
+export const BLENDER_DASH_GRIP = 0.55;
+/** Demi-largeur de la ligne de charge, pour le marqueur ET pour le contact. */
+export const BLENDER_DASH_HALF = 26;
+/**
+ * Dernières secondes du télégraphe : le marqueur STROBE. Signal de MOUVEMENT, donc
+ * lisible sans aucune perception des couleurs — même code que les missiles de horde.
+ */
+export const BLENDER_STROBE_TIME = 0.3;
+/** En route, il ne charge que si le bébé s'approche à moins de ça. */
+export const BLENDER_LUNGE_RANGE = 280;
+
+// — Machine à laver
+/** Intervalle entre deux anneaux de mousse. */
+export const WASHER_PULSE_INTERVAL = 3;
+/** Nombre de projectiles par anneau. Un anneau complet : on ne l'esquive pas, on le
+ *  traverse entre deux mousses — d'où un compte IMPAIR, jamais aligné sur les axes. */
+export const WASHER_PULSE_COUNT = 13;
+/** Anneau enragé : plus dense, mais toujours franchissable. */
+export const WASHER_RAGE_COUNT = 19;
+
 export const BOSS_SPEED = 27;
 export const BOSS_RADIUS = 34;
-export const BOSS_CRIB_DPS = 6;
 
 /** Portée du cône d'aspiration. */
 export const BOSS_SUCK_RANGE = 300;

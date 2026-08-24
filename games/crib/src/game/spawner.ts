@@ -6,7 +6,7 @@ export interface SpawnSink {
   /** `lane` est l'identifiant déclaré dans la carte ; c'est World qui le résout. */
   spawnWave(kind: number, count: number, lane: string, spread: number): void;
   spawnPickup(kind: number, x: number, y: number): void;
-  spawnBoss(lane: string): void;
+  spawnBoss(kind: number, lane: string): void;
 }
 
 /**
@@ -60,7 +60,7 @@ export class Spawner {
           sink.spawnPickup(B.pickupIndex(ev.variant), ev.x, ev.y);
           break;
         case 'boss':
-          sink.spawnBoss(ev.lane);
+          sink.spawnBoss(B.bossIndex(ev.kind), ev.lane);
           break;
         case 'clear':
           this.cleared = true;

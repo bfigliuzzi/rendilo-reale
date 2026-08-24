@@ -54,6 +54,8 @@ export interface Stats {
   enemies: number;
   bossHp: number;
   bossMax: number;
+  /** Nom affiché du boss en cours (vide si aucun). */
+  bossName: string;
   bottleT: number;
   immuneT: number;
   cleared: boolean;
@@ -66,6 +68,15 @@ export interface RunStats {
   picked: number;
   pins: number;
   maxGrip: number;
+  /**
+   * Dégâts CUMULÉS encaissés par le berceau sur tout le niveau.
+   *
+   * C'est LA mesure d'équilibrage, et pas les PV restants à la fin : la réparation
+   * ne coûte que 25 or les 40 PV, donc un joueur (ou un bot) qui a de l'or termine
+   * presque toujours près du maximum. Les PV restants mesurent la dernière nuit ;
+   * ce cumul-ci mesure la carte.
+   */
+  cribDamage: number;
 }
 
 /**
@@ -116,7 +127,7 @@ export class World {
   /** La bourse du niveau. Remise à zéro par `loadLevel` seul — jamais par une nuit. */
   readonly economy = new Economy();
 
-  readonly run: RunStats = { kills: 0, picked: 0, pins: 0, maxGrip: 0 };
+  readonly run: RunStats = { kills: 0, picked: 0, pins: 0, maxGrip: 0, cribDamage: 0 };
 
   /** La nuit est tenue : plus rien n'arrive, l'arène est vide, le boss est tombé. */
   onNightCleared: ((nightIndex: number, nightSec: number) => void) | null = null;
@@ -235,6 +246,7 @@ export class World {
     this.run.picked = 0;
     this.run.pins = 0;
     this.run.maxGrip = 0;
+    this.run.cribDamage = 0;
     this.wasPinned = false;
     this.clingCount = 0;
     this.playing = true;
@@ -267,6 +279,31 @@ export class World {
     // --- engluement : la mécanique centrale
     this.resolveContacts();
     this.boss.suck(this.hero.x, this.hero.y, this.pull);
+    // — Robot ménager : la charge encaissée englue d'un coup, UNE seule fois par
+    // passage. Sans le verrou, une charge qui traverse le bébé applique son grip à
+    // chaque frame et le cloue net : la punition doit être « tu es collé », pas
+    // « tu as perdu ».
+    if (this.boss.takeDashHit(this.hero.x, this.hero.y)) {
+      this.hero.addGrip(B.BLENDER_DASH_GRIP);
+      this.fx.shake(7);
+      this.sfx.bossHit();
+    }
+    // — Machine à laver : anneau de mousse complet. On ne l'esquive pas, on passe
+    // ENTRE deux mousses — d'où un compte impair, jamais aligné sur les axes.
+    if (this.boss.pulsed) {
+      const n = this.boss.rage ? B.WASHER_RAGE_COUNT : B.WASHER_PULSE_COUNT;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + this.boss.angle;
+        const r = this.boss.radius + 8;
+        this.peas.fire(
+          this.boss.x + Math.cos(a) * r,
+          this.boss.y + Math.sin(a) * r,
+          this.boss.x + Math.cos(a) * (r + 100),
+          this.boss.y + Math.sin(a) * (r + 100),
+        );
+      }
+      this.sfx.peaFire();
+    }
     // le talc DIVISE la charge, et la division vit ICI, au site d'appel, pas dans
     // `Hero` : c'est ce qui laisse le commentaire de `GRIP_LOAD_FOR_PIN` dire la
     // vérité sur le modèle nu.
@@ -299,6 +336,7 @@ export class World {
     this.puddles.update(dt);
     this.crib.update(dt);
     this.buildings.renderSync(this.clock);
+    this.run.cribDamage += this.crib.takeTally();
     this.fx.update(dt);
 
     this.enemies.sweepDead(this.onEnemyDeath);
@@ -347,6 +385,7 @@ export class World {
       enemies: this.enemies.count,
       bossHp: this.boss.active ? this.boss.hp : 0,
       bossMax: this.boss.maxHp,
+      bossName: this.boss.active ? `${this.boss.def.emoji} ${this.boss.def.name.toUpperCase()}` : '',
       bottleT: this.hero.bottleT,
       immuneT: this.hero.immuneT,
       cleared: this.spawner.cleared,
@@ -530,7 +569,7 @@ export class World {
       const dy = this.boss.y - this.crib.y;
       const r = B.CRIB_BITE_RADIUS + this.boss.radius;
       if (dx * dx + dy * dy <= r * r) {
-        this.crib.damage(B.BOSS_CRIB_DPS * dt);
+        this.crib.damage(this.boss.def.cribDps * dt);
         this.sfx.cribHit();
       }
     }
@@ -595,7 +634,7 @@ export class World {
       this.sfx.wave();
     },
     spawnPickup: (kind, x, y) => this.pickups.spawn(kind, x, y),
-    spawnBoss: (laneId) => {
+    spawnBoss: (kind, laneId) => {
       const lv = this.level;
       if (!lv) return;
       const t = lv.terrain;
@@ -608,7 +647,7 @@ export class World {
       // le boss suit `hpMul` comme le reste du bestiaire : UN seul levier de
       // difficulté par carte, sinon on se retrouve à équilibrer deux courbes.
       this.boss.spawn(
-        t.nodeX[n], t.nodeY[n], B.BOSS_HP * lv.def.hpMul, lv.cribX, lv.cribY,
+        kind, t.nodeX[n], t.nodeY[n], B.BOSS_KINDS[kind].hp * lv.def.hpMul, lv.cribX, lv.cribY,
         lane, Math.min(n + 1, t.laneStart[lane] + t.laneCount[lane] - 1),
       );
       this.fx.shake(9);
@@ -627,7 +666,7 @@ export class World {
   }
 
   private onBossDown(): void {
-    this.economy.credit(B.BOSS_GOLD);
+    this.economy.credit(this.boss.def.gold);
     this.fx.burst(this.boss.x, this.boss.y, { count: 60, color: PALETTE.bossBody, speed: 260, life: 0.8, size: 1.6 });
     this.fx.shake(16);
     this.sfx.bossDie();

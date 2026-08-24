@@ -29,6 +29,7 @@ export class Hud {
   private readonly barLabel: HTMLElement;
   private readonly bossBar: HTMLElement;
   private readonly bossFill: HTMLElement;
+  private readonly bossTag: HTMLElement;
   private readonly info: HTMLElement;
   private readonly gold: HTMLElement;
   private readonly buffs: HTMLElement;
@@ -55,6 +56,7 @@ export class Hud {
     this.barLabel = document.getElementById('hud-crib-label')!;
     this.bossBar = document.getElementById('hud-boss')!;
     this.bossFill = document.getElementById('hud-boss-fill')!;
+    this.bossTag = document.getElementById('hud-boss-tag')!;
     this.info = document.getElementById('hud-info')!;
     this.gold = document.getElementById('hud-gold')!;
     this.buffs = document.getElementById('hud-buffs')!;
@@ -127,7 +129,10 @@ export class Hud {
     if (this.barLabel.textContent !== label) this.barLabel.textContent = label;
 
     this.bossBar.hidden = s.bossHp <= 0;
-    if (s.bossHp > 0) this.bossFill.style.width = `${((s.bossHp / s.bossMax) * 100).toFixed(1)}%`;
+    if (s.bossHp > 0) {
+      this.bossFill.style.width = `${((s.bossHp / s.bossMax) * 100).toFixed(1)}%`;
+      if (this.bossTag.textContent !== s.bossName) this.bossTag.textContent = s.bossName;
+    }
 
     if (s.gold !== this.lastGold) {
       this.gold.textContent = `\u{1F4B0} ${Math.floor(s.gold)}`;
@@ -159,7 +164,7 @@ export class Hud {
     const milestone = s.cleared
       ? 'Dernière vague passée.'
       : s.bossHp > 0
-        ? 'Aspirateur géant en approche.'
+        ? `${s.bossName.replace(/^\S+\s/, '')} en approche.`
         : frac <= B.CRIB_WEAR[1]
           ? 'Berceau en danger.'
           : frac <= B.CRIB_WEAR[0]

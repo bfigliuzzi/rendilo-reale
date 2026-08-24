@@ -262,7 +262,12 @@ if (kind === 'win' || kind === 'idle') {
   let lastNight = 0;
   let dayTicks = 0;
   while (Date.now() - t0 < limitMs) {
-    await sleep(140);
+    // 90 ms et non 140 : le bot pilote en boucle ouverte, donc sa qualité de jeu
+    // suit la CADENCE d'échantillonnage. À 140 ms et 40 fps il ne corrige sa
+    // trajectoire que toutes les 5 ou 6 frames, et l'issue du run se met à dépendre
+    // du bruit de la machine plutôt que de l'équilibrage — ce qui rend toute mesure
+    // ininterprétable.
+    await sleep(90);
     last = await snapshot();
     // le JOUR n'a pas d'horloge : il dure tant qu'on ne lance pas la nuit. Le bot
     // ne construit pas encore (rien à acheter) — il enchaîne, ce qui est exactement
