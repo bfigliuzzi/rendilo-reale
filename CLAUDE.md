@@ -1,7 +1,7 @@
 # Rendilo Reale — hub de jeux web
 
 Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
-dans `games/<id>/` avec son propre `index.html` + `src/`. Quatre jeux : **Horde**
+dans `games/<id>/` avec son propre `index.html` + `src/`. Cinq jeux : **Horde**
 (`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
 hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
 métaprogression (or, boutique, localStorage). **Essaim** (`/games/hive/`), conquête
@@ -10,7 +10,11 @@ Mastermind à 3 difficultés avec un chat farceur (voir section dédiée). Et **
 (`/games/crib/`), tower-defense d'action façon Thronefall/Kingshot — trois cartes à
 voies tracées, boucle jour/nuit, monnaie et bâtiments, un bébé qu'on déplace, tir auto,
 et un ENGLUEMENT au lieu de PV (voir section dédiée) ; c'est le premier jeu d'action du
-hub jouable au clavier, et le premier avec une caméra et du terrain bloquant.
+hub jouable au clavier, et le premier avec une caméra et du terrain bloquant. Enfin
+**Trois Portes** (`/games/doors/`), roguelite tactique Porte/Monstre/Trésor : 9 nœuds à
+3 portes, combats au tour par tour sur deux lignes, escouade à cap dur de 4,
+méta-progression par éclats (voir section dédiée) ; c'est le second jeu au tour par tour
+après Cerveau, et il en reprend l'architecture d'accessibilité.
 PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
@@ -654,6 +658,231 @@ Contrôle même machine : hub = 4 jeux listés.
 `window.__game = {world, flow, app, layers, save, steer, hero, crib, boss, economy,
 buildings, level, terrain}`, `world.postSpawn(kind, x, y)` scriptable.
 
+## Trois Portes (`games/doors/`) — roguelite tactique à deux lignes
+
+**Porte / Monstre / Trésor.** Une run = 9 nœuds + 1 boss, 6 à 8 minutes. À chaque nœud,
+**3 portes** dont l'icône annonce la catégorie (le « tell ») et rien d'autre ; en franchir
+une ferme les deux autres. Le joueur part **seul** et finit à 4 s'il joue bien.
+Méta-progression par **éclats**, gagnés même en cas de wipe.
+
+C'est le second jeu au TOUR PAR TOUR du hub, et il reprend l'architecture de Cerveau :
+canvas Pixi `aria-hidden` pour le visuel, **toute** l'interaction en DOM natif.
+
+### Les trois piliers, et ce qui les rend vrais dans le code
+
+1. **Le front est une ressource qui se consomme.** Toute la tactique découle de la règle
+   de ligne (`Combat.legalTargets`) : le contact ne vise que la ligne avant adverse ; si
+   elle est vide, la ligne arrière DEVIENT la ligne avant ; la distance ne connaît aucune
+   restriction. Deux phrases, et elles produisent l'essentiel des décisions.
+2. **Le cap dur transforme une récompense en dilemme.** `SQUAD_CAP = 4`. Recruter à 4/4
+   impose de renvoyer quelqu'un, définitivement et **sans remboursement** (`Squad.dismiss`).
+3. **L'or ne peut pas tout faire.** Soigner (2 or/PV), ressusciter (25) et s'équiper
+   (25-40) puisent dans la même bourse. `assertBalanceSane` interdit qu'un objet coûte
+   MOINS qu'une résurrection — sauver reste la moins chère des options, mais ne fait pas
+   progresser. Le Fanion usé est délibérément À ÉGALITÉ (25) : c'est là que la question
+   pique.
+
+### Le modèle de combat est PUR
+
+`game/combat.ts` n'a ni horloge, ni `Math.random`, ni DOM, ni rendu — et **aucune variance
+de dégâts** (design §3.4 : le joueur doit pouvoir compter son létal ; l'aléatoire vit dans
+la génération des portes, jamais dans la résolution). Réduction SOUSTRACTIVE, plancher à
+1 dégât. Deux conséquences voulues : le bot rejoue un combat entier hors de la page, et
+l'écran n'a qu'à animer une file d'ÉVÉNEMENTS déjà résolus (`World.play`, un délai par
+type dans `DELAY`).
+
+- **Une mort LIBÈRE son emplacement.** Sans ça, un arrière ne pourrait jamais remonter au
+  front, alors que « reformer le mur quand le dernier tank tombe » est le moment fort que
+  le design décrit. C'est aussi pourquoi `legalSwaps` propose une place LIBRE et pas
+  seulement un allié à échanger.
+- **`abilityIsActive` doit inclure les capacités d'IA** (`litany`, `jailer`). Les oublier
+  faisait échouer `canUseAbility`, donc `act()`, donc `autoAct` se rabattait
+  silencieusement sur Défendre : **le boss n'avait plus de phase 2 du tout**. Attrapé par
+  le scénario `rules` du bot, invisible en jeu.
+- **La permutation coûte le tour entier**, sauf la première du combat avec les Bottes
+  lestées (`usedFreeSwap`) — auquel cas `act()` ne fait PAS avancer la file.
+- L'IA est **déterministe** : létal d'abord, puis la cible la plus basse en PV. C'est la
+  contrepartie des dégâts déterministes — le joueur doit pouvoir anticiper.
+- **Le Rôdeur est la pièce la plus importante du bestiaire** : perceur, il vise la ligne
+  arrière du joueur. C'est lui qui interdit « je mure et je gagne » et qui force la
+  permutation à un moment que le joueur n'a pas choisi. S'il n'apparaît pas assez tôt, le
+  critère de réussite n°1 du POC (« le joueur permute-t-il ? ») ne peut pas être observé.
+- **L'Idole ronflante est un puzzle, pas une menace** : 0 ATQ, elle rend 4 PV au plus
+  blessé chaque tour et vit hors de portée du contact. Le combat devient ingagnable tant
+  qu'elle vit → il faut une réponse à distance, **ou le Carquois lourd**.
+- **Écart assumé au design sur le Carquois lourd** : le texte dit « les attaques *à
+  distance* ignorent toute règle de ciblage prioritaire », mais un objet réservé à la
+  distance ne répond PAS à l'Idole — que le même document désigne pourtant comme sa raison
+  d'être, puisque le contact ne peut pas atteindre une ligne arrière. On l'étend donc à
+  TOUTES les attaques de l'unité (ligne avant ET provocation). Un objet qui casse une
+  règle EST sa promesse.
+
+### Génération des portes (`game/run.ts`)
+
+Seedée par `mulberry32`, zéro `Math.random` : une run se rejoue à l'identique, ce qui rend
+le bot reproductible. Les cinq règles du design, dans l'ordre où elles contraignent :
+recrue garantie au nœud 1 · jamais deux marchands consécutifs · au moins deux portes
+Recrue sur la run · marchand garanti au nœud 8 · combats dangereux à partir du nœud 4.
+Une porte voilée par nœud dès le nœud 3, jamais posée sur une porte FORCÉE (cacher le
+marchand garanti annulerait la garantie).
+
+- **Le nœud 7 ne propose JAMAIS de marchand.** Sans cette clause, les deux règles du
+  design se contredisent : le marchand garanti du nœud 8 devient un doublon dès que le
+  joueur a acheté au 7. Mesuré par le scénario `gen` : 7 runs sur 40.
+- **`VEILED_FIND_GOLD`** : une porte voilée cachant une salle sans or (recrue, trésor,
+  marchand) verse quand même une trouvaille. « Majoré de 50 % » n'a aucun sens sur un
+  objet ; sans ce versement, la moitié des paris seraient silencieusement perdants et le
+  joueur cesserait de parier — ce qui viderait la porte voilée de sa fonction.
+- **Correctif d'ouverture** : le nœud 1 garantit une recrue. Sans lui, une mauvaise porte
+  au nœud 1 tue la run avant qu'elle commence, et sans or on ne peut même pas ressusciter.
+- **La difficulté monte par l'ORDRE des tables, pas par les chiffres** : `PACKS_EASY` et
+  `PACKS_HARD` sont triées du plus doux au plus dur et `packWindow(node)` n'ouvre le
+  tirage qu'à leurs `node + 1` premières entrées. Le design ne décrit que des fréquences ;
+  sans cette rampe le nœud 9 est aussi mou que le nœud 1, et avec elle le nœud 1 ne peut
+  plus tirer une meute de chiens contre un héros SEUL — ce qui faisait du correctif
+  d'ouverture une obligation à la lettre plutôt qu'un conseil. Aucun chiffre d'ennemi ne
+  bouge : ré-ordonner une table SUFFIT à retoucher la courbe.
+
+### Économie et méta
+
+L'or et les objets **meurent avec la run** : l'absence de méta-progression matérielle est
+une décision de design, et `meta/save.ts` est l'endroit où on la fait respecter — le
+schéma ne contient ni or, ni objets, ni escouade. Revenu attendu d'une run : 140-180 or,
+soit environ six résurrections si le joueur ne dépense rien d'autre (`assertBalanceSane`
+garde la fourchette).
+
+L'arbre a **cinq nœuds et aucun bonus chiffré** : chacun ouvre une option ou change une
+règle (`meta/tree.ts`), correctif à la faiblesse habituelle des stats permanentes qui
+rendent les premières runs artificiellement dures et les tardives triviales. **Rang serré
+change une run entière** à lui seul — un front à trois autorise une composition défensive
+qui n'existait pas. `metaEffects(save)` DÉRIVE tout ; rien n'est stocké en double.
+Les succès (`meta/achievements.ts`, 6 familles sans fin + 12 hauts faits dont 3 ★ légende)
+ne rapportent **aucun éclat** : la complétion ne doit pas devenir un raccourci vers
+l'arbre, et l'arbre est justement ce qu'on veut mériter.
+
+### Accessibilité — la même décision que Cerveau, poussée plus loin
+
+Le canvas est `aria-hidden` ; l'interaction est faite de vrais `<button>` TRANSPARENTS
+posés dans le repère logique 540×960, qui subit exactement le même letterbox que le
+canvas. On récupère gratuitement tabulation, Entrée/Espace, noms accessibles et anneau de
+focus visible AU-DESSUS du canvas.
+
+- **Les boutons couvrent des CASES, pas des unités.** Une case vide de ligne arrière est
+  une destination légale de permutation ; sans bouton dessus, le repli — le geste qui
+  reforme le mur — serait injouable au clavier.
+- **`World.busy` PILOTE l'activation de la barre d'action, et il retombe TOUT SEUL** — à
+  la frame où la file d'événements se vide, donc sans qu'aucune action ne se produise.
+  Sans le `onStateChanged()` posé sur cette transition (`World.update`), la barre restait
+  grisée après le dernier coup ennemi de la manche et le joueur n'avait plus AUCUN moyen
+  de jouer : partie bloquée, zéro erreur console. Diagnostiqué par le bot, qui ne trouvait
+  jamais « Attaquer » focusable.
+- **`Hud.restoreFocus` + `Screens.hide()` qui renvoie `true`** : le trou classique de ce
+  genre d'interface. Le joueur valide une cible, le bouton de cette case passe `disabled`
+  dans la foulée, le navigateur renvoie le focus sur `<body>` — et un joueur au clavier
+  est perdu en plein combat, sans rien à l'écran qui l'indique. Même chose à la fermeture
+  d'un panneau, dont le contenu est détruit. On ne rend le focus QUE s'il était à nous :
+  le voler à quelqu'un qui joue au doigt serait pire que de le perdre.
+- **Le HUD se masque AVANT l'ouverture d'un panneau** (`Flow.openRoom`) : sans ça, on
+  pouvait tabuler sur des boutons de combat invisibles, cachés derrière le marchand.
+- **Les régions live n'écrivent que sur changement réel** (`Hud.setTop`/`setHint` et le
+  résumé de plateau). `refresh()` est appelée à chaque changement d'état ; réécrire
+  aveuglément ferait répéter « 25 or, manche 3 » toutes les demi-secondes au lecteur
+  d'écran. C'est la règle des `Text` du canvas, appliquée au DOM.
+- **Le focus SAUTE sur la première cible légale** après « Attaquer ». Sans ça, un joueur
+  au clavier retraverserait toute la barre d'action à chaque coup. `Hud.refresh` est
+  appelée SYNCHRONEMENT à chaque changement d'état (`World.onStateChanged`) : on ne peut
+  pas donner le focus à un bouton encore `disabled`.
+- **`#sr-board`** tient le plateau EN TEXTE (`boardSummary`) et `#sr-log` une phrase par
+  événement (`World.onAnnounce`) : c'est ce qui rend la partie jouable sans voir l'écran.
+- **La règle de ligne se lit sans les couleurs** : les deux camps occupent des BANDES
+  distinctes séparées par un trait, la ligne avant EFFECTIVE porte un liseré plein et
+  l'arrière un pointillé (continuité + épaisseur, pas deux teintes), les cibles légales
+  et les emplacements de permutation sont encadrés en POINTILLÉ, l'unité active a un
+  halo + un anneau plein, et l'ordre de tour affiche un socle plein (toi) ou creux
+  (l'ennemi). Les chiffres sont écrits en clair sous chaque unité.
+- **Les stats du canvas sont en toutes lettres** (`6 atq · 9 ini · contact`), jamais en
+  dingbats : le canvas retombe sur la police système, où ⚔ ⚡ 🛡 sortent en tofu selon la
+  machine. Les emoji restent réservés au DOM.
+- **Le bandeau d'ordre de tour se PROLONGE sur la manche suivante** (`Combat.queue`) : en
+  fin de manche il ne restait qu'une vignette, et un bandeau vide n'enseigne plus que
+  « l'INIT est une statistique, pas une décoration ».
+- Comme Cerveau : `user-scalable=no` est RETIRÉ (WCAG 1.4.4) et `touch-action: none` ne
+  vit que sur le canvas — un jeu au tour par tour n'a aucun geste continu à protéger.
+- **Mouvement réduit** traité côté canvas ET DOM : `prefers-reduced-motion` lu UNE fois au
+  boot, en OU avec l'option joueur (jamais en ET). Particules coupées, motes garées,
+  cadence de rejeu ÷2 — jamais 0 : on doit encore LIRE ce qui se passe.
+
+### Rendu — pixel art chaud, écrit à la main
+
+`render/sprites.ts` : 27 sprites en grilles de **16×16 caractères**, une lettre par teinte,
+palette par sprite. `render/textures.ts` les peint case par case (rectangles pleins de
+taille ENTIÈRE en pixels device) et les expose aussi en `data:` URL — les panneaux DOM
+(recrutement, marchand, escouade, bestiaire) les affichent en `<img>`, sans quoi la moitié
+du jeu, qui se joue hors du champ de bataille, serait un mur de texte.
+
+**PARTI PRIS : rien qui fasse peur.** Le bestiaire garde EXACTEMENT les rôles et les
+chiffres du design, mais ses silhouettes sont rondes, ses yeux grands et ses couleurs
+chaudes — un rat joufflu, un tas d'os débonnaire, une idole qui ronfle pour de vrai, un
+geôlier bougon. La menace se lit aux CHIFFRES et à la position sur les lignes ; comme les
+dégâts sont déterministes, on ne perd littéralement aucune information en la retirant de
+l'image. Même parti pris pour les tells : une lame plutôt qu'un crâne, deux lames croisées
+pour le combat dangereux (le tell double, comme les deux crânes du design).
+
+Charte : prune nuit `#2e1b2b`, ambre, or `#ffc247`, crème `#fff3dc`. Le seul froid du jeu
+(`cool #7fe0d8`) est réservé aux informations neutres — il tranche parce qu'il est rare.
+`scaleMode` reste **linear** (le letterbox impose une échelle fractionnaire, où `nearest`
+scintillerait d'une frame à l'autre) ; les vignettes DOM, elles, sont à échelle entière et
+donc en `image-rendering: pixelated`. Le « chatoyant » est un semis de motes dorées
+(`render/ambience.ts`) posé SOUS le gameplay, comme la météo d'Essaim.
+
+**Composition de l'écran des portes** : portes en HAUT, escouade EN DESSOUS. On regarde
+d'abord ce qu'on choisit, on relit ensuite avec quoi on le choisit — l'inverse laissait
+160 px de vide en bas et reléguait la décision au milieu de nulle part.
+
+### Vérification
+
+`node tools/verify-doors.mjs <url> <scénario>` — `rules`, `gen[:runs]`, `win[:seed]`,
+`band[:runs]`, `lose`, `keyboard`, `contrast`, `stress`.
+
+**Lancer les scénarios longs sur `npx vite preview`, jamais sur `npm run dev`** : le HMR
+recharge la page dès qu'on touche une source et tue le contexte d'exécution du bot en
+plein milieu d'une run.
+
+- **`rules` est le test de non-régression du modèle** et se lance après TOUTE retouche de
+  `combat.ts` ou de `balance.ts` : 27 assertions montées à la main DANS la page mais HORS
+  de toute partie — règle de ligne, front vide, distance, provocation, carquois, armure
+  plancher, élan, tir ajusté, meute, défense qui retombe au bon tour, phase 2 du boss,
+  expiration du spectre, emplacement libéré par une mort, déterminisme, plus les gardes
+  d'ÉCONOMIE (soin sans or, résurrection d'une invocation, étal qui ne se recharge pas,
+  objet rendu au sac par un renvoi, révélation unique, amulette).
+- **`gen` vérifie les cinq règles de génération** sur N runs seedées, jouées à sec.
+- **`win` / `lose` jouent une run entière en cliquant les VRAIS boutons du DOM** — aucune
+  API de raccourci en node. Il n'existe donc pas de second chemin non testé, et une
+  régression d'UI (bouton jamais activé, focus perdu, panneau sans issue) se voit avant de
+  se voir en jeu. Le bot active le mouvement réduit, qui est une OPTION DU JEU et non une
+  porte dérobée : sans elle une run dépasse les trois minutes d'horloge en animations.
+- **`band` est la bande d'équilibrage** : N runs sur des seeds différents, distribution
+  des nœuds atteints. C'est CE chiffre qu'on relit après tout changement de tuning.
+- **`keyboard` joue AU CLAVIER SEUL** depuis l'accueil et vérifie que le focus ne retombe
+  jamais sur `<body>` **après une validation** (le traverser pendant une tabulation est le
+  comportement NORMAL du navigateur — le compter ferait échouer le test sur une interface
+  parfaitement conforme) et que le saut automatique sur la première cible fonctionne à
+  chaque tour. C'est le test RGAA.
+- **`contrast` recalcule les contrastes** sur les VRAIES valeurs exposées par le jeu,
+  jamais « à l'œil ».
+
+`window.__game = {world, flow, hud, app, save, Combat, Run, metaEffects, contrastRatio,
+palette, classes, enemies, items}` — `Combat` et `Run` sont exposés pour que le bot monte
+ses propres scénarios hors partie.
+
+### Hors périmètre (à ne pas ajouter sans re-cadrer)
+
+Étage 2 et biomes multiples · alliés temporaires hors cap sur plusieurs combats · types,
+éléments, faiblesses · niveaux d'unité et expérience · craft et fusion d'objets ·
+événements narratifs à choix multiples · plus de six objets ou plus de six classes.
+L'allié temporaire hors cap DURABLE est écarté explicitement : il contredit frontalement
+le cap dur, qui est le meilleur générateur de décisions du jeu.
+
 ## Déploiement
 
 - **Prod** : https://rendilo-reale.netlify.app — déploiement continu Netlify sur push
@@ -672,6 +901,8 @@ node tools/verify-hive.mjs http://localhost:5199/games/hive/ win:2              
 node tools/verify-mind.mjs http://localhost:5199/games/mind/ contrast            # Cerveau
 node tools/verify-crib.mjs http://localhost:5199/games/crib/ grip                # Berceau
 node tools/verify-crib.mjs http://localhost:5199/games/crib/ win:kitchen          # Berceau, carte 2
+node tools/verify-doors.mjs http://localhost:5199/games/doors/ rules            # Trois Portes
+node tools/verify-doors.mjs http://localhost:5199/games/doors/ win:12345 420    # Trois Portes, run complète
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON

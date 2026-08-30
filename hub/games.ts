@@ -32,6 +32,13 @@ export const GAMES: GameEntry[] = [
     emoji: '🧠',
   },
   {
+    id: 'doors',
+    title: 'Trois Portes',
+    tagline: 'Porte, monstre ou trésor : trois portes, et une seule s’ouvre.',
+    path: '/games/doors/',
+    emoji: '🚪',
+  },
+  {
     id: 'crib',
     title: 'Berceau',
     tagline: 'Le jour on construit, la nuit les mamies arrivent par les chemins.',

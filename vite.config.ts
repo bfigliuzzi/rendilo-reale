@@ -39,6 +39,7 @@ export default defineConfig({
         hive: resolve(__dirname, 'games/hive/index.html'),
         mind: resolve(__dirname, 'games/mind/index.html'),
         crib: resolve(__dirname, 'games/crib/index.html'),
+        doors: resolve(__dirname, 'games/doors/index.html'),
       },
     },
   },

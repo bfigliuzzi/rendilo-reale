@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Comme Cerveau, et contrairement à Horde, Essaim et Berceau : on NE bloque
+       PAS le zoom. Ce jeu est au tour par tour, il n'a aucun geste continu à
+       protéger d'un pincement, et `user-scalable=no` viole WCAG 1.4.4
+       (redimensionnement du texte à 200 %). `touch-action` reste sur le canvas. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Rendilo Reale — Trois Portes</title>
+  <meta name="theme-color" content="#2e1b2b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="/pwa-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <style>
+    /* Charte CHAUDE : prune, ambre, or, crème — copie locale des hex de
+       render/textures.ts (le repo duplique volontairement plutôt que de
+       partager un thème tant qu'un seul jeu le consomme).
+       Contrastes calculés sur #2e1b2b : #fff3dc 13.4:1 · #e6c0aa 9.2:1 ·
+       #ffc247 10.4:1 · #7fe0d8 10.6:1 — RGAA 3.2, vérifiés au bot. */
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #2e1b2b;
+      overflow: hidden;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #fff3dc;
+    }
+
+    #stage { position: fixed; left: 50%; top: 50%; }
+    /* Le canvas est PUR DÉCOR (aria-hidden) : toute l'interaction est du DOM. */
+    #stage canvas { display: block; touch-action: none; }
+
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+
+    /* ───────── Overlay d'interaction ─────────
+       Superposé au canvas et transformé EXACTEMENT comme lui (même letterbox),
+       il contient de vrais <button> aux coordonnées logiques 540×960. Le canvas
+       porte le visuel, le DOM porte l'interaction : on récupère gratuitement
+       l'ordre de tabulation, les noms accessibles, Entrée/Espace, et un anneau
+       de focus réellement visible AU-DESSUS du canvas. */
+    #overlay {
+      position: fixed; left: 50%; top: 50%;
+      width: 540px; height: 960px;
+      pointer-events: none;
+    }
+    /* PIÈGE : l'overlay est transparent aux gestes, SAUF ses contrôles — et il
+       faut le rendre aux CONTENEURS qui portent des boutons (.actionbar), pas
+       seulement aux boutons : sinon un glissement démarré entre deux boutons
+       passe au travers. Leçon de Berceau. */
+    #overlay button, #overlay .actionbar { pointer-events: auto; }
+    #overlay[hidden] { display: none; }
+
+    /* Cases d'unité et portes : boutons TRANSPARENTS posés sur le dessin. Le
+       libellé visible reste vide (le nom est déjà peint sur le canvas), mais
+       l'aria-label porte la fiche complète. */
+    .cell, .doorbtn {
+      position: absolute; margin: 0; padding: 0;
+      background: none; border: 0; border-radius: 14px;
+      color: transparent; font: inherit; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cell:disabled, .doorbtn:disabled { cursor: default; }
+    .cell:focus, .doorbtn:focus { outline: none; }
+    .cell:focus-visible, .doorbtn:focus-visible {
+      outline: 3px solid #ffc247; outline-offset: 2px; border-radius: 16px;
+    }
+    /* Un bouton actif porte un liseré discret même sans focus : sur tactile,
+       rien n'indiquerait sinon qu'une case est cliquable. */
+    .cell:not(:disabled) { box-shadow: inset 0 0 0 2px rgba(255, 194, 71, 0.28); }
+
+    /* ───────── Barre d'action de combat ───────── */
+    .actionbar {
+      position: absolute; left: 20px; top: 756px; width: 500px;
+      display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start;
+    }
+    .actionbar[hidden] { display: none; }
+    /* Ancre de repli du focus (cf. Hud.restoreFocus) : on la signale, sinon un
+       joueur au clavier ne saurait pas où il vient d'atterrir. */
+    .actionbar:focus { outline: none; }
+    .actionbar:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 6px; border-radius: 16px; }
+    .action {
+      flex: 1 1 236px; min-height: 62px; margin: 0;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      border: 0; border-radius: 14px;
+      font: inherit; font-size: 19px; font-weight: 700;
+      color: #fff3dc; background: #58304c; cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .action.wide { position: absolute; flex: none; font-size: 17px; }
+    .action:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
+    .action.primary { background: #ffc247; color: #2e1b2b; box-shadow: 0 4px 0 #8a5c10; }
+    .action.ghost { background: #3a2033; }
+    .action:disabled { opacity: 0.38; cursor: default; box-shadow: none; }
+    .action[hidden] { display: none; }
+    .action:focus { outline: none; }
+    .action:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 3px; }
+
+    .hint {
+      position: absolute; left: 24px; top: 900px; width: 492px; margin: 0;
+      font-size: 14px; line-height: 1.35; color: #e6c0aa; text-align: center;
+    }
+
+    .topinfo {
+      position: absolute; left: 60px; top: 14px; width: 420px;
+      font-size: 15px; font-weight: 700; color: #ffc247; text-align: center;
+    }
+
+    .topbtn {
+      position: absolute; margin: 0;
+      width: 44px; height: 44px; border: 0; border-radius: 12px;
+      font: inherit; font-size: 21px; line-height: 1;
+      color: #fff3dc; background: rgba(88, 48, 76, 0.8); cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .topbtn:active { background: #3a2033; }
+    .topbtn:focus { outline: none; }
+    .topbtn:focus-visible { outline: 3px solid #ffc247; outline-offset: 2px; }
+
+    /* ───────── Miroir pour lecteurs d'écran ─────────
+       Le canvas est inaccessible par nature : ce résumé de plateau et ce journal
+       sont ce qui rend la partie réellement jouable sans voir l'écran. */
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    /* ───────── Écrans plein cadre ─────────
+       Fond OPAQUE, et non translucide : un plateau qui transparaît derrière le
+       texte rend le contraste réel imprévisible, donc invérifiable au RGAA 3.2. */
+    #ui {
+      position: fixed; inset: 0; display: none;
+      align-items: flex-start; justify-content: center;
+      background: #241522;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #ui.visible { display: flex; }
+    .panel {
+      display: flex; flex-direction: column; align-items: center; gap: 13px;
+      width: min(90vw, 400px); padding: 20px 14px 40px;
+      text-align: center;
+      animation: panel-in 0.26s cubic-bezier(0.2, 1.2, 0.4, 1);
+    }
+    .panel.wide { width: min(94vw, 480px); }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(20px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .panel h1 {
+      margin: 4px 0; font-size: 44px; font-weight: 900; letter-spacing: 3px;
+      line-height: 1; color: #ffc247; text-shadow: 0 3px 0 #7a4a08;
+    }
+    .panel h2 { margin: 6px 0 0; font-size: 27px; font-weight: 900; letter-spacing: 1px; }
+    .panel h2.sec { font-size: 19px; color: #ffc247; align-self: flex-start; }
+    /* Le titre reçoit le focus à chaque changement d'écran (ui/screens.ts) : on
+       garde un indicateur — un joueur au clavier doit voir où il a atterri —
+       mais stylé, plutôt que la boîte blanche du navigateur. */
+    .panel h1:focus, .panel h2:focus { outline: none; }
+    .panel h1:focus-visible, .panel h2:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 6px; border-radius: 8px; }
+    .panel h2.win { color: #9ce07a; text-shadow: 0 0 24px rgba(156, 224, 122, 0.45); animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+    .panel h2.lose { color: #ff8f6b; animation: slam 0.32s ease-out; }
+    @keyframes pop { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes slam { 0% { transform: scale(1.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+    .sub { font-size: 14px; line-height: 1.5; color: #e6c0aa; margin: 0; }
+    .warn { font-size: 14px; line-height: 1.5; color: #ff8f6b; margin: 0; font-weight: 700; }
+    .shards { font-size: 19px; font-weight: 900; color: #ffc247; margin: 0; }
+    .rules { font-size: 14px; line-height: 1.85; color: #f4dcc8; margin: 0; text-align: left; }
+    .rules kbd {
+      display: inline-block; min-width: 18px; padding: 1px 5px;
+      background: #58304c; border: 1px solid #a06a80; border-radius: 5px;
+      font-family: ui-monospace, monospace; font-size: 12px;
+    }
+    .stats { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #e6c0aa; }
+    .stats p { margin: 0; }
+
+    /* Vignettes pixel art : jamais lissées, à l'inverse du canvas letterboxé —
+       ici l'échelle est entière, `pixelated` donne donc des arêtes franches. */
+    .pix { image-rendering: pixelated; display: block; }
+
+    .btn {
+      width: 100%; padding: 14px 18px; border: 0; border-radius: 13px;
+      font: inherit; font-size: 17px; font-weight: 700; color: #fff3dc;
+      background: #58304c; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+    }
+    .btn:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+    .btn.primary { background: #ffc247; color: #2e1b2b; box-shadow: 0 3px 0 #8a5c10; }
+    .btn.small { width: auto; padding: 9px 14px; font-size: 13px; background: #3f2337; white-space: nowrap; }
+    /* `.btn.small` est déclarée APRÈS `.btn.primary` et a la même spécificité :
+       sans cette règle combinée, un bouton « petit ET primaire » (les prix du
+       marchand) reprenait le fond sombre du petit et perdait tout son contraste
+       d'appel. */
+    .btn.small.primary { background: #ffc247; color: #2e1b2b; box-shadow: 0 3px 0 #8a5c10; }
+    .btn.danger { background: #7f2a3d; box-shadow: 0 3px 0 #4a0f1f; }
+    .btn:disabled { opacity: 0.42; cursor: default; box-shadow: none; }
+    .btn:focus { outline: none; }
+    .btn:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 3px; }
+    .dot {
+      display: inline-block; min-width: 20px; padding: 0 5px; margin-left: 4px;
+      border-radius: 10px; background: #ffc247; color: #2e1b2b;
+      font-size: 12px; font-weight: 900;
+    }
+    a.hub-link { display: inline-block; margin-top: 6px; text-decoration: none; color: #e6c0aa; font-size: 13px; }
+    a.hub-link:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 3px; border-radius: 6px; }
+
+    .col { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .row2 { display: flex; gap: 8px; width: 100%; }
+    .row2 .btn { flex: 1; }
+
+    /* Cartes (héros, recrue, bestiaire) */
+    .card {
+      display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+      padding: 11px 13px; border: 0; border-radius: 13px;
+      font: inherit; color: #fff3dc; background: #43263c; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+    }
+    .card.static { cursor: default; box-shadow: none; }
+    .card.big { padding: 16px; }
+    .card:active:not(:disabled):not(.static) { transform: translateY(2px); box-shadow: none; }
+    .card:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+    .card:focus { outline: none; }
+    .card:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 3px; }
+    .card-pix { flex: none; font-size: 32px; line-height: 1; }
+    .card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .card-name { font-size: 16px; font-weight: 700; }
+    .card-sub { font-size: 12px; line-height: 1.45; color: #e6c0aa; }
+
+    /* Offres (marchand, objets, soins) */
+    .offer {
+      display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+      padding: 9px 11px; border-radius: 12px; background: #3f2337;
+    }
+    .offer .card-body { flex: 1; min-width: 0; }
+    .offer .btn.small { flex: none; }
+    .card-pix.dead { opacity: 0.4; }
+    select.gear {
+      flex: none; max-width: 42%; padding: 7px 8px; border-radius: 9px;
+      border: 1px solid #ad7080; background: #2e1b2b; color: #fff3dc;
+      font: inherit; font-size: 13px;
+    }
+    select.gear:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 2px; }
+
+    /* Formation : une grille de vrais boutons. Deux touches suffisent à tout. */
+    .formation { display: flex; gap: 8px; width: 100%; justify-content: center; }
+    .slot {
+      flex: 1 1 0; min-height: 96px; padding: 8px 4px;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      border: 2px dashed #ad7080; border-radius: 12px;
+      font: inherit; color: #fff3dc; background: #3a2033; cursor: pointer;
+    }
+    /* Sélection : un liseré PLEIN et un fond changé, pas une seule teinte. */
+    .slot.picked { border-style: solid; border-color: #ffc247; background: #58304c; }
+    .slot.dead { opacity: 0.55; }
+    .slot:focus { outline: none; }
+    .slot:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 3px; }
+    .slot-name { font-size: 12px; font-weight: 700; }
+    .slot-hp { font-size: 11px; color: #e6c0aa; }
+    .slot-free { font-size: 12px; color: #e6c0aa; }
+    .line-label { margin: 0 0 4px; font-size: 12px; color: #e6c0aa; align-self: flex-start; }
+
+    /* Options : cases à cocher natives, jamais de faux interrupteur */
+    .opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+           background: #3f2337; border-radius: 12px; padding: 11px 13px; font-size: 14px; }
+    .opt input { width: 22px; height: 22px; accent-color: #ffc247; flex: none; cursor: pointer; }
+    .opt label { cursor: pointer; }
+    .opt .opt-hint { display: block; font-size: 12px; color: #e6c0aa; margin-top: 2px; }
+    .opt input:focus-visible { outline: 3px solid #7fe0d8; outline-offset: 2px; }
+
+    /* Arbre de méta et succès : mêmes briques, deux usages */
+    .ach-list, .feats { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+    .ach { background: #3f2337; border-radius: 12px; padding: 11px 13px; text-align: left; }
+    .ach.owned { border: 1px solid #ffc247; }
+    .ach-head { display: flex; gap: 6px; align-items: baseline; font-size: 15px; }
+    .ach-head .ach-tier { margin-left: auto; font-size: 12px; color: #e6c0aa; }
+    .ach-desc { font-size: 13px; color: #f4dcc8; margin: 4px 0 2px; }
+    .ach-why { font-size: 12px; line-height: 1.5; color: #e6c0aa; margin: 0 0 8px; font-style: italic; }
+    .owned-line { margin: 0; font-size: 13px; font-weight: 700; color: #9ce07a; }
+    .bar { height: 8px; background: #241522; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+    .bar-fill { height: 100%; background: #ffc247; }
+    .feat {
+      display: flex; align-items: center; gap: 10px; text-align: left;
+      background: #3f2337; border: 1px solid transparent; border-radius: 12px; padding: 10px 12px;
+    }
+    .feat.locked { opacity: 0.5; }
+    .feat.hard { border-color: #ffc247; } /* + libellé « ★ légende » : jamais la couleur seule */
+    .feat-icon { font-size: 22px; line-height: 1; }
+    .feat-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .feat-name { font-size: 14px; font-weight: 700; }
+    .feat-hard { font-size: 11px; font-weight: 700; color: #ffc247; }
+    .feat-desc { font-size: 12px; color: #e6c0aa; }
+    .feat-line { font-size: 14px; font-weight: 700; color: #ffc247; margin: 0; }
+    .reset-warn { font-size: 14px; line-height: 1.5; color: #ff8f6b; }
+
+    /* Mouvement réduit : on coupe TOUTES les animations décoratives du DOM. Le
+       pendant côté canvas est géré en JS (World.setReducedMotion) — une media
+       query CSS ne peut pas atteindre les particules Pixi ni la cadence des
+       tours. L'INFORMATION n'est jamais amputée : tout se lit à l'arrêt. */
+    @media (prefers-reduced-motion: reduce) {
+      .panel, .panel h2.win, .panel h2.lose { animation: none; }
+      .action:active:not(:disabled), .btn:active:not(:disabled), .card:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage" aria-hidden="true"></div>
+  <div id="hud">
+    <div id="overlay" hidden></div>
+    <div id="sr" class="sr-only">
+      <p id="sr-log" aria-live="polite" aria-atomic="true"></p>
+      <p id="sr-board" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </div>
+  <div id="ui"></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
