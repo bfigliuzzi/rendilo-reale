@@ -126,7 +126,10 @@ export interface SquadView {
 
 export interface ResultView {
   victory: boolean;
+  /** Nœud atteint. Peut valoir `nodeCount + 1` : c'est le boss. */
   node: number;
+  /** Longueur de la run, passée plutôt que recopiée — Screens ne lit rien. */
+  nodeCount: number;
   shards: number;
   shardsTotal: number;
   timeSec: number;
@@ -599,7 +602,9 @@ export class Screens {
         <p class="sub">${
           v.victory
             ? `Run bouclée en ${fmtTime(v.timeSec)}.`
-            : `Tombé au nœud ${v.node} sur 9, après ${fmtTime(v.timeSec)}.`
+            : v.node > v.nodeCount
+              ? `Tombé face au Geôlier, après ${fmtTime(v.timeSec)}.`
+              : `Tombé au nœud ${v.node} sur ${v.nodeCount}, après ${fmtTime(v.timeSec)}.`
         }</p>
         <p class="shards">💎 +${v.shards} éclat${v.shards > 1 ? 's' : ''} · total ${v.shardsTotal}</p>
         ${v.record ? '<p class="feat-line" role="status">🏅 Nouveau record !</p>' : ''}

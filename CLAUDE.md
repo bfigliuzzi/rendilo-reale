@@ -875,6 +875,31 @@ plein milieu d'une run.
 palette, classes, enemies, items}` — `Combat` et `Run` sont exposés pour que le bot monte
 ses propres scénarios hors partie.
 
+**Bande mesurée** (conteneur, rendu logiciel, `vite preview`, 2026-08 — les taux absolus
+dépendent de la machine, lire en RELATIF, 8 runs minimum) : `rules` 27/27 · `gen:80`
+0 échec · `keyboard` 8 tours, saut sur cible 8/8, focus perdu 0 · `contrast` 0 échec ·
+`lose` défaite au nœud 1 en 13 s · `stress` ~14 fps · 0 erreur console.
+
+`band:8` → **5 runs sur 8 atteignent le boss, 2 le battent, nœud médian 10**, 35 à 95 s
+d'horloge par run en mouvement réduit. C'est la bande visée pour un POC : le bot n'a ni
+retranchement ni adaptation, il doit voir le boss souvent et le battre rarement. ATTENTION
+en la relisant : `band` répartit son budget de temps entre les runs (`SECONDS / runs`), une
+run lente est donc TRONQUÉE et compte comme un arrêt prématuré — donner large (`band:8 600`
+au minimum) avant de conclure qu'une run est morte tôt.
+
+Run de référence `win:12345` : boss atteint en 43 s, soin du héros au marchand du nœud 5,
+résurrection de l'Archère + achat du Carquois lourd au nœud 8, arrivée à 4 unités. C'est
+exactement l'histoire économique que le design attend — l'or part sur les DEUX postes, ce
+qui est le critère de réussite n°3 du POC.
+
+**Limite connue du bot, à garder en tête en lisant la bande** : il ne PERMUTE
+quasiment jamais (il ne le fait que privé de cible), alors que « le joueur permute-t-il ? »
+est le critère de réussite n°1 du POC. Le bot ne peut donc pas répondre à cette
+question-là — c'est une observation à faire sur un humain. Il mesure la SURVIE et
+l'ÉCONOMIE, pas la richesse tactique.
+
+Contrôle même machine : hub = 5 jeux listés, `verify-crib grip` 7/7.
+
 ### Hors périmètre (à ne pas ajouter sans re-cadrer)
 
 Étage 2 et biomes multiples · alliés temporaires hors cap sur plusieurs combats · types,

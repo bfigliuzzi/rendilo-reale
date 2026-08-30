@@ -537,6 +537,7 @@ export class Flow {
     this.screens.showResult({
       victory,
       node: run.node,
+      nodeCount: NODE_COUNT,
       shards,
       shardsTotal: s.shards,
       timeSec,
