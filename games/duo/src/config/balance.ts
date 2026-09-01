@@ -88,6 +88,15 @@ export const CAKE_CUTS = 6;
 export const CAKE_HANDLE_R = 34;
 /** ⭐ : un fruit préféré de plus sur le gâteau du joueur aidé. */
 export const CAKE_STAR_BONUS_FRUIT = 1;
+/**
+ * ÉCART ASSUMÉ à « on tire au pouce » (commentaire de `CAKE_HANDLE_R`) :
+ * chaque poignée avance par CRANS discrets autour du disque plutôt que par un
+ * drag continu — c'est ce qui rend `cake` jouable AU CLAVIER SEUL (§5, l'un
+ * des 5 jeux `pass` qui le doivent) sans traduire une position de pointeur à
+ * travers le letterbox, que `MiniGameCtx` n'expose pas à un micro-jeu. Voir le
+ * commentaire de `games/cake/view.ts`.
+ */
+export const CAKE_ANGLE_STEPS = 12;
 
 // ───────────────────────── 3.3 tree — La branche coupée ─────────────────────────
 
@@ -243,6 +252,11 @@ export function assertBalanceSane(): void {
   must(CAKE_MIN_GAP * 2 < CAKE_RADIUS, 'les fruits ne tiendraient pas sur le gâteau');
   must(CAKE_HANDLE_R * 2 >= TOUCH_MIN, 'les poignées de coupe doivent faire ≥ 60 px');
   must(CAKE_CUTS % 2 === 0, 'les rôles alternent : le nombre de coupes doit être pair');
+  must(CAKE_ANGLE_STEPS >= 6, 'assez de crans pour une coupe précise (cake)');
+  // PAIR : sans cran diamétralement opposé, aucune corde ne passe par le
+  // centre du gâteau, donc la coupe ÉQUITABLE — celle que le jeu enseigne —
+  // devient géométriquement inatteignable.
+  must(CAKE_ANGLE_STEPS % 2 === 0, 'un cran doit faire face à chaque cran (coupe par le centre)');
 
   // §3.3 / §3.4 — les garanties de génération, côté tuning.
   must(TREE_EDGES.min >= TREE_MIN_MOVES * 2, 'trop peu d’arêtes pour garantir 3 coups à chacun');

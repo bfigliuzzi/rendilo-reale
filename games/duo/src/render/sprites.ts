@@ -231,7 +231,17 @@ export const SPRITES: Readonly<Record<string, SpriteDef>> = {
     ],
     ink: { ...BASE, r: 0xef7d6a, g: 0xa9d97f, w: 0xfff3e2 },
   },
-  /** Domino de `tiles` : deux carrés, donc la tuile se lit debout ou couchée. */
+  /** Domino de `tiles` : deux carrés, donc la tuile se lit debout ou couchée.
+   *
+   *  SEUL sprite de la collection peint en NEUTRE CLAIR, et c'est délibéré : il
+   *  est le seul à être TEINTÉ à l'affichage (bleu « debout » / rose « couché »,
+   *  les teintes des deux piles). Un `tint` de Pixi MULTIPLIE ; sur l'ocre
+   *  d'origine (0xd9a86e) le bleu ressortait olive (0x728864) et le rose brique
+   *  (0xcd4c3b) — donc un domino rouge dans un jeu pour cinq ans, et surtout
+   *  plus AUCUN lien de couleur entre la pile et les pièces qu'elle pose. Sur
+   *  un corps quasi crème, le produit rend la teinte demandée (6,9:1 et 4,5:1
+   *  sur le fond). Le contour reste un brun MOYEN pour que, une fois multiplié,
+   *  il donne un brun sombre lisible et jamais un noir pur. */
   tile: {
     grid: [
       'oooooooooooooooo',
@@ -251,7 +261,7 @@ export const SPRITES: Readonly<Record<string, SpriteDef>> = {
       'oaaaaaaaaaaaaaao',
       'oooooooooooooooo',
     ],
-    ink: { ...BASE, a: 0xd9a86e, A: 0xa8763f },
+    ink: { ...BASE, o: 0x6b4a34, a: 0xf5efe8, A: 0xa2958a },
   },
   /** Bille de `plank` : éclat en haut à gauche, elle se lit même à l'arrêt. */
   marble: {
