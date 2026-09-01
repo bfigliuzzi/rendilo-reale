@@ -40,6 +40,7 @@ export default defineConfig({
         mind: resolve(__dirname, 'games/mind/index.html'),
         crib: resolve(__dirname, 'games/crib/index.html'),
         doors: resolve(__dirname, 'games/doors/index.html'),
+        duo: resolve(__dirname, 'games/duo/index.html'),
       },
     },
   },
