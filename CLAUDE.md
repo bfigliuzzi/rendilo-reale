@@ -1042,10 +1042,13 @@ qui fait qu'une animation se fige toute seule dès que le shell cesse d'appeler 
   y passer.
 - **LE SERVICE WORKER DU HUB SERT LA PAGE DU HUB SUR UNE URL À QUERY.** Il est configuré
   avec `navigateFallback: '/index.html'` : dès qu'il est installé, une navigation vers
-  `/games/duo/?probe` (absente du précache À CAUSE de la query) rend le hub. D'où
-  `#probe` — un hash n'est jamais envoyé au réseau. À garder en tête pour tout outil :
-  **un scénario qui change d'URL doit utiliser un hash ou repartir d'un contexte neuf**,
-  et un changement de hash SEUL ne recharge pas le document (il faut un `reload()`).
+  `/games/duo/?quelquechose` — URL absente du précache À CAUSE de la query — rend le
+  HUB, sans une erreur console. Mesuré sur l'échafaudage du §8.2, qui s'ouvrait par une
+  query et ne montrait plus que le menu du hub dès la deuxième visite ; il a fini en
+  hash, un hash ne partant jamais dans la requête réseau. À garder en tête pour tout
+  outil : **un scénario qui change d'URL doit utiliser un hash ou repartir d'un contexte
+  neuf**, et un changement de hash SEUL ne recharge pas le document (il faut un
+  `reload()`).
 
 Le plein écran de passage **masque** le plateau (`visibility:hidden`), il ne le voile
 pas : un voile semi-transparent laisse deviner le coup de l'autre. Pendant son
@@ -1236,11 +1239,10 @@ Un écart qu'on n'écrit pas est un piège pour le prochain.
 - **`mirror` n'a AUCUN handicap ⭐**, et c'est conforme : le §3.5 est la seule section du
   §3 sans ligne « ⭐ ». `stars` est accepté au constructeur pour la parité de signature
   de `window.__game.models` et ne pilote rien.
-- **Arborescence** : cinq fichiers de plus que le §2.2 — `core/shell.ts` et
+- **Arborescence** : quatre fichiers de plus que le §2.2 — `core/shell.ts` et
   `core/flow.ts` (garder `Shell` dans `main.ts` faisait importer son type par
   `core/flow.ts` : cycle d'imports ; `main.ts` ne fait plus que booter),
-  `core/probe.ts`, `games/plank/courses.ts` et `games/mirror/courses.ts` (donnée pure de
-  niveau).
+  `games/plank/courses.ts` et `games/mirror/courses.ts` (donnée pure de niveau).
 - **Le `localStorage` est réellement touché par `meta/save.ts`, pas par
   `core/session.ts`** : deux appels (`getItem`/`setItem`) dans toute la collection,
   `session.ts` en est le seul APPELANT. Le §9 dit « aucun `localStorage` hors
@@ -1248,11 +1250,14 @@ Un écart qu'on n'écrit pas est un piège pour le prochain.
   à connaître le schéma et sa migration. Écart nommé dans les deux fichiers — les
   commentaires disaient auparavant l'inverse l'un de l'autre, ET tous les deux à côté du
   code, ce qui faisait conclure au grep que l'invariant était cassé.
-- **`core/probe.ts` est un micro-jeu jouable, hors de `GAMES` et du menu**, lancé par
-  `/games/duo/#probe` : c'était l'échafaudage du §8.2 (valider le contrat `MiniGame` de
-  bout en bout) et il est resté dans le bundle. Le §10 interdit « un neuvième jeu » :
-  décision de périmètre à trancher — le supprimer coûte un harnais, le garder coûte une
-  ligne au §10. Aucun scénario du bot ne s'en sert.
+- **L'échafaudage du §8.2 a été SUPPRIMÉ, et c'est une décision de périmètre.** Un
+  neuvième micro-jeu bidon (« tape le bouton ») a bien existé en `core/probe.ts` pour
+  valider le contrat `MiniGame` de bout en bout — `onTurn`, `onAnnounce`, `onOver`,
+  `setPaused`, `destroy` — tant que les huit vrais jeux étaient des coquilles. Il est
+  hors du bundle : le §10 interdit un neuvième jeu, aucun scénario du bot ne s'en
+  servait, et les huit jeux exercent aujourd'hui chacun des cinq rappels. Le rebâtir
+  pour un futur neuvième micro-jeu coûte une soirée ; le garder coûtait une ligne
+  d'exception au §10 et une porte dérobée dans un jeu pour enfants.
 - **Du tuning de gameplay vit hors de `config/balance.ts`**, contre le §2.2 :
   `ANT_TOP_MARGIN` / `BOTTOM_MARGIN` / `ANT_START_X` dans `games/ant/model.ts` (ils
   fixent la distance à parcourir et la hauteur de bande jouable, donc l'équilibrage du
@@ -1362,7 +1367,7 @@ conformément au §7 — pas les huit.
 au dépôt sans Duo).
 
 `window.__game = { session, save, game /* Shell */, flow, hud, screens, pass, palette,
-mascots, models, contrastRatio, games, gameById, probe, demoBoard }` — `models` expose
+mascots, models, contrastRatio, games, gameById, demoBoard, demoSeeds }` — `models` expose
 les huit modèles purs pour que le bot monte ses scénarios hors partie.
 
 ### Hors périmètre (à ne pas ajouter sans re-cadrer)

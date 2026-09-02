@@ -5,7 +5,6 @@ import { GAMES, MODELS, gameById } from './config/games';
 import { MASCOTS } from './config/mascots';
 import { DEMO_SEEDS } from './core/demo';
 import { Flow } from './core/flow';
-import { PROBE_DEF } from './core/probe';
 import { Shell } from './core/shell';
 import { PALETTE, contrastRatio, getAtlas } from './render/textures';
 
@@ -42,21 +41,6 @@ async function boot(): Promise<void> {
   const flow = new Flow(shell);
   flow.start();
 
-  // `#probe` — le micro-jeu bidon du §8.2, hors grille : il exerce d'un bout à
-  // l'autre `onTurn` (écran de passage), `onAnnounce`, `onOver` (écran de
-  // résultat + « le perdant choisit »), `setPaused` (accumulateur figé) et
-  // `destroy`. C'est le test de bout en bout du shell tant que les huit vrais
-  // jeux sont des placeholders.
-  //
-  // UN HASH, PAS UNE QUERY, et c'est un piège mesuré : le service worker du hub
-  // est configuré avec `navigateFallback: '/index.html'`, donc une navigation
-  // vers `/games/duo/?probe` — URL absente du précache à cause de la query —
-  // retombe sur la PAGE DU HUB dès que le SW est installé. Le hash, lui, ne
-  // part jamais dans la requête réseau. (Le `?probe` reste accepté : il marche
-  // au premier chargement, avant l'installation du SW.)
-  const wanted = window.location.hash === '#probe' || new URLSearchParams(window.location.search).has('probe');
-  if (wanted) flow.startRound(PROBE_DEF);
-
   (window as unknown as Record<string, unknown>).__game = {
     session: shell.session,
     save: shell.session.save,
@@ -79,7 +63,6 @@ async function boot(): Promise<void> {
     // consécutives sont identiques : même tick ⇒ mêmes pixels.
     demoBoard: shell.menuBoard,
     demoSeeds: DEMO_SEEDS,
-    probe: PROBE_DEF,
   };
 
   startLoop(
