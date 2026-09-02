@@ -82,6 +82,9 @@ export class Shell {
   menuBoard!: DemoBoard;
   private intro: DemoRunner | null = null;
   private introBtn: HTMLButtonElement | null = null;
+  /** L'invite « tape pour jouer » de l'écran de démonstration — retirée après
+   *  un tour de boucle pour rendre le bas du plateau au jeu (cf. `startIntro`). */
+  private introTip: HTMLElement | null = null;
 
   /**
    * Points d'accroche du Flow. Le shell ne décide de rien : il transmet.
@@ -273,9 +276,13 @@ export class Shell {
   /**
    * §2.4, second emploi : le premier écran d'un jeu jamais lancé. On monte le
    * MÊME rejoueur que les vignettes, à la taille logique réelle du jeu, et on
-   * pose par-dessus UN SEUL focalisable — un bouton plein cadre transparent.
-   * « Elle tourne, un tap la coupe » : il n'y a littéralement rien d'autre à
-   * atteindre, ni au doigt ni au clavier.
+   * pose par-dessus un bouton plein cadre transparent : « elle tourne, un tap
+   * la coupe ».
+   *
+   * MESURÉ, et pas affirmé : à cet écran la page compte DEUX focalisables, ce
+   * bouton et le 🔇 du bandeau (⏸ y est `disabled` — il n'y a pas de manche à
+   * mettre en pause). Le second est voulu : le §1.2 exige que le son se coupe
+   * de partout. Rien d'autre n'est atteignable, ni au doigt ni au clavier.
    */
   startIntro(def: MiniGameDef): void {
     this.stopIntro();
@@ -297,10 +304,27 @@ export class Shell {
       'aria-label',
       `${def.title} : la règle en images, elle tourne en boucle. Taper pour commencer la partie.`,
     );
+    // L'INVITE S'EFFACE AU BOUT D'UNE BOUCLE DE DÉMONSTRATION, et ce n'est pas
+    // un détail de goût : elle est posée au bas du repère LOGIQUE, or c'est
+    // exactement la bande où cinq des huit jeux peignent leur objet-but — les
+    // paniers de `tree` et leur compte, le bas des piles de `tiles`, les
+    // compteurs 🔍 de `suspects`, la légende des sièges de `beast`, le trou de
+    // sortie du deuxième parcours de `plank`. Constaté à la capture d'écran,
+    // jamais au raisonnement : dans `tree`, la RÉCOMPENSE de la démonstration
+    // (les pommes qui roulent dans le panier) était intégralement masquée par
+    // l'invite, donc la boucle enseignait une règle amputée (§1.1 critère 1).
+    //
+    // On ne la déplace pas : aucune bande du cadre n'est libre dans les huit
+    // jeux à la fois (le haut porte la cime de `mirror`, le nuage du géant de
+    // `ant`, le titre de `tiles`). On la laisse dire ce qu'elle a à dire — un
+    // tap démarre la partie — le temps d'un tour de boucle, puis on rend le
+    // plateau à la démonstration. Rien n'est perdu : le bouton COUVRE tout
+    // l'écran et son `aria-label` porte la même phrase en permanence.
     const tip = document.createElement('span');
     tip.className = 'demotip';
     tip.textContent = '👀 la règle en images — tape pour jouer';
     btn.appendChild(tip);
+    this.introTip = tip;
     btn.addEventListener('click', this.onIntroClick);
     this.overlayEl.appendChild(btn);
     this.introBtn = btn;
@@ -313,6 +337,7 @@ export class Shell {
       this.introBtn.remove();
       this.introBtn = null;
     }
+    this.introTip = null;
     if (this.intro) {
       this.intro.destroy();
       this.intro = null;
@@ -422,6 +447,14 @@ export class Shell {
     this.fx.update(dt);
     this.menuBoard.update(dt);
     this.intro?.update(dt);
+    // Une BOUCLE de démonstration, pas une horloge murale : la durée d'un tour
+    // va de 2,9 s (`plank`) à 7,5 s (`beast`), et c'est bien « tu as vu la
+    // règle une fois » qui décide, pas un minuteur arbitraire. `loop` est
+    // incrémenté par le rejoueur lui-même (`core/demo.ts`, règle ①).
+    if (this.introTip && this.intro && this.intro.loop >= 1) {
+      this.introTip.remove();
+      this.introTip = null;
+    }
     this.current?.update(dt);
   }
 

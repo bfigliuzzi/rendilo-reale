@@ -21,8 +21,14 @@ import { DEFAULT_MASCOTS, mascotById } from '../config/mascots';
  * nécessaire, relire §1.3 avant de l'ajouter.
  * ─────────────────────────────────────────────────────────────────────────
  *
- * Écrite UNIQUEMENT par `core/session.ts` — c'est aussi le SEUL module de
- * `games/duo/` qui touche au `localStorage`. Aucun micro-jeu n'y accède.
+ * DEUX RÔLES, À NE PAS CONFONDRE (les deux commentaires disaient l'inverse
+ * l'un de l'autre, et tous les deux à côté du code) : les DEUX SEULS appels à
+ * `localStorage` de toute la collection sont ceux de CE fichier (`loadSave` /
+ * `persist`, plus bas) ; `core/session.ts` en est le seul APPELANT. Le §9 de la
+ * spec dit « aucun `localStorage` hors `core/session.ts` » — l'écart est
+ * assumé et il est ici : la spec impose par ailleurs (§2.2) un `meta/save.ts`,
+ * et c'est lui qui connaît le schéma et sa migration. Aucun micro-jeu n'accède
+ * ni à l'un ni à l'autre : il ne reçoit que ses `stars` et son `seed`.
  */
 
 const KEY = 'rendilo-reale:duo:save:v1';

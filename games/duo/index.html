@@ -25,6 +25,11 @@
        #ffc95e 9,0:1 · #c79a7b 5,4:1 — et les 6 teintes de mascottes ≥ 3,2:1,
        toutes séparées d'au moins 1,26:1 EN NIVEAUX DE GRIS. Vérifié au calcul
        par le scénario `contrast` du bot, jamais à l'œil. */
+    :root {
+      /* Hauteur du bandeau de table — UNE seule source, lue par `#ui` (qui la
+         réserve) et imposée à `.hudbar` (qui la remplit). */
+      --hudbar-h: 72px;
+    }
     html, body {
       margin: 0; padding: 0; height: 100%;
       background: #3b2a20;
@@ -129,8 +134,11 @@
       position: fixed; inset: 0; display: none;
       align-items: flex-start; justify-content: center;
       background: #2c1f18;
-      /* Réserve la hauteur du bandeau, qui est peint par-dessus. */
-      padding-top: 68px;
+      /* Réserve la hauteur du bandeau, qui est peint par-dessus. UNE seule
+         source pour cette hauteur (`--hudbar-h`) : elle était écrite en dur
+         ici ET déduite du gabarit des boutons dans `.hudbar`, donc agrandir
+         un bouton faisait passer les titres des panneaux SOUS le bandeau. */
+      padding-top: var(--hudbar-h);
       box-sizing: border-box;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
@@ -240,7 +248,12 @@
     .row .btn { flex: 1; }
     .col { display: flex; flex-direction: column; gap: 10px; width: 100%; }
 
-    a.hub-link { display: inline-block; margin-top: 8px; text-decoration: none; color: #e8cfb4; font-size: 14px; }
+    /* Cible tactile ≥ 60 px, comme les boutons : un lien de 16 px de haut est
+       le genre de cible qu'un enfant de cinq ans rate trois fois sur quatre. */
+    a.hub-link {
+      display: inline-flex; align-items: center; min-height: 60px; padding: 0 12px;
+      margin-top: 8px; text-decoration: none; color: #e8cfb4; font-size: 14px;
+    }
     a.hub-link:focus-visible { outline: 4px solid #87cfe8; outline-offset: 3px; border-radius: 6px; }
 
     /* ═════════════════ BANDEAU DE TABLE (§4.1.3) ═════════════════
@@ -253,6 +266,7 @@
     .hudbar {
       position: fixed; left: 0; right: 0; top: 0;
       display: flex; align-items: center; gap: 8px;
+      min-height: var(--hudbar-h); box-sizing: border-box;
       padding: 6px 10px calc(6px) 10px;
       padding-top: max(6px, env(safe-area-inset-top));
       background: rgba(44, 31, 24, 0.9);
@@ -282,8 +296,15 @@
       flex: 1; text-align: center; margin: 0;
       font-size: 22px; font-weight: 900; color: #fff3e2; letter-spacing: 2px;
     }
+    /* 60 px, pas 52 : le corollaire ergonomique du §1.1 vaut aussi pour les
+       deux seules commandes PERMANENTES de la collection (🔇 et ⏸), que le
+       §1.2 exige « toujours atteignables ». Mesurées à 52×52 CSS px, elles
+       étaient les plus petites cibles tapables d'une collection faite pour des
+       doigts de cinq ans. La hauteur du bandeau suit (`--hudbar-h`), et le
+       shell la RE-MESURE (`resize`, `hud.element.offsetHeight`) : rien à
+       recaler ailleurs. */
     .hudbtn {
-      width: 52px; height: 52px; padding: 0; border: 0; border-radius: 14px;
+      width: 60px; height: 60px; padding: 0; border: 0; border-radius: 14px;
       font: inherit; font-size: 24px; color: #fff3e2; background: #54392c;
       cursor: pointer; -webkit-tap-highlight-color: transparent;
     }
@@ -346,7 +367,9 @@
     .starbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 4px #ffc95e; color: #ffc95e; }
     .starbtn:focus { outline: none; }
     .starbtn:focus-visible { outline: 4px solid #87cfe8; outline-offset: 2px; }
-    .opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; font-size: 15px; color: #e8cfb4; }
+    /* Le `<input>` fait 26 px mais la CIBLE est le `<label>` entier (l'input y
+       est imbriqué) : c'est lui qu'on porte à 60 px, comme tout le reste. */
+    .opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; font-size: 15px; color: #e8cfb4; }
     .opt input { width: 26px; height: 26px; accent-color: #ffc95e; }
     .opt input:disabled + span { opacity: 0.75; }
 

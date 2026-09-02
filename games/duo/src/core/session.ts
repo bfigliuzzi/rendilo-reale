@@ -6,9 +6,12 @@ import type { Result } from './minigame';
  * L'état de la TABLE : qui joue, avec quelle mascotte, à quel niveau ⭐, où en
  * est le score de la soirée, et à qui revient le choix du jeu suivant.
  *
- * C'est le SEUL module de `games/duo/` qui touche au `localStorage` (même
+ * C'est le SEUL module de `games/duo/` qui LIT ET ÉCRIT la sauvegarde (même
  * discipline que « seul `flow.ts` écrit la save » dans les cinq autres jeux du
- * hub). Un micro-jeu ne le connaît même pas : il reçoit ses `stars` et son
+ * hub) ; les appels bruts à `localStorage`, eux, vivent tous les deux dans
+ * `meta/save.ts`, qui porte le schéma et sa migration — ne pas les rapatrier
+ * ici, et ne pas croire l'ancien commentaire qui prétendait le contraire.
+ * Un micro-jeu ne connaît ni l'un ni l'autre : il reçoit ses `stars` et son
  * `seed` par `MiniGameCtx`.
  *
  * DEUX ÉTATS, DEUX DURÉES DE VIE, et ce n'est pas un détail :
@@ -126,7 +129,8 @@ export class Session {
     this.flush();
   }
 
-  /** Unique point d'écriture du `localStorage` de toute la collection. */
+  /** Unique point d'écriture de la sauvegarde de toute la collection (le
+   *  `localStorage.setItem` lui-même est dans `meta/save.ts`). */
   private flush(): void {
     persist(this.save);
   }

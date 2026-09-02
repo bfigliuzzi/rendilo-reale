@@ -11,13 +11,17 @@ import { getAtlas, PALETTE } from '../../render/textures';
 import {
   ANT_ARENA_H,
   ANT_ARENA_W,
+  ANT_DROP_X_MAX,
+  ANT_DROP_X_MIN,
+  ANT_DROP_Y_MAX,
+  ANT_DROP_Y_MIN,
   ANT_FLOWER_X,
   ANT_START_X,
   ANT_TOP_MARGIN,
   ANT_Y_MAX,
   ANT_Y_MIN,
 } from './model';
-import type { AntModel, AntState } from './model';
+import type { AntModel, AntPhase, AntState } from './model';
 
 /**
  * Vue de `ant` — LECTURE SEULE du modèle (contrat de `core/minigame.ts`).
@@ -38,6 +42,9 @@ const SEAT_COLOR: readonly [number, number] = [PALETTE.sky, PALETTE.berry];
 const BLOCK_POP_SEC = 0.22;
 const BLOCK_FADE_SEC = 1.1; // dernière seconde de vie : le bloc s'annonce avant de disparaître
 const CLOUD_PX = 64;
+/** Demi-côté d'un bloc — la garde de pose se mesure de la fourmi au CORPS du
+ *  bloc, pas à son centre (cf. `drawForbiddenZone`). */
+const ANT_BLOCK_HALF = ANT_BLOCK_SIZE / 2;
 const CAP_DOT_R = 7;
 const CAP_DOT_GAP = 20;
 /**
@@ -78,7 +85,17 @@ export class AntView {
   private readonly capDots = new Graphics();
   private readonly reticleG = new Graphics();
   private readonly hud: Text;
-  private lastHud = '';
+  // Le libellé du bandeau n'est FABRIQUÉ que si l'un des cinq nombres qu'il
+  // affiche a bougé : c'est le patron déjà écrit dans `plank/view.ts`
+  // (« construire le libellé pour le jeter aussitôt serait une allocation par
+  // frame »). Le comparer en CHAÎNE obligeait à concaténer trois gabarits à
+  // chaque frame, soit exactement l'allocation que le §6 interdit aux trois
+  // jeux temps réel — et ce dans le seul des trois qui l'avait laissée passer.
+  private lastHudPhase: AntPhase | '' = '';
+  private lastHudHalf = -1;
+  private lastHudSec = -1;
+  private lastHudS0 = -1;
+  private lastHudS1 = -1;
   private readonly flowerSprites: Sprite[] = [];
 
   constructor(
@@ -185,17 +202,57 @@ export class AntView {
     this.drawHud(s);
   }
 
-  /** Zone où le géant NE PEUT PAS poser (§3.6) — rendue VISIBLE plutôt que
-   *  simplement refusée en silence : un enfant de 5 ans voit où c'est permis
-   *  sans avoir à essayer. Teinte calme (`leaf`), jamais un code de danger
-   *  (anneau + rouge/ambre), réservé ailleurs dans tout le dépôt.
-   *  OPACITÉ PLEINE, trouvée au calcul et pas à l'œil : à alpha 0,4 l'anneau
-   *  tombait à 2,31:1 sur le fond du plateau, sous le 3:1 du WCAG 1.4.11 —
-   *  invisible comme défaut, fatal comme information. Opaque : 6,46:1. */
+  /**
+   * Zone où le géant NE PEUT PAS poser (§3.6) — rendue VISIBLE plutôt que
+   * simplement refusée en silence : un enfant de 5 ans voit où c'est permis
+   * sans avoir à essayer. Teinte calme (`leaf`), jamais un code de danger
+   * (anneau + rouge/ambre), réservé ailleurs dans tout le dépôt.
+   * OPACITÉ PLEINE, trouvée au calcul et pas à l'œil : à alpha 0,4 l'anneau
+   * tombait à 2,31:1 sur le fond du plateau, sous le 3:1 du WCAG 1.4.11 —
+   * invisible comme défaut, fatal comme information. Opaque : 6,46:1.
+   *
+   * ═══ LA FORME DE CETTE ZONE EST LA GARDE ELLE-MÊME, PAS UNE APPROXIMATION ═══
+   * Elle a longtemps été un cercle de rayon `ANT_BLOCK_MIN_DIST` (40) — et
+   * c'était FAUX, mesuré au bot : `tryDropBlock` refuse tout point dont le
+   * BLOC (demi-côté 28) approcherait à moins de 40 px du centre de la fourmi
+   * (`distPointToRect(ax, ay, bx, by, ANT_BLOCK_HALF) < ANT_BLOCK_MIN_DIST`).
+   * Un tap à 65 px de la fourmi était donc refusé EN SILENCE alors que
+   * l'anneau le déclarait permis — l'anneau annonçait 40, la vraie frontière
+   * est à 68 px sur les axes et ~80 px en diagonale. C'est exactement le
+   * contraire du critère 2 du §1.1 : le coup illégal doit être visiblement
+   * hors d'atteinte, jamais refusé sans un mot.
+   *
+   * Le lieu EXACT des centres de bloc refusés est la somme de Minkowski du
+   * carré du bloc et du disque de garde : un carré ARRONDI de demi-côté
+   * `ANT_BLOCK_HALF + ANT_BLOCK_MIN_DIST` et de rayon de coin
+   * `ANT_BLOCK_MIN_DIST`. Démonstration en une ligne : avec u = |ax-bx| et
+   * v = |ay-by|, la garde s'écrit max(u-h,0)² + max(v-h,0)² < d², ce qui est
+   * précisément ce rectangle arrondi. On le dessine donc tel quel — le doigt
+   * pose le bloc là où le dessin l'autorise, partout et exactement.
+   */
   private drawForbiddenZone(s: AntState, ax: number, ay: number): void {
     this.forbid.clear();
     if (s.over) return;
-    this.forbid.circle(ax, ay, ANT_BLOCK_MIN_DIST).stroke({ width: 2, color: PALETTE.leaf });
+    const reach = ANT_BLOCK_HALF + ANT_BLOCK_MIN_DIST;
+    let x0 = ax - reach;
+    let x1 = ax + reach;
+    let y0 = ay - reach;
+    let y1 = ay + reach;
+    // ET LE CLAMP COMPTE AUSSI. `tryDropBlock` ne refuse pas un tap hors des
+    // bornes de pose : il le RAMÈNE dedans (`clamp`, un bloc doit tenir entier
+    // dans l'arène). Donc dès que la zone interdite touche une borne, TOUT ce
+    // qu'il y a au-delà y retombe et se fait refuser aussi. La fourmi
+    // réapparaît à 88 px du bord gauche alors que la borne est à 28 : le cas
+    // se produit à CHAQUE traversée, pas dans un coin exotique. Le clamp étant
+    // monotone axe par axe, la préimage est exactement le rectangle prolongé
+    // jusqu'au bord — on le prolonge donc.
+    if (x0 <= ANT_DROP_X_MIN) x0 = 0;
+    if (x1 >= ANT_DROP_X_MAX) x1 = ANT_ARENA_W;
+    if (y0 <= ANT_DROP_Y_MIN) y0 = 0;
+    if (y1 >= ANT_DROP_Y_MAX) y1 = ANT_ARENA_H;
+    this.forbid
+      .roundRect(x0, y0, x1 - x0, y1 - y0, ANT_BLOCK_MIN_DIST)
+      .stroke({ width: 2, color: PALETTE.leaf });
   }
 
   private drawBlocks(s: AntState): void {
@@ -331,12 +388,23 @@ export class AntView {
   }
 
   private drawHud(s: AntState): void {
-    const clockTxt = `${Math.ceil(s.clock)} s`;
+    const sec = Math.ceil(s.clock);
+    if (
+      s.phase === this.lastHudPhase &&
+      s.half === this.lastHudHalf &&
+      sec === this.lastHudSec &&
+      s.scores[0] === this.lastHudS0 &&
+      s.scores[1] === this.lastHudS1
+    ) {
+      return;
+    }
+    this.lastHudPhase = s.phase;
+    this.lastHudHalf = s.half;
+    this.lastHudSec = sec;
+    this.lastHudS0 = s.scores[0];
+    this.lastHudS1 = s.scores[1];
     const phaseTxt = s.phase === 'suddenDeath' ? 'Mort subite' : `Manche ${s.half + 1} sur 2`;
-    const text = `${phaseTxt} · ${clockTxt}   🐜 ${s.scores[0]} – ${s.scores[1]}`;
-    if (text === this.lastHud) return;
-    this.lastHud = text;
-    this.hud.text = text;
+    this.hud.text = `${phaseTxt} · ${sec} s   🐜 ${s.scores[0]} – ${s.scores[1]}`;
   }
 
   destroy(): void {

@@ -36,6 +36,9 @@
 //               les cinq jeux `pass` à la file.
 //   stress      fps avec les 8 démos du menu animées EN MÊME TEMPS qu'un jeu
 //               temps réel lancé (§7). Le taux absolu dépend de la machine.
+//               Il porte aussi la MESURE de la règle ① de `core/demo.ts` (deux
+//               boucles consécutives durent le même nombre de pas) — elle y
+//               était affirmée et n'était exercée nulle part.
 //
 // Exit : 0 ok · 1 erreur console ou assertion(s) en échec · 2 argument
 // invalide. En conteneur : lancer node SANS les variables de proxy
@@ -43,7 +46,9 @@
 // Lancer les scénarios longs sur `npx vite preview`, jamais `npm run dev` (le
 // HMR recharge la page et tue le contexte du bot en pleine manche) : `play`,
 // `keyboard` et `stress` ouvrent de vraies manches et durent, pour les trois
-// jeux temps réel, la durée réelle d'une manche (90 s, 105 s pour `ant`).
+// jeux temps réel, la durée réelle d'une manche (90 s au plus, `ant` compris :
+// deux mi-temps de 40 s + 10 s de mort subite, cf. l'arbitrage §1.2/§3.6 dans
+// config/balance.ts — c'était 105 s avant qu'il ne soit tranché).
 // `rules`, `gen`, `contrast` et `physics`, eux, n'ouvrent jamais de manche.
 //
 // 5e argument optionnel : le budget en secondes d'une manche (défaut 150, ou
@@ -1932,6 +1937,34 @@ else if (kind === 'physics') {
         check('ant garde : au moins un dépôt accepté (la garde a été exercée)', accepted > 0, true);
         check('ant garde : ANT_BLOCK_MIN_DIST jamais violée', violations, 0);
       }
+
+      // LA FRONTIÈRE EXACTE DE LA GARDE, et pourquoi elle mérite ses propres
+      // assertions : `ant/view.ts` DESSINE cette zone (§1.1 critère 2 — un coup
+      // illégal doit se voir hors d'atteinte, jamais être refusé en silence), et
+      // elle a longtemps été peinte comme un cercle de rayon
+      // ANT_BLOCK_MIN_DIST alors que la garde porte sur le CORPS du bloc.
+      // La frontière réelle est donc à `ANT_BLOCK_HALF + ANT_BLOCK_MIN_DIST`
+      // (68 px) sur les axes et à `ANT_BLOCK_MIN_DIST + ANT_BLOCK_HALF·√2`
+      // (~79,6 px) en diagonale : un carré ARRONDI, pas un disque. Ces quatre
+      // mesures fixent la forme ; si elles bougent, la zone dessinée doit
+      // bouger avec elles.
+      {
+        const axis = EXPECT.ANT_BLOCK_SIZE / 2 + EXPECT.ANT_BLOCK_MIN_DIST;
+        const diag = EXPECT.ANT_BLOCK_MIN_DIST + (EXPECT.ANT_BLOCK_SIZE / 2) * Math.SQRT2;
+        // Un modèle NEUF par mesure : le cooldown part à 0 et rien n'est
+        // remis à la main, donc aucune de ces sondes ne dépend d'un champ
+        // privé du modèle.
+        const tryAt = (dx, dy) => {
+          const m = new A(11, [2, 2]);
+          const ant = m.state.ant;
+          return m.tryDropBlock(ant.x + dx, ant.y + dy);
+        };
+        check('ant frontière : refusé juste EN DEÇÀ de l’axe', tryAt(axis - 2, 0), false);
+        check('ant frontière : accepté juste AU-DELÀ de l’axe', tryAt(axis + 2, 0), true);
+        const k = Math.SQRT1_2;
+        check('ant frontière : refusé juste EN DEÇÀ de la diagonale', tryAt((diag - 2) * k, (diag - 2) * k), false);
+        check('ant frontière : accepté juste AU-DELÀ de la diagonale', tryAt((diag + 2) * k, (diag + 2) * k), true);
+      }
     }
 
     return out;
@@ -1995,7 +2028,18 @@ else if (kind === 'physics') {
       process.exit(2);
     }
     const posture = await page.evaluate((id) => window.__game.gameById(id).posture, gameId);
-    const budget = Number(process.argv[4] ?? (posture === 'side' ? 200 : 150));
+    // BUDGET PAR JEU, et `beast` n'est pas comme les autres : son tour de
+    // chasseur exige EXACTEMENT trois cases armées parmi 48, et un pilote au
+    // clavier qui tabule au hasard en arme puis en désarme longtemps avant de
+    // tomber sur le compte. La bande de référence le mesure à 138 validations
+    // là où les quatre autres en demandent 12 à 48 — soit près du triple, pour
+    // le MÊME budget de 150 s. Mesuré ici : un run à 130 validations tombait
+    // en panne de temps et faisait échouer deux assertions sur une interface
+    // parfaitement conforme, ce qui est le pire défaut possible d'un test de
+    // non-régression. On lui donne la marge que son ergonomie réclame ; le 5e
+    // argument de la ligne de commande continue de tout surcharger.
+    const fallback = posture === 'side' ? 200 : gameId === 'beast' ? 280 : 150;
+    const budget = Number(process.argv[4] ?? fallback);
     perGame[gameId] = await keyboardRound(gameId, posture, budget, checks);
     // On rentre à l'accueil au clavier pour le jeu suivant.
     if (gameId !== list[list.length - 1]) {
@@ -2052,6 +2096,71 @@ else if (kind === 'physics') {
   const both = await page.evaluate(() => window.__game.demoBoard.attached && window.__game.flow.current === 'game');
   checks.push({ name: 'stress : 8 démos + jeu temps réel simultanés', got: both, want: true, ok: both === true });
   detail.fpsBoth = await fps('8 démos rejouées + plank temps réel', 4);
+
+  // ── RÈGLE ① DE `core/demo.ts`, ENFIN MESURÉE ───────────────────────────
+  // Le fichier écrit « DEUX BOUCLES CONSÉCUTIVES SONT IDENTIQUES, à la frame
+  // près » et « MESURÉES par le bot (§7), pas seulement affirmées » — or
+  // aucune assertion ne l'exerçait : `main.ts` exposait bien `demoBoard`,
+  // `loop`, `tick` et `lastLoopTicks` « pour que le bot le prouve », mais le
+  // bot ne lisait que `attached`. C'était donc, littéralement, un invariant
+  // AFFIRMÉ. Il l'est d'autant moins qu'il porte tout le §2.4 : une vignette
+  // qui n'enseigne pas la même chose à chaque tour n'est plus un tutoriel.
+  //
+  // La preuve est EXACTE et non statistique (le fichier le dit et il a
+  // raison) : le rejoueur remonte le micro-jeu au MÊME seed, la liste de
+  // coups est la même et le pas de simulation est fixe, donc deux boucles
+  // qui durent le même nombre de PAS sont la même boucle. Comparer des
+  // pixels serait plus faible et plus fragile.
+  //
+  // FENÊTRE BORNÉE, et assumée : en mouvement réduit (que `stress` active) un
+  // tour de boucle va de 246 pas (`plank`, ~4 s) à 900 (`beast`, ~15 s). On
+  // laisse 30 s, on n'exige DEUX boucles bouclées que des plus rapides — au
+  // moins quatre des huit — et on vérifie l'égalité sur toutes celles qui y
+  // sont arrivées. Un seuil plus ambitieux ferait un test qui échoue quand la
+  // machine est chargée, ce qui est pire qu'un test absent.
+  {
+    const first = new Map();
+    const mismatches = [];
+    const twoLoops = new Set();
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      const snap = await page.evaluate(() =>
+        window.__game.demoBoard.runners.map((r, i) => ({
+          id: window.__game.games[i].id,
+          loop: r.loop,
+          last: r.lastLoopTicks,
+        })),
+      );
+      for (const r of snap) {
+        if (r.loop < 1 || r.last <= 0) continue;
+        if (!first.has(r.id)) {
+          first.set(r.id, { loop: r.loop, last: r.last });
+          continue;
+        }
+        const seen = first.get(r.id);
+        if (r.loop === seen.loop) continue;
+        twoLoops.add(r.id);
+        if (r.last !== seen.last) mismatches.push(`${r.id} ${seen.last}≠${r.last}`);
+      }
+      if (twoLoops.size >= 8) break;
+      await sleep(500);
+    }
+    detail.demoLoopTicks = Object.fromEntries([...first].map(([k, v]) => [k, v.last]));
+    detail.demoTwoLoops = [...twoLoops];
+    checks.push({
+      name: 'démo ① : au moins 4 vignettes ont bouclé DEUX fois dans la fenêtre',
+      got: twoLoops.size,
+      want: '≥ 4',
+      ok: twoLoops.size >= 4,
+    });
+    checks.push({
+      name: 'démo ① : deux boucles consécutives durent le MÊME nombre de pas',
+      got: mismatches.length === 0 ? 0 : mismatches.join(', '),
+      want: 0,
+      ok: mismatches.length === 0,
+    });
+  }
+
   await page.evaluate(() => window.__game.demoBoard.detach());
 
   detail.checks = checks;

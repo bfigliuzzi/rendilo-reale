@@ -43,6 +43,11 @@ const BASKET_PX = 80;
  */
 const BASKET_Y = 820;
 const BASKET_MARGIN = 70;
+/** Plaque du panier : elle enveloppe le sprite (780-860), le compte (864) et
+ *  les jetons ✂ (890), et reste dans les 960 px logiques du repère. */
+const PLATE_W = 128;
+const PLATE_Y = 770;
+const PLATE_H = 150;
 /** Ligne d'indice, sous le bandeau du shell et au-dessus de la cime. */
 const HINT_Y = 96;
 
@@ -93,6 +98,28 @@ export class TreeView {
   private readonly basketCount: [Text, Text];
   private readonly basketTokens: [Text, Text];
   private readonly basketSprites: [Sprite, Sprite];
+  /**
+   * LES DEUX PANIERS SONT NOMMÉS, et c'est le critère 3 du §1.1 qui l'exige :
+   * un « objet visible en permanence » qui ne dit pas À QUI il appartient
+   * n'est pas un but, c'est un décor. Vu à la capture d'écran, jamais au
+   * raisonnement — les deux paniers étaient le MÊME sprite, le MÊME chiffre
+   * crème, sans une seule marque de camp, alors que le bandeau annonce « à
+   * bleu de couper » : un enfant de cinq ans n'avait aucun moyen de relier sa
+   * couleur de brindille à son panier. Les sept autres jeux marquaient déjà le
+   * leur (fruit préféré et cadre doré pour `cake`, piles teintées de `tiles`,
+   * ● / ■ de `beast` et `suspects`) ; `tree` était le seul à ne rien dire.
+   *
+   * On reprend EXACTEMENT le double codage des branches (`renderEdge`) —
+   * teinte ET forme, disque bleu / losange violet — posé sur une plaque
+   * `bgDeep` : le violet plafonne à 2,49:1 sur le sol `panel` (WCAG 1.4.11 en
+   * exige 3 pour un élément porteur d'information) et remonte à 3,78:1 sur
+   * `bgDeep`. Calculé, pas jugé à l'œil. Le cadre doré du panier ACTIF est
+   * l'idiome déjà posé par `cake` (`BasketView.sync`).
+   */
+  private readonly basketPlates = new Graphics();
+  /** Dernier état peint des plaques — elles ne changent qu'au tour, donc on ne
+   *  reconstruit pas cette géométrie soixante fois par seconde. */
+  private lastPlateActive: 0 | 1 | null | undefined = undefined;
 
   private readonly nodePx: readonly { x: number; y: number }[];
   private readonly apples: AppleSlot[] = [];
@@ -171,6 +198,7 @@ export class TreeView {
       this.nodeDots,
       this.appleLayer,
       this.hint,
+      this.basketPlates,
       this.basketSprites[0],
       this.basketSprites[1],
       this.basketCount[0],
@@ -245,6 +273,8 @@ export class TreeView {
       }
     }
 
+    this.renderBasketPlates(s);
+
     for (const player of [0, 1] as const) {
       const bounce = this.reducedMotion ? 0 : Math.max(0, 1 - (time - this.popAt[player]) / 0.3);
       const scale = 1 + Math.max(0, bounce) * 0.22;
@@ -257,6 +287,39 @@ export class TreeView {
     }
 
     this.renderApples(s, time);
+  }
+
+  /**
+   * La plaque de chaque panier : le camp (teinte + FORME, reprises des
+   * branches) et, sur celui dont c'est le tour, le cadre doré. Redessinée
+   * seulement quand le joueur actif change — la géométrie est fixe.
+   */
+  private renderBasketPlates(s: TreeState): void {
+    const active: 0 | 1 | null = s.over ? null : s.turn;
+    if (active === this.lastPlateActive) return;
+    this.lastPlateActive = active;
+    const g = this.basketPlates;
+    g.clear();
+    for (const player of [0, 1] as const) {
+      const bx = basketX(player, this.w);
+      const isActive = active === player;
+      g.roundRect(bx - PLATE_W / 2, PLATE_Y, PLATE_W, PLATE_H, 16)
+        .fill({ color: PALETTE.bgDeep, alpha: isActive ? 1 : 0.82 })
+        .stroke({ width: isActive ? 5 : 2, color: isActive ? PALETTE.gold : PALETTE.panelEdge });
+      // Marque de camp : MÊME teinte et MÊME forme que les brindilles de ce
+      // joueur (disque bleu / losange violet, `renderEdge`) — jamais la
+      // couleur seule, et jamais un code inventé pour l'occasion.
+      const mx = bx - 46;
+      const my = BASKET_Y + BASKET_PX / 2 + 15;
+      const color = edgeColorHex(player);
+      if (player === 0) {
+        g.circle(mx, my, 9).fill(color).stroke({ width: 2, color: PALETTE.outline });
+      } else {
+        g.poly([mx, my - 10, mx + 10, my, mx, my + 10, mx - 10, my])
+          .fill(color)
+          .stroke({ width: 2, color: PALETTE.outline });
+      }
+    }
   }
 
   private renderEdge(e: TreeEdgeData, s: TreeState, time: number): void {

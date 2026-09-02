@@ -28,9 +28,13 @@ import { PALETTE, contrastRatio, getAtlas } from './render/textures';
  * l'autre sens, le résultat resterait suspendu pour toujours.
  */
 async function boot(): Promise<void> {
-  // Garde-fou DEV : une incohérence de tuning se lirait sinon en jeu comme
-  // « ce jeu est bizarre », sans jamais dire où.
-  if (import.meta.env.DEV) assertBalanceSane();
+  // Garde-fou de tuning : une incohérence se lirait sinon en jeu comme « ce jeu
+  // est bizarre », sans jamais dire où. Appelé INCONDITIONNELLEMENT (convention
+  // de Trois Portes, et non celle de Berceau qui le réserve au DEV) : le bot de
+  // vérification tourne sur `vite preview`, donc sur un build de PRODUCTION —
+  // sous `import.meta.env.DEV` le garde-fou n'aurait été exercé par aucun
+  // scénario, ce qui est exactement le cas où l'on croit avoir un filet.
+  assertBalanceSane();
 
   const shell = new Shell(getAtlas());
   await shell.init();

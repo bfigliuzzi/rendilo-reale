@@ -8,7 +8,7 @@
  * le seul endroit où l'on voit d'un coup d'œil qu'une manche dure bien 45 à
  * 90 s partout (§1.2, mode restaurant).
  *
- * `assertBalanceSane()` en fin de fichier est le garde-fou DEV : il est appelé
+ * `assertBalanceSane()` en fin de fichier est le garde-fou de tuning : il est appelé
  * une fois au boot et casse bruyamment sur une incohérence de tuning, qui
  * autrement se lirait en jeu comme « ce jeu est bizarre » sans qu'on sache où.
  */
@@ -173,11 +173,34 @@ export const ANT_BLOCK_MAX_STAR = 5;
 export const ANT_BLOCK_SIZE = 56;
 /** Rayon de la fourmi (px). */
 export const ANT_RADIUS = 15;
+/**
+ * ═══ ARBITRAGE §1.2 CONTRE §3.6 — LA MANCHE TIENT LA BANDE, MORT SUBITE INCLUSE ═══
+ *
+ * Le §3.6 écrit « manche = 45 s », puis « les rôles s'échangent et on refait
+ * 45 s », puis « choisis la mort subite » de 15 s. Bout à bout : 105 s
+ * d'horloge, pour un jeu dont l'horloge est DÉTERMINISTE — contrairement aux
+ * cinq jeux au tour par tour, la durée d'`ant` ne dépend d'aucun geste et ne
+ * peut donc pas retomber dans la bande par la qualité du jeu. Le §1.2 est
+ * déclaré non négociable et plafonne une manche à 90 s ; c'est lui qui gagne,
+ * exactement comme il a gagné contre le §3.7 dans `beast` un peu plus bas.
+ *
+ * MESURÉ, et c'est ce qui rend l'arbitrage nécessaire plutôt qu'esthétique :
+ * à 45 + 45 le jeu était DÉJÀ collé au plafond (90 s pile, sans compter
+ * l'écran de règle ni l'écran de résultat), et une égalité — le cas nominal
+ * quand deux enfants marquent 1 traversée chacune — le poussait à 105 s
+ * (`play:ant` mesuré à 108 s d'horloge).
+ *
+ * 40 + 40 + 10 = 90 s au PIRE, 80 s au nominal, et le plancher de 45 s reste
+ * tenu par une seule mi-temps de 40 s + le temps du lancement. Aucune règle du
+ * §3.6 ne bouge : deux mi-temps, échange des rôles, mort subite en cas
+ * d'égalité — seuls les trois chiffres changent. Une traversée coûte ~5 s à
+ * `ANT_SPEED`, il en reste largement de quoi marquer plusieurs fois.
+ */
 /** Durée d'une mi-temps (s) ; puis les rôles s'échangent. */
-export const ANT_ROUND_TIME = 45;
+export const ANT_ROUND_TIME = 40;
 /** Mort subite en cas d'égalité (s) — choisie plutôt qu'un départage calculé :
  *  un enfant de 5 ans comprend « on rejoue vite », pas « temps sans bloc ». */
-export const ANT_SUDDEN_DEATH = 15;
+export const ANT_SUDDEN_DEATH = 10;
 
 // ───────────────────────── 3.7 beast — La bête sous le tapis ─────────────────────────
 
@@ -277,7 +300,15 @@ export function assertBalanceSane(): void {
   must(ROUND_MIN_SEC < ROUND_MAX_SEC, 'bornes de durée de manche incohérentes');
   must(PLANK_TIME_LIMIT <= ROUND_MAX_SEC, 'plank dépasse la manche maximale');
   must(MIRROR_TIME_LIMIT <= ROUND_MAX_SEC, 'mirror dépasse la manche maximale');
-  must(ANT_ROUND_TIME * 2 <= ROUND_MAX_SEC, 'ant (deux mi-temps) dépasse la manche maximale');
+  // LE PIRE CAS, PAS LE NOMINAL. L'assertion ne portait que sur les deux
+  // mi-temps et laissait donc passer les 105 s d'une égalité, alors même que
+  // le commentaire au-dessus promet « aucune manche ne dépasse 90 s » : un
+  // garde-fou qui vérifie autre chose que ce qu'il annonce est pire qu'absent.
+  must(
+    ANT_ROUND_TIME * 2 + ANT_SUDDEN_DEATH <= ROUND_MAX_SEC,
+    'ant (deux mi-temps + mort subite) dépasse la manche maximale',
+  );
+  must(ANT_ROUND_TIME >= ROUND_MIN_SEC / 2, 'une mi-temps d’ant trop courte pour tenir le plancher de manche');
   must(ANT_SUDDEN_DEATH > 0 && ANT_SUDDEN_DEATH < ANT_ROUND_TIME, 'la mort subite doit être plus courte qu’une mi-temps');
   must(DEMO_REDUCED_MUL >= 1, 'la démo ralentit en mouvement réduit, elle ne s’arrête jamais');
 

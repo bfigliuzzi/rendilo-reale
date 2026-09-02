@@ -310,7 +310,14 @@ export class AntModel {
   private blockedAt(x: number, y: number, fromX: number, fromY: number): boolean {
     if (x < ANT_RADIUS || x > ANT_ARENA_W - ANT_RADIUS) return true;
     if (y < ANT_Y_MIN || y > ANT_Y_MAX) return true;
-    for (const b of this.blocks) {
+    // Boucle INDEXÉE et non `for…of` : `blockedAt` est appelée deux fois par
+    // frame depuis `update()`, et un `for…of` sur un tableau construit un
+    // itérateur à chaque passage — l'allocation par tick que le §6 interdit
+    // aux trois jeux temps réel. Les autres boucles chaudes du fichier
+    // (expiration des blocs, nettoyage de `resetAnt`) étaient déjà indexées ;
+    // celle-ci était la seule à ne pas l'être.
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
       const d = distPointToRect(x, y, b.x, b.y, ANT_BLOCK_HALF);
       if (d >= ANT_RADIUS) continue;
       const d0 = distPointToRect(fromX, fromY, b.x, b.y, ANT_BLOCK_HALF);
