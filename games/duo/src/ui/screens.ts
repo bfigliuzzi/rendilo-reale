@@ -182,8 +182,16 @@ export class Screens {
    * font pas la même chose. Le sens complet vit dans l'`aria-label`, jamais
    * dans le pictogramme seul.
    *
-   * Les vignettes sont STATIQUES à ce stade : l'étape §8.8 les animera avec la
-   * démo (`def.demo` rejouée à travers le modèle réel).
+   * CHAQUE VIGNETTE EST ANIMÉE PAR SA DÉMO (§2.4 / §4.1.2) : le `<canvas>`
+   * `data-thumb="<id>"` posé ici est rempli par `core/demo.ts`, qui y recopie
+   * la cellule où il vient de peindre le MICRO-JEU RÉEL rejoué en boucle. Il est
+   * `aria-hidden` — l'information est déjà dans l'`aria-label` du bouton, et une
+   * boucle de trois secondes ne se raconte pas au lecteur d'écran.
+   *
+   * Le `<canvas>` est CARRÉ alors que les plateaux sont en 9:16 ou 16:9 : la
+   * démo y est mise à l'échelle « contenue », donc la vignette d'un jeu `pass`
+   * est haute et étroite et celle d'un jeu `side` large et basse. C'est un
+   * quatrième rappel de la posture, gratuit, en plus du pictogramme.
    */
   showMenu(v: MenuView): void {
     const tiles = v.games
@@ -194,7 +202,10 @@ export class Screens {
           g.posture === 'pass' ? 'téléphone en main, on se le passe' : 'téléphone posé à plat, côte à côte'
         }, ${modeLabel(g.mode)}`;
         return `<button class="tile" data-action="game" data-id="${g.id}" data-key="g-${g.id}" aria-label="${label}">
-          <span class="tile-emoji" aria-hidden="true">${g.emoji}</span>
+          <span class="thumbwrap" aria-hidden="true">
+            <canvas class="thumb" data-thumb="${g.id}"></canvas>
+            <span class="tile-emoji">${g.emoji}</span>
+          </span>
           <span class="tile-name">${g.title}</span>
           <span class="tile-tags" aria-hidden="true">${post}${mode}</span>
         </button>`;

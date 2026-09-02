@@ -178,17 +178,15 @@ class TreeGame implements MiniGame {
     if (wasOurs && prev && (prev.hidden || (prev as HTMLButtonElement).disabled)) this.anchor.focus();
   }
 
-  /** `#sr-board` (via le shell — `ctx` n'expose pas ce résumé, cf. digest §8.2). */
+  /** `#sr-board` (`ctx.onBoard`). */
   private updateBoard(baskets: readonly [number, number], turn: 0 | 1, over: boolean): void {
-    const g = (window as unknown as { __game?: { game?: { setBoardText?: (t: string) => void } } }).__game?.game;
-    if (!g?.setBoardText) return;
     // « 1 pommes » à la synthèse vocale, c'est une faute qu'on entend.
     const bleu = `Panier bleu : ${baskets[0]} pomme${baskets[0] > 1 ? 's' : ''}`;
     const violet = `Panier violet : ${baskets[1]} pomme${baskets[1] > 1 ? 's' : ''}`;
     const text = over
       ? `Manche terminée. ${bleu}. ${violet}.`
       : `${bleu}. ${violet}. À ${turn === 0 ? 'bleu' : 'violet'} de couper.`;
-    g.setBoardText(text);
+    this.ctx.onBoard(text);
   }
 
   private onCut(edgeId: number): void {
@@ -267,6 +265,10 @@ class TreeGame implements MiniGame {
     // Elle se fige à la pause (§1.2 : reprise à l'identique), comme tout
     // accumulateur du dépôt.
     this.time += dt;
+    // Le verrou de chute est armé ICI, à chaque pas, et non à la frame de
+    // rendu : il fige l'instant où une brindille tombe, et cet instant doit
+    // être celui de la SIMULATION (cf. le commentaire de `detectFalls`).
+    this.view.detectFalls(this.model.state, this.time);
     if (!this.boardPosted) {
       // Le shell écrit SA ligne générique dans `#sr-board` après `startGame`
       // (`Flow.enter`) : le résumé posé par le `refresh()` du constructeur est

@@ -105,12 +105,9 @@ class TilesGame implements MiniGame {
     this.focusFirstLegal();
   }
 
-  /** `#sr-board` (via le shell — `ctx` n'expose pas ce résumé, cf. digest
-   *  §8.2) : donne le plateau ENTIER en texte, y compris ce qui ne change pas
-   *  d'un événement discret (les cases bloquées) — jouable sans voir l'écran. */
+  /** `#sr-board` (`ctx.onBoard`) : donne le plateau ENTIER en texte, y compris
+   *  ce qui ne change pas d'un événement discret (les cases bloquées) — jouable sans voir l'écran. */
   private updateBoard(s: TilesState): void {
-    const g = (window as unknown as { __game?: { game?: { setBoardText?: (t: string) => void } } }).__game?.game;
-    if (!g?.setBoardText) return;
     const legalCount = s.legal.reduce((n, v) => n + (v ? 1 : 0), 0);
     const blockedCount = s.blocked.reduce((n, v) => n + (v ? 1 : 0), 0);
     const text = s.over
@@ -119,7 +116,7 @@ class TilesGame implements MiniGame {
         `Debout : ${s.stacks[0]} tuiles restantes, ${s.placed[0]} posées. ` +
         `Couché : ${s.stacks[1]} tuiles restantes, ${s.placed[1]} posées. ` +
         `${legalCount} cases jouables sur ${s.cols * s.rows - blockedCount} disponibles.`;
-    g.setBoardText(text);
+    this.ctx.onBoard(text);
   }
 
   private focusFirstLegal(): void {

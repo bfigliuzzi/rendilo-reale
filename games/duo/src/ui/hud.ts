@@ -49,6 +49,21 @@ export interface HudView {
 
 export class Hud {
   private readonly bar: HTMLElement;
+  /**
+   * ANCRE DE REPLI DU FOCUS (§5). Elle n'existe que pour une fenêtre précise :
+   * la fin de manche masque les boutons du micro-jeu et n'ouvre l'écran de
+   * résultat qu'après `RESULT_DELAY_SEC` — soit 1,1 s pendant lesquelles
+   * l'élément focalisé a disparu de la page et le focus retombe sur `<body>`.
+   * Mesuré sur les HUIT jeux (10 échantillons à 90 ms), et c'est exactement ce
+   * que le scénario `keyboard` du §7 compte comme échec.
+   *
+   * `tabindex="-1"` : atteignable par programme, JAMAIS en tabulant — même
+   * patron que les titres de `ui/screens.ts`. Elle est `sr-only` et non
+   * `display:none`, sans quoi elle ne serait pas focalisable ; elle porte le
+   * texte de la cause, donc le lecteur d'écran annonce la fin de manche au
+   * moment où elle arrive, et non 1,1 s plus tard.
+   */
+  private readonly anchor: HTMLElement;
   private readonly socles: [HTMLElement, HTMLElement];
   private readonly starLabels: [HTMLElement, HTMLElement];
   private readonly chips: [HTMLElement, HTMLElement];
@@ -97,6 +112,19 @@ export class Hud {
 
     this.bar.append(chip0, this.scoreEl, chip1, this.muteBtn, this.pauseBtn);
     hudRoot.appendChild(this.bar);
+
+    // Hors du `.hudbar` : `setVisible(false)` la masque, or l'ancre doit rester
+    // focalisable pendant la pause et le résultat, où le bandeau disparaît.
+    this.anchor = document.createElement('div');
+    this.anchor.className = 'sr-only';
+    this.anchor.tabIndex = -1;
+    // `hidden` (donc `display:none`) TANT QU'ON NE S'EN SERT PAS : le §4.2
+    // exige qu'il reste EXACTEMENT un élément focalisable pendant l'écran de
+    // passage, et une ancre `sr-only` toujours présente en faisait deux (elle
+    // garde un `offsetParent` sous un `visibility:hidden`). On ne la déplie
+    // que le temps de garer le focus dessus.
+    this.anchor.hidden = true;
+    hudRoot.appendChild(this.anchor);
   }
 
   /**
@@ -179,6 +207,32 @@ export class Hud {
   focusFirst(): void {
     const target = [this.pauseBtn, this.muteBtn].find((b) => !b.disabled && !this.bar.hidden);
     target?.focus();
+  }
+
+  /**
+   * Gare le focus sur l'ancre, en l'annonçant. Appelée AVANT de masquer les
+   * boutons du micro-jeu (fin de manche) : dans l'autre ordre, le focus est
+   * déjà parti sur `<body>` quand on arrive, et `<body>` n'est pas un endroit
+   * d'où l'on revient — un joueur au clavier est perdu, sans rien à l'écran qui
+   * l'indique.
+   */
+  focusAnchor(text: string): void {
+    this.anchor.hidden = false;
+    this.anchor.textContent = text;
+    // `preventScroll` : l'ancre est un carré d'un pixel, la faire défiler à
+    // l'écran secouerait la page sans rien montrer.
+    this.anchor.focus({ preventScroll: true });
+  }
+
+  /**
+   * Replie l'ancre. Appelée à chaque changement d'écran : la fenêtre où elle
+   * sert (le délai de résultat) est finie, et la laisser dépliée ajouterait un
+   * second élément focalisable pendant l'écran de passage. Le focus qu'elle
+   * portait est repris SYNCHRONEMENT par l'appelant (titre du panneau, ou
+   * première cible du jeu) — jamais à la frame suivante.
+   */
+  hideAnchor(): void {
+    this.anchor.hidden = true;
   }
 
   get element(): HTMLElement {

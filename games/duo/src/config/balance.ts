@@ -183,10 +183,54 @@ export const ANT_SUDDEN_DEATH = 15;
 
 export const BEAST_COLS = 6;
 export const BEAST_ROWS = 8;
-/** Tours dont dispose la bête pour atteindre le haut. */
-export const BEAST_TURNS = 12;
-/** ⭐ : la bête aidée en a deux de plus. */
-export const BEAST_TURNS_STAR = 14;
+/**
+ * ═══ ARBITRAGE §1.2 CONTRE §3.7 — LA MANCHE NE COMPTE PLUS QU'UNE MOITIÉ ═══
+ *
+ * Les deux sections de la spec se contredisent, et le §1.2 est déclaré NON
+ * NÉGOCIABLE : « une manche dure 45 à 90 s ». Or le §3.7 empile deux moitiés ×
+ * jusqu'à 12 tours × (un déplacement + trois taps + une validation), avec un
+ * ÉCRAN DE PASSAGE À CHAQUE demi-tour. Mesuré au bot sur 60 manches (politique
+ * « la bête monte tout droit à 70 % », chasseur au hasard) : 77 gestes et 29
+ * écrans de passage en MÉDIANE — soit, au budget assumé de 1,1 s par tap et
+ * 2,5 s par passage (le tap PLUS la remise du téléphone), près de 160 s. Deux
+ * fois et demie la bande.
+ *
+ * Ce n'est pas un défaut d'implémentation : les constantes étaient EXACTEMENT
+ * celles du §3.7. C'est la STRUCTURE qui ne rentre pas, et le seul terme
+ * divisible par deux sans toucher à une seule règle du jeu est le nombre de
+ * moitiés. Réduire la grille à la place aurait été pire : la bête a besoin de
+ * `rows - 1` déplacements, donc raccourcir la manche par les rangées revient à
+ * lui offrir le haut avant que le chasseur n'ait rien appris — on aurait payé
+ * la durée avec l'équilibre du jeu.
+ *
+ * CE QUI NE CHANGE PAS : la grille, le thermomètre, le budget de tours, les
+ * trois cases éclairées, la mémoire du chasseur, les handicaps ⭐. Une moitié
+ * se joue à la lettre du §3.7.
+ * CE QUI CHANGE : les rôles ne s'échangent plus À L'INTÉRIEUR d'une manche
+ * mais D'UNE MANCHE À L'AUTRE (le siège de la bête est retiré au seed de
+ * chaque manche), et le vainqueur est celui qui a réussi son rôle — plus
+ * besoin de départager deux moitiés. Le score de TABLE, que le shell cumule
+ * déjà, porte la symétrie des rôles à la place du départage : c'est la même
+ * promesse, sur l'échelle au-dessus.
+ * Le départage à deux moitiés reste ÉCRIT et testé (`decide`) : remettre 2 ici
+ * suffit à le rallumer si un jour la spec tranche dans l'autre sens.
+ */
+export const BEAST_HALVES: 1 | 2 = 1;
+/**
+ * Tours dont dispose la bête pour atteindre le haut. Ramené de 12 à 9 : à une
+ * seule moitié la MÉDIANE tombe déjà à 77 s (mesurée, cf. `BEAST_HALVES`), mais
+ * la QUEUE de distribution — la bête qui erre jusqu'au plafond de tours —
+ * restait à 126 s ; 9 la ramène à 109. Il reste deux déplacements de rattrapage
+ * sur les sept nécessaires : assez pour un pas de côté qui trompe le
+ * thermomètre, pas assez pour tourner en rond. Descendre plus bas ne gagne plus
+ * rien (mesuré à 8 : médiane inchangée, queue à 105) et coûterait le dernier
+ * pas de côté — la bête n'aurait plus qu'à monter droit, et le jeu n'aurait
+ * plus de cachette.
+ */
+export const BEAST_TURNS = 9;
+/** ⭐ : la bête aidée en a deux de plus (le +2 du §3.7, qui pèse d'autant plus
+ *  que la base a baissé — le handicap est plus franc qu'avant). */
+export const BEAST_TURNS_STAR = 11;
 /** Cases éclairées par le chasseur à chaque tour. */
 export const BEAST_LIGHTS = 3;
 /** ⭐ : le chasseur aidé en éclaire une de plus. */
@@ -287,6 +331,9 @@ export function assertBalanceSane(): void {
   must(BEAST_TURNS_STAR > BEAST_TURNS, '⭐ doit donner des tours en plus à la bête');
   must(BEAST_LIGHTS_STAR > BEAST_LIGHTS, '⭐ doit donner une case en plus au chasseur');
   must(BEAST_TURNS >= BEAST_ROWS - 1, 'la bête doit pouvoir atteindre le haut en jouant droit');
+  // Une manche à zéro moitié n'a pas de vainqueur, et au-delà de deux le
+  // départage de `beast/model.ts` (écrit pour un couple) ne sait plus trancher.
+  must(BEAST_HALVES === 1 || BEAST_HALVES === 2, 'beast : 1 ou 2 moitiés par manche');
   must(BEAST_LIGHTS < BEAST_COLS * BEAST_ROWS, 'le chasseur ne doit pas pouvoir tout éclairer');
 
   // §3.8 — 3 questions binaires séparent au plus 8 profils : 6 suspects passent.

@@ -8,7 +8,15 @@ import {
   ANT_RADIUS,
 } from '../../config/balance';
 import { getAtlas, PALETTE } from '../../render/textures';
-import { ANT_ARENA_H, ANT_ARENA_W, ANT_FLOWER_X, ANT_START_X, ANT_Y_MAX, ANT_Y_MIN } from './model';
+import {
+  ANT_ARENA_H,
+  ANT_ARENA_W,
+  ANT_FLOWER_X,
+  ANT_START_X,
+  ANT_TOP_MARGIN,
+  ANT_Y_MAX,
+  ANT_Y_MIN,
+} from './model';
 import type { AntModel, AntState } from './model';
 
 /**
@@ -32,14 +40,6 @@ const BLOCK_FADE_SEC = 1.1; // dernière seconde de vie : le bloc s'annonce avan
 const CLOUD_PX = 64;
 const CAP_DOT_R = 7;
 const CAP_DOT_GAP = 20;
-/**
- * Hauteur LOGIQUE que le bandeau de table du shell peut recouvrir en posture
- * `side` (il vit en espace écran, 68 px CSS au plus ; à l'échelle 0,72 d'un
- * téléphone paysage typique cela fait ~94 px logiques). Rien de PERMANENT ne
- * se dessine au-dessus : à la capture d'écran, l'horloge du jeu, le ⭐ du géant
- * et la première fleur y étaient purement et simplement invisibles.
- */
-const SHELL_BAR_H = 96;
 /**
  * Retrait horizontal du panneau du géant depuis son bord. Ni 56 (le nuage
  * mangeait la fleur du haut, donc une partie du BUT — mesuré à la capture) ni
@@ -85,6 +85,14 @@ export class AntView {
     parent: Container,
     private readonly model: AntModel,
     private readonly reducedMotion: boolean,
+    /**
+     * Recouvrement RÉEL du bandeau de table, en px logiques (`ctx.safeTop`).
+     * Une FONCTION et non un nombre : la fenêtre peut tourner en pleine
+     * manche. Elle remplace une constante empirique de 96 px que ce fichier
+     * portait — fausse dans les deux sens (0 px de recouvrement sur un
+     * téléphone portrait, 114 px sur une fenêtre 960×540).
+     */
+    private readonly safeTop: () => number = () => 0,
   ) {
     const atlas = getAtlas();
 
@@ -113,12 +121,13 @@ export class AntView {
       s.height = 40;
       const t = flowerCount === 1 ? 0.5 : i / (flowerCount - 1);
       // Centrée dans la bande entre la ligne d'arrivée et le bord droit, et
-      // RENTRÉE sous le bandeau du shell : la fleur du haut, posée à
-      // `ANT_Y_MIN`, était masquée — or c'est LE but visible en permanence
-      // (§1.1 critère 3), il n'en manque pas une.
+      // gardée hors du recouvrement RÉEL du bandeau de table (`ctx.safeTop()`,
+      // 0 depuis que le shell réserve sa bande) au lieu d'une constante
+      // empirique : la fleur du haut, posée à `ANT_Y_MIN`, était masquée — or
+      // c'est LE but visible en permanence (§1.1 critère 3).
       s.position.set(
         ANT_FLOWER_X + (ANT_ARENA_W - ANT_FLOWER_X) / 2,
-        lerp(Math.max(ANT_Y_MIN, SHELL_BAR_H + 24), ANT_Y_MAX - 20, t),
+        lerp(Math.max(ANT_Y_MIN, this.safeTop() + 24), ANT_Y_MAX - 20, t),
       );
       this.root.addChild(s);
       this.flowerSprites.push(s);
@@ -229,10 +238,11 @@ export class AntView {
     g.circle(x - 5, y - 2, 1.7).fill(PALETTE.outline);
     g.circle(x + 5, y - 2, 1.7).fill(PALETTE.outline);
 
-    // Le ⭐ est un OBJET du plateau (§1.3) : on le pousse sous le bandeau du
-    // shell plutôt que de le laisser disparaître quand la fourmi longe le haut.
+    // Le ⭐ est un OBJET du plateau (§1.3) : on le garde hors du recouvrement
+    // RÉEL du bandeau (`ctx.safeTop()`) plutôt que de le laisser disparaître
+    // quand la fourmi longe le haut.
     this.antStar.visible = s.boosted;
-    this.antStar.position.set(x, Math.max(SHELL_BAR_H + 12, y - ANT_RADIUS - 22));
+    this.antStar.position.set(x, Math.max(this.safeTop() + 12, y - ANT_RADIUS - 22));
   }
 
   /** Le géant : un nuage joufflu (jamais une main écrasante, §6), la jauge de
@@ -241,16 +251,19 @@ export class AntView {
   private drawGiant(s: AntState): void {
     const giantSeat = s.antSeat === 0 ? 1 : 0;
     const cx = giantSeat === 0 ? GIANT_INSET : ANT_ARENA_W - GIANT_INSET;
-    // Descendu SOUS le bandeau du shell : à 78, le nuage était à moitié mangé
-    // et son ⭐ (posé au-dessus) totalement invisible — un handicap qu'on ne
-    // voit pas est exactement le « multiplicateur caché » que le §1.3 interdit.
-    const cy = SHELL_BAR_H + CLOUD_PX / 2 + 6;
+    // Le nuage occupe la bande haute que le MODÈLE lui réserve
+    // (`ANT_TOP_MARGIN`) et se cale sur SON BAS : il ne mord donc jamais sur la
+    // zone jouable, et c'est le même nombre qui borne les poses de blocs —
+    // plateau et simulation lisent la même valeur, comme le sol de Berceau est
+    // peint DEPUIS le masque. Son ⭐ (posé à côté) reste visible : un handicap
+    // qu'on ne voit pas est le « multiplicateur caché » que le §1.3 interdit.
+    const cy = ANT_TOP_MARGIN - CLOUD_PX / 2 - 6;
     // Le nuage garde sa palette propre (peinte dans `render/sprites.ts`,
     // pas un masque neutre) : on ne le teinte pas, la POSITION (côté du
     // siège) suffit à dire qui contrôle le géant à l'instant.
     this.cloud.position.set(cx, cy);
-    // ⭐ posé À CÔTÉ du nuage, vers le centre de l'arène : au-dessus il
-    // repassait sous le bandeau, et hors de l'arène du côté du bord.
+    // ⭐ posé À CÔTÉ du nuage, vers le centre de l'arène : au-dessus il sortait
+    // de la bande du géant, et du côté du bord il tombait hors de l'arène.
     this.cloudStar.visible = s.boosted; // le plafond RÉDUIT du géant d'en face
     this.cloudStar.position.set(cx + (giantSeat === 0 ? 1 : -1) * (CLOUD_PX / 2 + 20), cy);
 

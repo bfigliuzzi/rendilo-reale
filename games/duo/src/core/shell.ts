@@ -6,6 +6,7 @@ import { Fx } from '../render/fx';
 import { Layers } from '../render/layers';
 import { PALETTE, getAtlas, type Atlas } from '../render/textures';
 import { Hud } from '../ui/hud';
+import { DemoBoard, DemoRunner } from './demo';
 import type { MiniGame, MiniGameCtx, MiniGameDef, Result } from './minigame';
 import { Session } from './session';
 
@@ -54,10 +55,33 @@ export class Shell {
   private lh = PASS_H;
   /** Facteur du letterbox, utile aux écrans qui doivent connaître l'échelle. */
   scale = 1;
+  /**
+   * Hauteur ÉCRAN réellement occupée par le bandeau de table, MESURÉE sur
+   * l'élément (elle bouge avec `env(safe-area-inset-top)` et avec la police du
+   * système). Mise en cache : le bandeau est `display:none` pendant l'écran de
+   * passage et la pause, où `offsetHeight` vaut 0 — réserver 0 px à ce
+   * moment-là ferait sauter le letterbox d'un écran à l'autre.
+   */
+  private barPx = 0;
+  /** Recouvrement RÉSIDUEL du bandeau, en px logiques (cf. `safeTop`). */
+  private safeTopPx = 0;
 
   current: MiniGame | null = null;
   def: MiniGameDef | null = null;
   paused = false;
+
+  /**
+   * LES DEUX EMPLOIS DE LA DÉMONSTRATION (§2.4), et ils partagent le même
+   * rejoueur (`core/demo.ts`) — c'est tout l'intérêt : une seule cadence, un
+   * seul contrat, aucune animation parallèle nulle part.
+   *   • `menuBoard` : les huit vignettes de la grille du menu, peintes sur la
+   *     planche `layers.demo` puis recopiées dans les `<canvas>` du DOM.
+   *   • `intro` : le PREMIER écran d'un jeu jamais lancé (`save.seen`), en
+   *     plein cadre. Elle tourne, un tap la coupe.
+   */
+  menuBoard!: DemoBoard;
+  private intro: DemoRunner | null = null;
+  private introBtn: HTMLButtonElement | null = null;
 
   /**
    * Points d'accroche du Flow. Le shell ne décide de rien : il transmet.
@@ -66,6 +90,8 @@ export class Shell {
    */
   onTurn: (player: 0 | 1) => void = () => {};
   onOver: (result: Result) => void = () => {};
+  /** Le tap qui coupe l'écran de démonstration d'un jeu jamais lancé. */
+  onIntroSkip: () => void = () => {};
 
   constructor(atlas: Atlas = getAtlas()) {
     this.atlas = atlas;
@@ -95,6 +121,9 @@ export class Shell {
     this.layers = new Layers(this.app.stage, this.atlas, this.lw, this.lh);
     this.ambience = new Ambience(this.layers.motes, this.atlas.spark, this.lw, this.lh);
     this.fx = new Fx(this.layers.fx, this.layers.floaters, this.atlas.spark);
+    // Le mouvement réduit est relu à chaque montage de vignette, pas figé ici :
+    // la case de l'accueil peut changer entre deux passages au menu.
+    this.menuBoard = new DemoBoard(this.app, this.layers.demo, () => this.session.reducedMotion);
 
     this.applyMotionAndSound();
     this.setLogical(this.lw, this.lh);
@@ -134,15 +163,58 @@ export class Shell {
     this.resize();
   }
 
+  /**
+   * LE BANDEAU DE TABLE EST RÉSERVÉ HORS DU LETTERBOX, et c'est une correction
+   * de fond, pas un ajustement d'esthétique.
+   *
+   * Le bandeau vit en espace ÉCRAN (§4.1.3 : ⏸ ne doit pas valser d'un jeu
+   * `pass` à un jeu `side`) tandis que le plateau est letterboxé et centré sur
+   * la fenêtre entière : les deux se recouvraient donc, d'une hauteur qui n'est
+   * même pas constante — MESURÉ de 0 à 114 px LOGIQUES selon la fenêtre et la
+   * posture (114 pour un jeu 540×960 dans une fenêtre 960×540). Cinq des huit
+   * jeux avaient contourné le trou chacun de son côté, avec cinq constantes
+   * empiriques différentes ; le sixième format de fenêtre les prenait toutes en
+   * défaut.
+   *
+   * On centre donc le plateau dans la bande LIBRE, sous le bandeau : la
+   * hauteur disponible perd `barPx`, et le centre descend d'une demi-hauteur de
+   * bandeau. Corollaire mesurable : `safeTop()` retombe à 0 pour les huit jeux,
+   * dans les deux postures — plus aucun micro-jeu ne peut peindre sous le
+   * bandeau, quelle que soit la fenêtre.
+   *
+   * La bande reste réservée même quand le bandeau est masqué (passage, pause) :
+   * la libérer ferait sauter le plateau d'un écran à l'autre, ce qui se lit
+   * comme un bug de rendu.
+   */
   private readonly resize = (): void => {
-    const scale = Math.min(window.innerWidth / this.lw, window.innerHeight / this.lh);
+    const measured = this.hud.element.offsetHeight;
+    if (measured > 0) this.barPx = measured;
+    const free = Math.max(1, window.innerHeight - this.barPx);
+    const scale = Math.min(window.innerWidth / this.lw, free / this.lh);
     this.scale = scale;
-    const t = `translate(-50%, -50%) scale(${scale})`;
+    // `translateY` AVANT `scale` : il s'applique donc en pixels ÉCRAN (les
+    // transforms se composent de droite à gauche), ce qui est bien ce qu'on
+    // veut — la bande à réserver est une hauteur d'écran, pas de plateau.
+    const t = `translate(-50%, -50%) translateY(${this.barPx / 2}px) scale(${scale})`;
     this.stageEl.style.transform = t;
     // MÊME transform que #stage, sans exception : c'est le contrat qui aligne
     // les boutons transparents sur le dessin.
     this.overlayEl.style.transform = t;
+    // Recouvrement RÉSIDUEL, recalculé et non pas affirmé : si quelqu'un
+    // retouche le CSS du bandeau, `safeTop()` dira la vérité au lieu de mentir.
+    const top = window.innerHeight / 2 - (this.lh * scale) / 2 + this.barPx / 2;
+    this.safeTopPx = Math.max(0, (this.barPx - top) / scale);
   };
+
+  /**
+   * Hauteur, en px LOGIQUES du repère courant, que le bandeau recouvre encore.
+   * 0 dans tous les formats mesurés depuis la réservation ci-dessus ; un
+   * micro-jeu qui veut border son bord haut lit CE nombre, jamais une
+   * constante (cf. `MiniGameCtx.safeTop`).
+   */
+  get safeTop(): number {
+    return this.safeTopPx;
+  }
 
   // ───────────────────────── Régions live ─────────────────────────
 
@@ -178,6 +250,7 @@ export class Shell {
       stars: this.session.stars,
       onTurn: (player) => this.onTurn(player),
       onAnnounce: (text) => this.announce(text),
+      onBoard: (text) => this.setBoardText(text),
       onOver: (result) => {
         this.session.recordResult(result);
         this.announce(result.reason);
@@ -186,6 +259,8 @@ export class Shell {
         this.onOver(result);
       },
       reducedMotion: this.session.reducedMotion,
+      // Fonction et non valeur : la fenêtre peut tourner en pleine manche.
+      safeTop: () => this.safeTopPx,
     };
 
     this.current = def.create(ctx);
@@ -193,7 +268,68 @@ export class Shell {
     this.overlayEl.hidden = false;
   }
 
+  // ───────────────────────── Démonstration en plein cadre ─────────────────────────
+
+  /**
+   * §2.4, second emploi : le premier écran d'un jeu jamais lancé. On monte le
+   * MÊME rejoueur que les vignettes, à la taille logique réelle du jeu, et on
+   * pose par-dessus UN SEUL focalisable — un bouton plein cadre transparent.
+   * « Elle tourne, un tap la coupe » : il n'y a littéralement rien d'autre à
+   * atteindre, ni au doigt ni au clavier.
+   */
+  startIntro(def: MiniGameDef): void {
+    this.stopIntro();
+    this.setLogical(def.logical.w, def.logical.h);
+    const root = new Container();
+    this.layers.game.addChild(root);
+    this.intro = new DemoRunner(def, {
+      stage: root,
+      reducedMotion: this.session.reducedMotion,
+      // Ici le bandeau est bien là : on lui rend sa vraie valeur, contrairement
+      // à une vignette, qui n'est sous rien.
+      safeTop: () => this.safeTopPx,
+    });
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'demoskip';
+    btn.dataset.key = 'demo-skip';
+    btn.setAttribute(
+      'aria-label',
+      `${def.title} : la règle en images, elle tourne en boucle. Taper pour commencer la partie.`,
+    );
+    const tip = document.createElement('span');
+    tip.className = 'demotip';
+    tip.textContent = '👀 la règle en images — tape pour jouer';
+    btn.appendChild(tip);
+    btn.addEventListener('click', this.onIntroClick);
+    this.overlayEl.appendChild(btn);
+    this.introBtn = btn;
+    this.overlayEl.hidden = false;
+  }
+
+  stopIntro(): void {
+    if (this.introBtn) {
+      this.introBtn.removeEventListener('click', this.onIntroClick);
+      this.introBtn.remove();
+      this.introBtn = null;
+    }
+    if (this.intro) {
+      this.intro.destroy();
+      this.intro = null;
+      this.layers.game.removeChildren();
+    }
+  }
+
+  private readonly onIntroClick = (): void => {
+    this.onIntroSkip();
+  };
+
+  get introRunning(): boolean {
+    return this.intro !== null;
+  }
+
   stopGame(): void {
+    this.stopIntro();
     if (this.current) {
       this.current.destroy();
       this.current = null;
@@ -238,7 +374,7 @@ export class Shell {
 
   /** Les boutons du micro-jeu, masqués dès qu'un panneau s'ouvre. */
   setOverlayVisible(on: boolean): void {
-    this.overlayEl.hidden = !on || this.current === null;
+    this.overlayEl.hidden = !on || (this.current === null && this.intro === null);
   }
 
   /** L'écran de passage doit MASQUER le plateau, pas le voiler (§4.2). */
@@ -253,8 +389,15 @@ export class Shell {
    */
   focusPlayable(): boolean {
     if (this.overlayEl.hidden) return false;
+    // Un jeu en posture 'side' n'a NI bouton NI input : ses commandes sont des
+    // zones `role="slider"` / `role="application"` rendues focalisables par un
+    // `tabindex`. Le sélecteur d'origine ne voyait qu'un plateau vide et
+    // renvoyait `false`, donc le focus repartait sur le bandeau au lancement de
+    // chaque manche de `plank` — mesuré. On exclut `tabindex="-1"` : c'est
+    // l'ancre de repli que posent `suspects` et `tree`, atteignable seulement
+    // par programme, jamais « la première cible légale ».
     const el = this.overlayEl.querySelector<HTMLElement>(
-      'button:not([disabled]):not([hidden]), input:not([disabled])',
+      'button:not([disabled]):not([hidden]), input:not([disabled]), [tabindex]:not([tabindex="-1"]):not([hidden])',
     );
     if (!el) return false;
     el.focus();
@@ -277,12 +420,24 @@ export class Shell {
     if (this.paused) return;
     this.ambience.update(dt);
     this.fx.update(dt);
+    this.menuBoard.update(dt);
+    this.intro?.update(dt);
     this.current?.update(dt);
   }
 
+  /**
+   * L'ORDRE COMPTE, et c'est la seule subtilité du rendu des vignettes : la
+   * planche des huit démos doit être PEINTE par la passe du renderer, puis
+   * recopiée APRÈS elle. Le tampon de dessin WebGL reste lisible dans la même
+   * tâche (il n'est vidé qu'à la composition), donc `blit()` n'a besoin ni de
+   * `preserveDrawingBuffer` ni d'une extraction de pixels.
+   */
   render(alpha: number): void {
+    this.menuBoard.render();
+    this.intro?.render(alpha);
     this.current?.render(alpha);
     this.app.renderer.render(this.app.stage);
+    this.menuBoard.blit();
   }
 }
 

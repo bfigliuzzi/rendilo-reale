@@ -34,6 +34,15 @@ export class Layers {
   readonly fx: ParticleContainer;
   /** Nombres flottants — au-dessus de tout. */
   readonly floaters = new Container();
+  /**
+   * PLANCHE DE RENDU DES VIGNETTES DU MENU (§2.4 / §4.1.2), et rien d'autre.
+   * Les huit démonstrations y sont peintes côte à côte, puis chaque cellule est
+   * recopiée dans le `<canvas>` de sa vignette DOM (`core/demo.ts`). Elle vit
+   * au-dessus de tout parce qu'elle n'est JAMAIS regardée en place : au menu, le
+   * panneau opaque `#ui` la recouvre entièrement — c'est une planche, pas un
+   * plan de la scène. Vide (et `visible = false`) partout ailleurs.
+   */
+  readonly demo = new Container();
 
   constructor(
     stage: Container,
@@ -48,7 +57,7 @@ export class Layers {
       dynamicProperties: { position: true, vertex: true, color: true, rotation: true },
     });
 
-    stage.addChild(this.bg, this.motes, this.game, this.fx, this.floaters);
+    stage.addChild(this.bg, this.motes, this.game, this.fx, this.floaters, this.demo);
   }
 
   get width(): number {

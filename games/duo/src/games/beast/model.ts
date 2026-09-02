@@ -6,15 +6,25 @@
 // égal, ce qui permet au bot de vérifier une manche entière sans cliquer un
 // seul bouton.
 //
-// STRUCTURE EN DEUX MOITIÉS (comme `ant`) : une « manche » de `beast` est en
-// fait DEUX mini-parties jouées à la suite sur la même grille — la première
-// avec un siège bête et l'autre chasseur, la seconde avec les rôles échangés.
-// Chaque moitié se résout indépendamment (la bête atteint le haut, le
-// chasseur la touche, ou l'horloge de tours expire) ; le vainqueur de la
-// MANCHE compare ensuite les deux résolutions.
+// STRUCTURE EN MOITIÉS : une moitié est une mini-partie complète sur la grille
+// — un siège bête, l'autre chasseur — qui se résout seule (la bête atteint le
+// haut, le chasseur la touche, ou l'horloge de tours expire).
+//
+// COMBIEN DE MOITIÉS PAR MANCHE : `BEAST_HALVES` (config/balance.ts), et la
+// raison de la valeur 1 y est écrite en entier — le §3.7 en demande deux, le
+// §1.2 impose 45 à 90 s par manche, deux moitiés en coûtent 160 (mesuré), et le
+// §1.2 est déclaré non négociable. À UNE moitié, les rôles s'échangent d'une
+// MANCHE à l'autre (le siège de la bête est retiré au seed) au lieu de
+// s'échanger au milieu, et le vainqueur est simplement celui qui a réussi son
+// rôle : il n'y a plus rien à départager. Tout le reste du §3.7 — grille,
+// thermomètre, mémoire du chasseur, trois cases, handicaps ⭐ — est intact.
+//
+// Le départage ci-dessous reste ÉCRIT, TESTÉ et exact : remettre `BEAST_HALVES`
+// à 2 rallume la manche en deux moitiés à la lettre de la spec.
 //
 // ─────────────────────────────────────────────────────────────────────────
-// LE DÉPARTAGE INTER-RÔLES (exigé par le §3.7, écrit ici noir sur blanc) :
+// LE DÉPARTAGE INTER-RÔLES (exigé par le §3.7 ; actif seulement à
+// `BEAST_HALVES === 2`, écrit ici noir sur blanc) :
 //
 // « Réussir son rôle le plus vite » se mesure par le nombre de TOURS DE BÊTE
 // écoulés quand la moitié se résout — que la résolution soit une victoire de
@@ -40,6 +50,7 @@
 import { mulberry32 } from '@shared/rng';
 import {
   BEAST_COLS,
+  BEAST_HALVES,
   BEAST_LIGHTS,
   BEAST_LIGHTS_STAR,
   BEAST_MILD_MAX,
@@ -241,12 +252,21 @@ export class BeastModel {
     return otherOf(this.beastSeat);
   }
 
+  /*
+   * CONVENTION ⭐ DE LA COLLECTION (posée en tête de `core/minigame.ts`) : c'est
+   * `stars === 1` qui désigne le joueur AIDÉ — ⭐ se lit « un coup de plus » sur
+   * l'accueil, ⭐⭐ « sans coup de plus ». Ce jeu lisait `=== 2`, donc l'aide
+   * partait au mauvais enfant : exactement la panne du §1.3 (« le grand crie à
+   * la triche, le petit ne comprend pas sa victoire »).
+   * Et le handicap ne s'applique QUE si les deux réglages diffèrent : une aide
+   * donnée aux deux n'en est plus une.
+   */
   private get helpedBeast(): boolean {
-    return this.stars[this.beastSeat] === 2;
+    return this.stars[0] !== this.stars[1] && this.stars[this.beastSeat] === 1;
   }
 
   private get helpedHunter(): boolean {
-    return this.stars[this.hunterSeat] === 2;
+    return this.stars[0] !== this.stars[1] && this.stars[this.hunterSeat] === 1;
   }
 
   private get turnLimit(): number {
@@ -384,7 +404,12 @@ export class BeastModel {
       turnLimit: this.turnLimit,
       captured,
     });
-    if (this.half === 0) {
+    // Une SEULE moitié par manche par défaut (`BEAST_HALVES`, et l'arbitrage
+    // §1.2 contre §3.7 est écrit là-bas) : les rôles s'échangent d'une manche à
+    // l'autre au lieu de s'échanger au milieu, et le vainqueur est celui qui a
+    // réussi son rôle. Le bloc ci-dessous — l'échange de rôles à mi-manche —
+    // reste vrai à la lettre du §3.7 et se rallume en remettant 2.
+    if (this.half === 0 && BEAST_HALVES === 2) {
       this.half = 1;
       this.beastSeat = this.hunterSeat; // les rôles s'échangent
       this.beastCol = this.half1Col;
@@ -439,16 +464,25 @@ export class BeastModel {
   }
 
   /**
-   * `winner` n'est jamais `null` (mode `asym`, deux moitiés jouées, un
-   * vainqueur toujours départagé — voir l'en-tête). `scores` compte les
-   * moitiés remportées par chaque siège (0, 1 ou 2) : simple, symétrique, et
+   * `winner` n'est jamais `null` (mode `asym` : une moitié a toujours un
+   * vainqueur, et deux moitiés sont toujours départagées — voir l'en-tête).
+   * `scores` compte les moitiés remportées par chaque siège (0, 1 ou 2) : simple, symétrique, et
    * ne dépend d'aucune conversion de tours en points qui favoriserait
    * arbitrairement une moitié ⭐ sur l'autre. La CAUSE réelle (§1.1
    * critère 4) vit dans `reason`, pas dans ce chiffre.
    */
   get result(): Result {
     const [h0, h1] = this.halvesArr;
-    if (!h0 || !h1) throw new Error('beast : résultat demandé avant la fin des deux moitiés');
+    if (!h0) throw new Error('beast : résultat demandé avant la fin de la manche');
+    // MANCHE À UNE MOITIÉ (cas par défaut) : il n'y a rien à départager, le
+    // vainqueur est celui qui a réussi son rôle. `scores` reste le compte des
+    // moitiés gagnées — 1 à 0 — pour que la barre de cause de l'écran de
+    // résultat (§4.3) se lise comme dans les sept autres jeux.
+    if (!h1) {
+      const scores: [number, number] = [0, 0];
+      scores[h0.winner] += 1;
+      return { winner: h0.winner, scores, reason: this.halfReason(h0) };
+    }
     const { half, other, tied } = this.decide(h0, h1);
     const scores: [number, number] = [0, 0];
     scores[h0.winner] += 1;

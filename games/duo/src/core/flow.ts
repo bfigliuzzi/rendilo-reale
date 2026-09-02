@@ -33,7 +33,7 @@ import type { Shell } from './shell';
  *    Jamais la couleur seule.
  * ─────────────────────────────────────────────────────────────────────────
  */
-export type FlowState = 'home' | 'menu' | 'game' | 'pass' | 'result' | 'pause';
+export type FlowState = 'home' | 'menu' | 'game' | 'demo' | 'pass' | 'result' | 'pause';
 
 export class Flow {
   readonly screens: Screens;
@@ -47,6 +47,8 @@ export class Flow {
   private resultIn = 0;
   /** Reset en deux temps : un tap arme, le suivant efface. */
   private resetArmed = false;
+  /** Seed mis en attente pendant l'écran de démonstration d'un jeu jamais lancé. */
+  private introSeed: number | undefined;
 
   constructor(private readonly shell: Shell) {
     this.screens = new Screens(shell.ui);
@@ -58,6 +60,7 @@ export class Flow {
 
     this.shell.onTurn = (player) => this.requestPass(player);
     this.shell.onOver = (result) => this.onOver(result);
+    this.shell.onIntroSkip = () => this.endIntro();
 
     this.screens.onPlay = () => this.showMenu();
     this.screens.onHome = () => this.showHome();
@@ -73,7 +76,7 @@ export class Flow {
     };
     this.screens.onPick = (id) => {
       const def = gameById(id);
-      if (def) this.startRound(def);
+      if (def) this.play(def);
     };
     this.screens.onAgain = () => {
       // « Encore » = MÊME jeu, NOUVEAU tirage (§4.3) : rejouer le même seed
@@ -151,10 +154,67 @@ export class Flow {
     const s = this.shell.session;
     const chooser = s.chooser === null ? null : s.mascot(s.chooser);
     this.screens.showMenu({ games: GAMES, chooser });
+    // APRÈS le rendu du panneau, jamais avant : les `<canvas>` des vignettes
+    // n'existent pas tant que le HTML du menu n'est pas posé. `enter()` les
+    // démonte à toute autre transition.
+    this.shell.menuBoard.attach(GAMES, this.shell.ui);
     if (chooser) this.shell.announce(`au tour de ${chooser.name} de choisir`);
     this.shell.setBoardText(
       `menu : ${GAMES.length} jeux.${chooser ? ` ${chooser.name} choisit.` : ''}`,
     );
+  }
+
+  /**
+   * LE GESTE DU JOUEUR qui choisit un jeu dans la grille — et le SEUL chemin
+   * qui puisse ouvrir la démonstration.
+   *
+   * SECOND EMPLOI DE LA DÉMO (§2.4) : un jeu JAMAIS lancé (`save.seen`, écrit
+   * par `Shell.startGame`) s'ouvre d'abord sur sa règle en images, en plein
+   * cadre et en boucle — un tap la coupe et la manche commence. Elle ne
+   * réapparaît plus jamais pour ce jeu-là : c'est un premier contact, pas un
+   * péage.
+   *
+   * POURQUOI ICI ET PAS DANS `startRound` : `startRound` est LE point d'entrée
+   * du bot (§7) et son contrat est « lance une manche », pas « lance ce qu'un
+   * joueur verrait ». L'y mettre faisait atterrir tous les scénarios existants
+   * sur un écran de démonstration au lieu du plateau — mesuré, deux assertions
+   * de la campagne de non-régression sont tombées. Un bot qui VEUT exercer
+   * l'écran de démonstration appelle `play()`, ou tape la vignette du menu
+   * comme un joueur, puis le bouton `[data-key="demo-skip"]` (il n'existe pas
+   * de raccourci en node — même discipline que Trois Portes).
+   */
+  play(def: MiniGameDef, seed?: number): void {
+    if (!this.shell.session.hasSeen(def.id) && def.demo.length > 0) {
+      this.showIntro(def, seed);
+      return;
+    }
+    this.startRound(def, seed);
+  }
+
+  /** L'écran de démonstration d'un jeu jamais lancé (§2.4, emploi n°2). */
+  private showIntro(def: MiniGameDef, seed?: number): void {
+    this.resetArmed = false;
+    this.currentDef = def;
+    this.introSeed = seed;
+    this.lastResult = null;
+    this.resultIn = 0;
+    this.screens.hide();
+    this.shell.setPaused(false);
+    this.shell.startIntro(def);
+    this.enter('demo');
+    this.shell.setBoardText(
+      `${def.title} : la règle en images, en boucle. Tape pour commencer la partie.`,
+    );
+    if (!this.shell.focusPlayable()) this.shell.hud.focusFirst();
+  }
+
+  private endIntro(): void {
+    const def = this.currentDef;
+    if (!def) return;
+    const seed = this.introSeed;
+    this.introSeed = undefined;
+    this.shell.stopIntro();
+    this.startRound(def, seed);
   }
 
   /** Lance une manche : nouveau tirage sauf si le bot en impose un. */
@@ -167,10 +227,15 @@ export class Flow {
     // dans un overlay déjà propre, et le focus saute ensuite sur SA première
     // cible légale, jamais sur un bouton de menu détruit entre-temps.
     this.screens.hide();
+    // LA LIGNE GÉNÉRIQUE D'ABORD, LE MONTAGE ENSUITE. Un micro-jeu qui décrit
+    // son plateau (`ctx.onBoard`) le fait dès sa construction : écrite après,
+    // la ligne du flow ÉCRASAIT ce résumé et `#sr-board` annonçait « la manche
+    // commence » à la place du plateau. Ici elle n'est plus qu'un repli, pour
+    // les jeux temps réel qui ne décrivent rien.
+    this.shell.setBoardText(`${def.title} : la manche commence.`);
     this.shell.startGame(def, seed);
     this.enter('game');
     if (!this.shell.focusPlayable()) this.shell.hud.focusFirst();
-    this.shell.setBoardText(`${def.title} : la manche commence.`);
   }
 
   // ───────────────────────── Passage (§4.2) ─────────────────────────
@@ -199,8 +264,14 @@ export class Flow {
 
   private endPass(): void {
     this.pass.hide();
-    this.enter('game');
+    // LE DÉGEL AVANT `enter` : `enter()` appelle `refresh()`, qui recopie
+    // `shell.paused` dans le libellé de ⏸. Dans l'autre ordre le bandeau
+    // affichait encore « reprendre ▶ » alors que la manche avait repris —
+    // mesuré (`paused === false`, `flow === 'game'`, bouton « ▶ reprendre »).
+    // Un bouton de pause qui ment est pire qu'absent : on tape dessus pour
+    // reprendre, et on met en pause.
     this.shell.setPaused(false);
+    this.enter('game');
     if (!this.shell.focusPlayable()) this.shell.hud.focusFirst();
   }
 
@@ -212,6 +283,14 @@ export class Flow {
     // que le joueur voit la cause (la dernière pomme qui tombe, la bille dans
     // le trou). Le panneau n'arrive qu'après.
     this.shell.setPaused(true);
+    // LE FOCUS D'ABORD, LE MASQUAGE ENSUITE — l'ordre est le correctif.
+    // `setOverlayVisible(false)` fait disparaître (`display:none`) l'élément
+    // qui a le focus, et pendant les 1,1 s du délai il n'existe plus rien à
+    // focaliser : le focus repart sur `<body>`, sur les huit jeux, mesuré à
+    // 10 échantillons de 90 ms. On le gare donc sur une ancre VIVANTE et
+    // NOMMÉE du bandeau, qui annonce au passage la cause de la fin de manche ;
+    // `showResult` le reprendra ensuite sur le titre du panneau.
+    this.shell.hud.focusAnchor(`manche terminée : ${result.reason}`);
     this.shell.setOverlayVisible(false);
     this.resultIn = RESULT_DELAY_SEC;
     this.refresh();
@@ -243,8 +322,10 @@ export class Flow {
   togglePause(): void {
     if (this.state === 'pause') {
       const had = this.screens.hide();
-      this.enter('game');
+      // Même ordre qu'à `endPass`, et pour la même raison : `enter()` lit
+      // `shell.paused` pour peindre ⏸.
       this.shell.setPaused(false);
+      this.enter('game');
       if (had && !this.shell.focusPlayable()) this.shell.hud.focusFirst();
       return;
     }
@@ -279,6 +360,24 @@ export class Flow {
   private enter(state: FlowState): void {
     this.state = state;
     const passing = state === 'pass';
+    // QUATRIÈME PLAN, celui qui manquait : l'écran de passage. `enter()` est
+    // censé re-décider les quatre plans d'un bloc, mais `#pass` n'était fermé
+    // que par le tap de son propre bouton — donc « encore », « un autre jeu »,
+    // « quitter » ou la fin d'une manche déclenchée depuis l'écran de passage
+    // laissaient un plein écran opaque par-dessus TOUT le reste. Vu à la
+    // capture d'écran, pas au raisonnement : les huit jeux s'affichaient
+    // derrière une grenouille géante, sans une erreur console. Le focus est
+    // replacé juste après par l'appelant (`focusPlayable`, ou le titre du
+    // panneau) — c'est pour ça qu'on ferme AVANT de décider le reste.
+    if (!passing) this.pass.hide();
+    // CINQUIÈME PLAN : les huit vignettes animées du menu. Elles vivent sur une
+    // planche de rendu Pixi et dans des `<canvas>` du DOM ; les laisser tourner
+    // derrière un autre écran ferait tourner huit modèles pour personne, et
+    // leurs `<canvas>` sont de toute façon détruits par le panneau suivant.
+    if (state !== 'menu') this.shell.menuBoard.detach();
+    // L'ancre de repli du focus (fin de manche) se replie à tout changement
+    // d'écran : hors de sa fenêtre elle n'est qu'un focalisable de plus.
+    this.shell.hud.hideAnchor();
     // Pendant le passage, TOUT le HUD disparaît (bandeau ET boutons du jeu) :
     // il ne doit rester qu'un seul élément focalisable sur la page.
     this.shell.setHudVisible(!passing);
@@ -286,7 +385,9 @@ export class Flow {
     // Le bandeau reste au-dessus du menu et du résultat (§4.1.3) ; il
     // disparaît pendant la pause, dont le panneau porte déjà « reprendre ».
     this.shell.setBarVisible(!passing && state !== 'pause');
-    this.shell.setOverlayVisible(state === 'game');
+    // L'écran de démonstration a lui aussi son unique focalisable dans
+    // l'overlay : le bouton plein cadre qui la coupe.
+    this.shell.setOverlayVisible(state === 'game' || state === 'demo');
     this.refresh();
   }
 
@@ -299,8 +400,16 @@ export class Flow {
       score: s.score,
       chooser: s.chooser,
       muted: s.muted,
-      paused: this.shell.paused,
-      canPause: this.state === 'game' || this.state === 'pause',
+      // ⏸ SE LIT SUR L'ÉTAT, PAS SUR `shell.paused`. Le shell est aussi « en
+      // pause » pendant l'écran de passage et pendant le délai de résultat,
+      // deux moments où la manche n'est PAS suspendue par le joueur : le
+      // bandeau y affichait « reprendre ▶ » alors que taper dessus mettait en
+      // pause. Le seul moment où le bandeau doit dire « reprendre » est l'état
+      // 'pause' lui-même.
+      paused: this.state === 'pause',
+      // Et ⏸ est inerte pendant le délai de résultat : la manche est finie, il
+      // n'y a plus rien à suspendre.
+      canPause: (this.state === 'game' && this.resultIn <= 0) || this.state === 'pause',
     });
   }
 

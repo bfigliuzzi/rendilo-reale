@@ -105,6 +105,15 @@ class CakeGame implements MiniGame {
   /** Synchrone à chaque changement d'état (§5) : on ne donne jamais le focus
    *  à un bouton encore `disabled`, et attendre la frame de rendu le raterait. */
   private refresh(): void {
+    // §5 — L'ÉTAT DU FOCUS SE CAPTURE AVANT toute mutation de `disabled` /
+    // `hidden` : après, l'information est déjà perdue. Sans ce couple
+    // capture/restauration, une poignée poussée jusqu'à sa butée se grisait
+    // SOUS le focus et le navigateur le jetait sur `<body>` — le joueur au
+    // clavier se retrouvait hors de la page, en pleine coupe, sans une seule
+    // erreur console. Mesuré au bot (`keyboard:cake`, 5 pertes par manche).
+    const prev = document.activeElement as HTMLElement | null;
+    const wasOurs = !!prev && this.ctx.overlay.contains(prev);
+
     const s = this.model.state;
     const cutting = s.phase === 'cut';
     const choosing = s.phase === 'choose';
@@ -149,6 +158,47 @@ class CakeGame implements MiniGame {
     }
 
     this.updateBoard(s, parts);
+    this.restoreFocus(prev, wasOurs);
+  }
+
+  /**
+   * Ne rend le focus que s'il était À NOUS et qu'il vient de MOURIR : le voler
+   * à quelqu'un qui joue au doigt serait pire que de le perdre.
+   */
+  private restoreFocus(prev: HTMLElement | null, wasOurs: boolean): void {
+    if (!wasOurs || !prev) return;
+    const dead = (prev as HTMLButtonElement).disabled || prev.hidden || !prev.isConnected;
+    if (!dead) return;
+    // Une poignée butée renvoie sur SON autre sens — c'est le geste que le
+    // joueur veut faire ensuite. ✓ vient en DERNIER, et jamais avant les
+    // poignées : atterrir sur « couper ici » alors qu'on ajustait ferait
+    // valider la coupe à la touche suivante, par mégarde.
+    const partner =
+      prev === this.btnAMinus
+        ? this.btnAPlus
+        : prev === this.btnAPlus
+          ? this.btnAMinus
+          : prev === this.btnBMinus
+            ? this.btnBPlus
+            : prev === this.btnBPlus
+              ? this.btnBMinus
+              : null;
+    const candidates: readonly (HTMLButtonElement | null)[] = [
+      partner,
+      this.btnAMinus,
+      this.btnAPlus,
+      this.btnBMinus,
+      this.btnBPlus,
+      this.btnPiece0,
+      this.btnPiece1,
+      this.btnConfirm,
+    ];
+    for (const b of candidates) {
+      if (b && !b.disabled && !b.hidden) {
+        b.focus();
+        return;
+      }
+    }
   }
 
   /** Les deux parts telles qu'elles s'affichent MAINTENANT : figées dès la
@@ -158,20 +208,16 @@ class CakeGame implements MiniGame {
     return splitFruits(s.fruits, s.angleA, s.angleB);
   }
 
-  /** `#sr-board` (via le shell — `ctx` n'expose pas ce résumé, §8.2) : les
-   *  comptes de fruits changent sans « événement » discret pendant l'ajustement
+  /** `#sr-board` (`ctx.onBoard`) : les comptes de fruits changent sans « événement » discret pendant l'ajustement
    *  de la corde, exactement le cas d'usage d'un résumé d'état. */
   private updateBoard(s: CakeState, parts: readonly [readonly Fruit[], readonly Fruit[]]): void {
-    const g = (window as unknown as { __game?: { game?: { setBoardText?: (t: string) => void } } })
-      .__game?.game;
-    if (!g?.setBoardText) return;
     const paniers = `Panier de ${fruitWord(preferredKind(0), s.scores[0])} contre panier de ${fruitWord(preferredKind(1), s.scores[1])}.`;
     const deux = `Part ${PIECE_NAME[0]} : ${words(parts[0])}. Part ${PIECE_NAME[1]} : ${words(parts[1])}.`;
     const text =
       s.phase === 'over'
         ? `Manche terminée. ${paniers}`
         : `Coupe ${s.cutIndex + 1} sur ${s.totalCuts}. Au joueur ${s.phase === 'cut' ? s.cutter + 1 : s.chooser + 1} de ${s.phase === 'cut' ? 'couper' : 'choisir'}. ${deux} ${paniers}`;
-    g.setBoardText(text);
+    this.ctx.onBoard(text);
   }
 
   private onNudge(handle: 'a' | 'b', dir: 1 | -1): void {

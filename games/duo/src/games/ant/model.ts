@@ -40,18 +40,23 @@ export const ANT_ARENA_H = SIDE_H;
  * Marges verticales : la fourmi (son CENTRE) et tout bloc restent dans
  * `[ANT_Y_MIN, ANT_Y_MAX]`.
  *
- * LE HAUT N'EST PAS UN CHOIX ESTHÉTIQUE. Le bandeau de table du shell vit en
- * espace ÉCRAN (68 px CSS au plus, mascotte agrandie comprise) et se peint
- * AU-DESSUS du plateau ; en posture `side`, le letterbox d'un téléphone
- * paysage typique (844×390) donne une échelle de 0,72, donc ce bandeau
- * recouvre jusqu'à ~94 px LOGIQUES du haut de l'arène. Un bloc posé plus haut
- * serait un mur invisible — le jeu mentirait sur la passabilité, exactement
- * l'interdit que `?debug` traque dans Berceau. Mesuré à la capture d'écran :
- * à 46, l'horloge du jeu ET le nuage du géant disparaissaient sous le bandeau.
+ * LA MARGE HAUTE EST LA BANDE DU PANNEAU DU GÉANT (nuage, jauge de recharge,
+ * jetons de blocs restants) — et rien d'autre n'y entre : un bloc posé sous le
+ * nuage serait un mur qu'on ne voit pas, exactement l'interdit que `?debug`
+ * traque dans Berceau.
+ *
+ * CE N'EST PLUS UNE DEVINETTE SUR LE BANDEAU DU SHELL. La valeur 96 avait été
+ * calée à la capture d'écran pour échapper au bandeau de table, qui recouvrait
+ * jusqu'à ~114 px logiques du haut du plateau ; `core/shell.ts` RÉSERVE
+ * désormais cette bande hors du letterbox (`ctx.safeTop()` le mesure, et vaut
+ * 0), donc plus rien n'oblige `ant` à deviner quoi que ce soit. Le nombre est
+ * conservé parce qu'il décrit maintenant une vraie contrainte de MISE EN PAGE
+ * — le nuage fait 64 px et vit là — et parce que le changer déplacerait les
+ * bornes de jeu (`ANT_Y_MIN`, `ANT_DROP_Y_MIN`), donc l'équilibrage mesuré.
  */
-const TOP_MARGIN = 96;
+export const ANT_TOP_MARGIN = 96;
 const BOTTOM_MARGIN = 18;
-export const ANT_Y_MIN = TOP_MARGIN + ANT_RADIUS;
+export const ANT_Y_MIN = ANT_TOP_MARGIN + ANT_RADIUS;
 export const ANT_Y_MAX = ANT_ARENA_H - BOTTOM_MARGIN - ANT_RADIUS;
 export const ANT_MID_Y = (ANT_Y_MIN + ANT_Y_MAX) / 2;
 
@@ -70,7 +75,7 @@ const ANT_BLOCK_HALF = ANT_BLOCK_SIZE / 2;
  */
 export const ANT_DROP_X_MIN = ANT_BLOCK_HALF;
 export const ANT_DROP_X_MAX = ANT_ARENA_W - ANT_BLOCK_HALF;
-export const ANT_DROP_Y_MIN = TOP_MARGIN + ANT_BLOCK_HALF;
+export const ANT_DROP_Y_MIN = ANT_TOP_MARGIN + ANT_BLOCK_HALF;
 export const ANT_DROP_Y_MAX = ANT_ARENA_H - BOTTOM_MARGIN - ANT_BLOCK_HALF;
 const BLOCK_X_MIN = ANT_DROP_X_MIN;
 const BLOCK_X_MAX = ANT_DROP_X_MAX;
@@ -182,8 +187,17 @@ export class AntModel {
     return this.curAntSeat === 0 ? 1 : 0;
   }
 
+  /*
+   * CONVENTION ⭐ DE LA COLLECTION (posée en tête de `core/minigame.ts`) : c'est
+   * `stars === 1` qui désigne le joueur AIDÉ — ⭐ se lit « un coup de plus » sur
+   * l'accueil, ⭐⭐ « sans coup de plus ». Ce jeu lisait `=== 2`, donc l'aide
+   * partait au mauvais enfant : exactement la panne du §1.3 (« le grand crie à
+   * la triche, le petit ne comprend pas sa victoire »).
+   * Et le handicap ne s'applique QUE si les deux réglages diffèrent : une aide
+   * donnée aux deux n'en est plus une.
+   */
   private get boosted(): boolean {
-    return this.stars[this.curAntSeat] === 2;
+    return this.stars[0] !== this.stars[1] && this.stars[this.curAntSeat] === 1;
   }
 
   private get blockMax(): number {

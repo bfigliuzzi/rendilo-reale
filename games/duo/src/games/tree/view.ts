@@ -183,9 +183,18 @@ export class TreeView {
 
   /** Détecte les transitions `alive → tombée` et fige, pour chaque arête qui
    *  vient de tomber, l'INSTANT de la chute et le panier destinataire (déduit
-   *  du panier qui vient de grossir — un seul joueur gagne par coup). Appelé
-   *  une fois par frame ; ne mute jamais le modèle. */
-  private detectFalls(s: TreeState, time: number): void {
+   *  du panier qui vient de grossir — un seul joueur gagne par coup). Ne mute
+   *  jamais le modèle, et il est IDEMPOTENT : deux appels de suite sur le même
+   *  état ne latchent qu'une fois.
+   *
+   *  PUBLIC, et appelé aussi depuis `update()` : le verrou doit tomber au TICK
+   *  de la coupe, pas à la frame qui peint. Sinon l'instant de départ de la
+   *  chute dépend de la cadence d'affichage (une frame lente avale deux ou
+   *  trois pas de simulation avant de rendre), et la MÊME démonstration rejouée
+   *  deux fois ne donne pas la même image au même pas — mesuré sur les
+   *  vignettes du menu (§8.8) : `tree` était le seul des huit à échouer, aux
+   *  0,75 s de chute près. */
+  detectFalls(s: TreeState, time: number): void {
     // Le panier destinataire est celui qui vient de GROSSIR — les deux tests,
     // pas seulement le premier : une coupe sans pomme ne fait grossir aucun
     // panier, et « sinon c'est 1 » faisait alors rebondir le panier de l'AUTRE

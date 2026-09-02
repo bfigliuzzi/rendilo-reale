@@ -228,7 +228,11 @@ export class BeastView {
     const roleGlyph = (seat: 0 | 1): string => (seat === s.beastSeat ? '🐾' : '🔦');
     // ⭐ collée au SIÈGE, pas au rôle : elle ne bouge pas quand les rôles
     // s'échangent, donc l'enfant aidé voit son étoile toute la manche.
-    const starGlyph = (seat: 0 | 1): string => (this.model.stars[seat] === 2 ? ' ⭐' : '');
+    // CONVENTION ⭐ (core/minigame.ts) : ⭐ = le joueur AIDÉ, donc `stars === 1`.
+    // Le pictogramme portait l'étoile sur `=== 2` : il DÉSIGNAIT le mauvais
+    // enfant, exactement comme le modèle qui lui donnait l'aide.
+    const starGlyph = (seat: 0 | 1): string =>
+      this.model.stars[0] !== this.model.stars[1] && this.model.stars[seat] === 1 ? ' ⭐' : '';
     const t0 = `● siège 1 ${roleGlyph(0)}${starGlyph(0)}`;
     const t1 = `■ siège 2 ${roleGlyph(1)}${starGlyph(1)}`;
     if (this.seatLabels[0].text !== t0) this.seatLabels[0].text = t0;

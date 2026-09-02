@@ -197,15 +197,12 @@ class SuspectsGame implements MiniGame {
     return `${verb} : ${this.suspectDescription(id)}${hint}`;
   }
 
-  /** `#sr-board` (via le shell — `ctx` n'expose pas ce résumé, cf. digest
-   *  §8.2). RÈGLE DE SECRET reprise de la vue : jamais un mot sur QUI est le
-   *  coupable pendant `'guess'` — seul le nombre de questions posées compte. */
+  /** `#sr-board` (`ctx.onBoard`). RÈGLE DE SECRET reprise de la vue : jamais
+   *  un mot sur QUI est le coupable pendant `'guess'` — seul le nombre de questions posées compte. */
   private updateBoard(s: SuspectsState): void {
     // Rejoué en vignette de menu, le modèle n'est PAS le plateau que le joueur
     // a sous les yeux : écrire le résumé écraserait celui de l'écran courant.
     if (this.demoMode) return;
-    const g = (window as unknown as { __game?: { game?: { setBoardText?: (t: string) => void } } }).__game?.game;
-    if (!g?.setBoardText) return;
     // La CAUSE d'abord : tant que la dernière manche est à l'écran (fenêtre de
     // révélation, ou partie finie pendant le délai du shell), c'est ELLE que
     // décrit le résumé — un « manche terminée » sec n'expliquerait rien au
@@ -219,11 +216,11 @@ class SuspectsGame implements MiniGame {
           ? `Raté. Coupable resté caché : point pour le siège ${r.picker + 1}.`
           : 'Raté, personne ne marque.';
       const tail = s.over ? ` Partie terminée, ${this.model.result.reason}.` : '';
-      g.setBoardText(`${point} ${who} Score ${s.scores[0]} à ${s.scores[1]}.${tail}`);
+      this.ctx.onBoard(`${point} ${who} Score ${s.scores[0]} à ${s.scores[1]}.${tail}`);
       return;
     }
     if (s.over) {
-      g.setBoardText(`Partie terminée : ${this.model.result.reason}.`);
+      this.ctx.onBoard(`Partie terminée : ${this.model.result.reason}.`);
       return;
     }
     const decisive = s.decisive ? ' Manche de départage : si le coupable n’est pas trouvé, le point va à celui qui l’a caché.' : '';
@@ -232,7 +229,7 @@ class SuspectsGame implements MiniGame {
       s.phase === 'pick'
         ? `${head} Siège ${s.picker + 1} choisit un coupable en secret.`
         : `${head} Siège ${s.guesser + 1} enquête : ${s.asked.length} question(s) posée(s) sur 3, peut accuser à tout moment.`;
-    g.setBoardText(text);
+    this.ctx.onBoard(text);
   }
 
   /** Reflet du pattern `restoreFocus` du brief accessibilité : ne rendre le

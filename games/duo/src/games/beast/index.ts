@@ -153,15 +153,12 @@ class BeastGame implements MiniGame {
     if (!this.validateBtn.disabled && !this.validateBtn.hidden) this.validateBtn.focus();
   }
 
-  /** `#sr-board` (via le shell — `ctx` n'expose pas ce résumé, cf. digest
-   *  §8.2). RÈGLE DE SECRET reprise de la vue : la position de la bête n'est
-   *  décrite QUE pendant son propre tour — l'annoncer pendant celui du
+  /** `#sr-board` (`ctx.onBoard`). RÈGLE DE SECRET reprise de la vue : la
+   *  position de la bête n'est décrite QUE pendant son propre tour — l'annoncer pendant celui du
    *  chasseur trahirait la cachette au lecteur d'écran. */
   private updateBoard(s: BeastState): void {
-    const g = (window as unknown as { __game?: { game?: { setBoardText?: (t: string) => void } } }).__game?.game;
-    if (!g?.setBoardText) return;
     if (s.over) {
-      g.setBoardText('Manche terminée.');
+      this.ctx.onBoard('Manche terminée.');
       return;
     }
     // SECRET : entre deux tours (passage du téléphone) et en pause, celui qui
@@ -170,7 +167,7 @@ class BeastGame implements MiniGame {
     // lequel le plateau muet peut trahir. On n'écrit la vraie ligne qu'au
     // dépliage (`setPaused(false)`), qui rappelle `refresh`.
     if (this.handOff || this.paused) {
-      g.setBoardText('En attente : passe le téléphone à l\'autre joueur.');
+      this.ctx.onBoard('En attente : passe le téléphone à l\'autre joueur.');
       return;
     }
     const progress = `Tour ${s.turnsUsed} sur ${s.turnLimit}.`;
@@ -181,7 +178,7 @@ class BeastGame implements MiniGame {
             return `À toi, siège ${s.active + 1}, tu es la bête, rangée ${r + 1} colonne ${c + 1}. Objectif : rangée 1. ${progress}`;
           })()
         : `À toi, siège ${s.active + 1}, tu es le chasseur. ${s.selected.length} sur ${s.lightsCount} cases armées. ${s.revealed.length} cases en mémoire. ${progress}`;
-    g.setBoardText(text);
+    this.ctx.onBoard(text);
   }
 
   private focusFirstLegal(): void {

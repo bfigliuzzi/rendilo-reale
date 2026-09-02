@@ -13,6 +13,28 @@ import type { Container } from 'pixi.js';
  *   les deux et expose le `MiniGameDef`.
  */
 
+/**
+ * ═══════════ CONVENTION ⭐ DE LA COLLECTION — NE PAS LA RE-INVERSER ═══════════
+ * `stars[siège]` vaut 1 ou 2, et la POLARITÉ n'est pas devinable : c'est
+ * `stars === 1` qui désigne le joueur AIDÉ.
+ *
+ * Elle est fixée par le libellé de l'accueil (`ui/screens.ts`) : ⭐ se lit
+ * « un coup de plus » (le petit, qu'on aide) et ⭐⭐ « sans coup de plus » (le
+ * grand, à qui l'on ne donne rien). Le réglage décrit donc le NIVEAU du joueur
+ * à l'envers de l'intuition « plus d'étoiles = plus fort » — d'où cette note.
+ *
+ * Le patron canonique, à recopier tel quel dans un neuvième jeu :
+ *     helped = stars[0] !== stars[1] ? (stars[0] === 1 ? 0 : 1) : null;
+ * (`null` = les deux au même niveau, donc AUCUN handicap : un handicap donné
+ * aux deux n'en est plus un.)
+ *
+ * Deux jeux sur huit avaient lu `stars === 2` comme l'aidé : l'aide partait au
+ * mauvais enfant, ce qui est exactement la panne que décrit le §1.3 — « le
+ * grand crie à la triche, le petit ne comprend pas sa victoire ». Corrigé, et
+ * écrit ici parce que c'est le seul fichier que les huit jeux lisent tous.
+ * ═════════════════════════════════════════════════════════════════════════════
+ */
+
 /** §1.4 — deux ergonomies, jamais mélangées. */
 export type Posture = 'pass' | 'side';
 export type Mode = 'coop' | 'duel' | 'asym';
@@ -44,6 +66,19 @@ export interface MiniGameCtx {
   onTurn(player: 0 | 1): void;
   /** Ligne de région live (#sr-log). */
   onAnnounce(text: string): void;
+  /**
+   * Le PLATEAU EN TEXTE (#sr-board) — ce qui rend une manche jouable sans voir
+   * l'écran (§5). Comme `onAnnounce`, le shell n'écrit que sur changement
+   * RÉEL : appeler à chaque frame ne fera pas répéter la phrase au lecteur
+   * d'écran.
+   *
+   * Avant cette entrée, les jeux au tour par tour atteignaient le shell par
+   * `window.__game.game.setBoardText` en accès défensif — une dépendance
+   * implicite d'un micro-jeu vers le shell, que le §2.3 lui interdit
+   * justement. Un jeu TEMPS RÉEL peut légitimement ne jamais l'appeler : une
+   * bille qui roule ne se décrit pas en une phrase par frame.
+   */
+  onBoard(text: string): void;
   /** Fin de manche. */
   onOver(result: Result): void;
   /**
@@ -54,6 +89,20 @@ export interface MiniGameCtx {
    * secousses à 0, cadences ralenties ; l'INFORMATION n'est jamais amputée.
    */
   reducedMotion: boolean;
+  /**
+   * Hauteur, EN PIXELS LOGIQUES du repère courant, que le bandeau de table du
+   * shell recouvre encore en haut du plateau. C'est un CALCUL, pas une
+   * constante : le bandeau vit en espace écran (68 px CSS au plus) tandis que
+   * le plateau est letterboxé, donc la conversion dépend du scale — mesurée
+   * entre 0 et 114 px logiques selon la fenêtre et la posture.
+   *
+   * Depuis que `Shell` RÉSERVE la bande du bandeau hors du letterbox, elle vaut
+   * 0 dans tous les cas mesurés ; elle reste exposée (et calculée) pour qu'un
+   * micro-jeu qui tient à border son bord haut le fasse sur la valeur RÉELLE
+   * plutôt que sur une constante empirique — cinq jeux en avaient chacun
+   * inventé une, toutes différentes et toutes fausses dans au moins un format.
+   */
+  safeTop(): number;
 }
 
 export interface Result {

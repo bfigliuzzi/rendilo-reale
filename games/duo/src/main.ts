@@ -3,6 +3,7 @@ import { startLoop } from '@shared/loop';
 import { assertBalanceSane } from './config/balance';
 import { GAMES, MODELS, gameById } from './config/games';
 import { MASCOTS } from './config/mascots';
+import { DEMO_SEEDS } from './core/demo';
 import { Flow } from './core/flow';
 import { PROBE_DEF } from './core/probe';
 import { Shell } from './core/shell';
@@ -67,6 +68,13 @@ async function boot(): Promise<void> {
     contrastRatio,
     games: GAMES,
     gameById,
+    // §8.8 — le bot lit l'état des huit vignettes animées : `blitLoop[i]` et
+    // `blitTick[i]` disent EXACTEMENT à quel tour de boucle et à quel pas de
+    // simulation correspond l'image actuellement affichée dans le `<canvas>`
+    // de la vignette i. C'est ce qui lui permet de prouver que deux boucles
+    // consécutives sont identiques : même tick ⇒ mêmes pixels.
+    demoBoard: shell.menuBoard,
+    demoSeeds: DEMO_SEEDS,
     probe: PROBE_DEF,
   };
 

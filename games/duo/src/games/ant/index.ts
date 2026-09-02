@@ -70,6 +70,19 @@ class AntGame implements MiniGame {
 
   private readonly dropBtn: HTMLButtonElement;
   private readonly stick: readonly [HTMLDivElement, HTMLDivElement];
+  /**
+   * ANCRE DE REPLI DU FOCUS (pattern de `tree`/`suspects` et du bandeau).
+   * `tabIndex = -1` : jamais atteinte en tabulant, seulement par `.focus()`.
+   *
+   * Elle existe parce que le bouton du géant est le SEUL focalisable de ce
+   * jeu (les deux joysticks sont des zones de pointeur), et qu'il passe
+   * `disabled` à chaque recharge — 1,2 s, et bien plus longtemps quand les
+   * blocs sont tous posés. Le navigateur jette alors le focus sur `<body>` :
+   * mesuré au bot, 217 échantillons sur une manche entière, soit un tiers du
+   * temps SANS aucun focus dans la page. On l'y gare donc, avec la RAISON en
+   * toutes lettres, et on le rend au bouton dès qu'il redevient actif.
+   */
+  private readonly anchor: HTMLDivElement;
 
   private readonly p0Keys: Keys = { up: false, down: false, left: false, right: false };
   private readonly p1Keys: Keys = { up: false, down: false, left: false, right: false };
@@ -91,7 +104,7 @@ class AntGame implements MiniGame {
 
   constructor(private readonly ctx: MiniGameCtx) {
     this.model = new AntModel(ctx.seed, ctx.stars);
-    this.view = new AntView(ctx.stage, this.model, ctx.reducedMotion);
+    this.view = new AntView(ctx.stage, this.model, ctx.reducedMotion, ctx.safeTop);
 
     // Bouton du géant : PLEIN CADRE, il lit la position du clic (§3.6). La
     // classe `.cell` donne gratuitement le liseré « ceci est actionnable »
@@ -105,6 +118,14 @@ class AntGame implements MiniGame {
     this.dropBtn.style.cssText = `left:0px;top:0px;width:${ANT_ARENA_W}px;height:${ANT_ARENA_H}px;border-radius:22px;`;
     this.dropBtn.addEventListener('click', this.onDropClick);
     ctx.overlay.appendChild(this.dropBtn);
+
+    this.anchor = document.createElement('div');
+    this.anchor.className = 'sr-only';
+    this.anchor.tabIndex = -1;
+    // `hidden` tant qu'on ne s'en sert pas : un élément déplié en permanence
+    // serait lu par le lecteur d'écran alors qu'il ne dit rien.
+    this.anchor.hidden = true;
+    ctx.overlay.appendChild(this.anchor);
 
     const stick0 = this.makeStick(STICK_MARGIN, STICK_Y, 'Fourmi — joystick, joueur 1');
     const stick1 = this.makeStick(SIDE_W - STICK_MARGIN - STICK_SIZE, STICK_Y, 'Fourmi — joystick, joueur 2');
@@ -361,7 +382,10 @@ class AntGame implements MiniGame {
     // chaque recharge et ne le retrouvait plus. On le rend au bouton dès qu'il
     // redevient actif, et SEULEMENT s'il était à nous ET s'il est retombé sur
     // `<body>` — voler le focus d'un joueur parti sur ⏸ serait pire.
-    if (document.activeElement === this.dropBtn) this.focusWasOurs = true;
+    // L'état du focus se CAPTURE avant toute mutation de `disabled` (§5) :
+    // après, l'information est déjà perdue.
+    const active = document.activeElement;
+    if (active === this.dropBtn || active === this.anchor) this.focusWasOurs = true;
     this.lastCanDrop = can;
     this.dropBtn.disabled = !can;
     this.dropBtn.setAttribute(
@@ -369,8 +393,21 @@ class AntGame implements MiniGame {
       can ? 'géant — toucher pour faire tomber un bloc' : 'géant — pas de bloc disponible pour l’instant',
     );
     if (can) {
-      if (this.focusWasOurs && document.activeElement === document.body) this.dropBtn.focus();
+      const wasAnchor = document.activeElement === this.anchor;
+      this.anchor.hidden = true;
+      // On ne rend le focus que s'il était à NOUS et qu'il est retombé : le
+      // voler à un joueur parti sur ⏸ serait pire que de le perdre.
+      if (this.focusWasOurs && (wasAnchor || document.activeElement === document.body)) this.dropBtn.focus();
       this.focusWasOurs = false;
+      return;
+    }
+    // Le bouton vient de se griser : le focus part sur `<body>` tout seul. On
+    // le GARE au lieu de le laisser tomber — c'est la seule différence entre
+    // « le géant attend sa recharge » et « le géant au clavier est perdu ».
+    if (this.focusWasOurs && (active === this.dropBtn || document.activeElement === document.body)) {
+      this.anchor.hidden = false;
+      this.anchor.textContent = 'géant — pas de bloc disponible, la recharge arrive';
+      this.anchor.focus({ preventScroll: true });
     }
   }
 
@@ -440,7 +477,13 @@ class AntGame implements MiniGame {
  */
 const DEMO: Demo = [
   { move: 'ant', args: [1, 0], hold: 0.6 },
-  { move: 'drop', args: [ANT_START_X + 260, ANT_MID_Y] },
+  // `hold: 0` EXPLICITE, et il est indispensable : le contrat de `core/demo.ts`
+  // donne la cadence lente (`DEMO_STEP_SEC`) à tout coup SANS `hold`, or un
+  // dépôt de bloc est instantané — laisser 0,9 s ici faisait courir la fourmi
+  // 171 px de plus, droit dans le bloc qu'elle venait de faire tomber, et la
+  // démonstration montrait exactement le contraire de ce qu'elle enseigne
+  // (constaté à la capture d'écran de l'écran de démonstration).
+  { move: 'drop', args: [ANT_START_X + 260, ANT_MID_Y], hold: 0 },
   { move: 'ant', args: [1, 1], hold: 0.5 },
   { move: 'ant', args: [1, 0], hold: 3.2 },
 ];
