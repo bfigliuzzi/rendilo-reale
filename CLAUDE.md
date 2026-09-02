@@ -1,7 +1,7 @@
 # Rendilo Reale — hub de jeux web
 
 Hub multi-jeux (Vite multi-page) : la racine `/` est un menu de sélection, chaque jeu vit
-dans `games/<id>/` avec son propre `index.html` + `src/`. Cinq jeux : **Horde**
+dans `games/<id>/` avec son propre `index.html` + `src/`. Six jeux : **Horde**
 (`/games/horde/`), horde-shooter vertical style Last War — escouade auto-tir en bas,
 hordes qui descendent, portes x2/+N, caisses HP, boss. Campagne + endless +
 métaprogression (or, boutique, localStorage). **Essaim** (`/games/hive/`), conquête
@@ -14,7 +14,11 @@ hub jouable au clavier, et le premier avec une caméra et du terrain bloquant. E
 **Trois Portes** (`/games/doors/`), roguelite tactique Porte/Monstre/Trésor : 9 nœuds à
 3 portes, combats au tour par tour sur deux lignes, escouade à cap dur de 4,
 méta-progression par éclats (voir section dédiée) ; c'est le second jeu au tour par tour
-après Cerveau, et il en reprend l'architecture d'accessibilité.
+après Cerveau, et il en reprend l'architecture d'accessibilité. Et **Duo**
+(`/games/duo/`), une COLLECTION de 8 micro-jeux à deux joueurs sur un seul téléphone,
+pour deux enfants de 5 et 8 ans qui attendent au restaurant (voir section dédiée) ; c'est
+la seule entrée du hub qui contient plusieurs jeux, le seul jeu muet par défaut, et le
+premier à porter DEUX repères logiques (portrait et paysage) dans la même page.
 PixiJS v8 + TypeScript strict + Vite. Aucune autre dépendance runtime.
 
 ## Hub & multi-jeux
@@ -908,6 +912,474 @@ Contrôle même machine : hub = 5 jeux listés, `verify-crib grip` 7/7.
 L'allié temporaire hors cap DURABLE est écarté explicitement : il contredit frontalement
 le cap dur, qui est le meilleur générateur de décisions du jeu.
 
+## Duo (`games/duo/`) — huit micro-jeux à deux enfants sur un seul téléphone
+
+**Une collection, pas un jeu** (~15 000 lignes, `docs/prompt-duo.md` = la spec
+contraignante). Le public est une paire d'enfants de **5 et 8 ans** qui attend au
+restaurant, et c'est lui qui tranche TOUS les arbitrages : une manche dure 45 à 90 s,
+la règle s'apprend par une boucle animée **sans un mot**, « encore » est à un tap, le
+son est **muet par défaut** (seul jeu du hub dans ce cas) et ⏸ fige tout à l'instant —
+le plat qui arrive au milieu d'une manche est le cas NOMINAL, pas l'exception.
+`games/duo/` est **UNE** entrée du hub et pas huit : huit entrées auraient fait exploser
+le menu du hub ET repayé un boot Pixi par micro-jeu. La grille de sélection est un
+sous-menu interne ; `hub/games.ts` et `vite.config.ts` ne portent qu'une ligne `duo`.
+
+**Deux postures, jamais mélangées** (`MiniGameDef.posture`) : `pass` = téléphone en
+main, portrait **540×960**, on se le passe entre deux tours derrière un plein écran
+« passe le téléphone à 🐰 » (`cake`, `tree`, `tiles`, `beast`, `suspects`) ; `side` =
+téléphone posé à plat, paysage **960×540**, les deux enfants assis **côte à côte, même
+orientation**, un tiers d'écran chacun (`plank`, `mirror`, `ant`). Le côte-à-côte est
+une hypothèse ASSUMÉE et écrite dans le code — on n'essaie pas de rendre une vue lisible
+dans les deux sens. Corollaire non négociable : **la taille logique est un PARAMÈTRE du
+letterbox, jamais une constante** (`Shell.setLogical`, appelée à chaque changement de
+jeu) ; `#stage` et `#overlay` reçoivent EXACTEMENT la même transform, mesurée identique
+sur 4 fenêtres × 8 jeux en basculant `pass` ⇄ `side` à chaud.
+
+### Le contrat `MiniGame` — la réponse au « switch géant »
+
+Un seul contrat pour les huit (`core/minigame.ts`) : `def` (id, titre, emoji, posture,
+mode, `logical`, `demo`) + `create(ctx)` → `{ update(dt), render(alpha), setPaused,
+destroy }`. Le shell possède la boucle 60 Hz (`@shared/loop`), le letterbox, la pause,
+l'écran de passage, l'écran de résultat, le menu et la save ; un micro-jeu ne reçoit que
+`seed`, `stars`, `reducedMotion`, `safeTop()` et quatre rappels (`onTurn`, `onAnnounce`,
+`onOver`, `onBoard`). **Aucun micro-jeu ne touche au `localStorage`.**
+
+**`model.ts` est PUR** — ni horloge, ni `Math.random`, ni DOM, ni Pixi, ni import de
+`view.ts` ; `view.ts` ne mute JAMAIS le modèle ; `index.ts` câble les deux. C'est cette
+séparation, et rien d'autre, qui rend le bot capable de rejouer un jeu entier **hors de
+la page** (`window.__game.models` expose les huit constructeurs) — même dividende que
+`combat.ts` dans Trois Portes : le scénario `rules` monte 1844 assertions sans ouvrir
+une seule manche. Ne pas la casser. Les cinq jeux au tour par tour n'avancent dans
+`update` qu'une **horloge de rendu** — aucun état de simulation — et animent par des
+**fonctions closes du temps écoulé** (pattern de `mind/render/boardView.ts`) : c'est ce
+qui fait qu'une animation se fige toute seule dès que le shell cesse d'appeler `update`
+(pause, écran de passage) au lieu de se jouer derrière un écran caché.
+
+### Les quatre contraintes du §1, et où le CODE les fait respecter
+
+- **① La règle est un geste** : chaque jeu exporte une liste de coups canoniques
+  (`def.demo`) rejouée **à travers le modèle réel** par `core/demo.ts` (voir plus bas).
+  Il n'existe AUCUN écran de règles écrites dans toute la collection.
+- **② Le coup illégal est physiquement impossible** : la garde vit dans le MODÈLE
+  (`canPlace`, `canCut`, `canNudge`, `canMove`, `canToggleLight`, `canValidate`,
+  `canPick`, `canAsk`, `canAccuse`, `tryDropBlock`), le DOM ne fait que la refléter en
+  `disabled`/`hidden`. Vérifié en forçant à l'état actif puis en cliquant TOUTES les
+  cibles mortes des cinq jeux `pass` : **zéro mutation de `model.state`**. Aucun jeu
+  n'affiche jamais « coup interdit » — les deux seules occurrences de « impossible »
+  dans les sources sont des `throw` de génération.
+- **③ Le but est un objet visible en permanence** : paniers de `cake` et de `tree`,
+  piles de dominos de `tiles`, bandeau de sortie à chevrons de `beast`, portraits +
+  compteurs 🔍 de `suspects`, disque vert + fanion de `plank`, rangée des six arches de
+  `mirror`, quatre fleurs sur la ligne d'arrivée de `ant`. **QUATRE de ces objets ont dû
+  être ajoutés après coup** (les paniers de `cake`, la rangée d'arches de `mirror`, le
+  bandeau de sortie de `beast`, les compteurs de `suspects`) : c'est le critère qu'on
+  croit tenu parce que la RÈGLE interne est claire, alors que l'écran ne montre rien qui
+  se remplisse.
+- **④ La défaite a une cause à l'écran** : `Result.reason` a DES BRANCHES, jamais une
+  formule unique — « 6 parcours sur 6 : tout est fini ! » ≠ « 4 parcours sur 6 : le
+  temps est écoulé », « 8 tuiles posées contre 5 » ≠ « 8 tuiles chacun : la dernière
+  posée l'emporte ». Le shell fige exprès le plateau `RESULT_DELAY_SEC` (1,1 s) AVANT
+  d'ouvrir le panneau, pour que la cause se voie en image.
+- **Corollaires ergonomiques** : toute cible tactile fait **≥ 60 px** logiques (mesuré
+  dans la page sur les huit jeux, l'accueil, le menu et la pause : 0 cible en dessous)
+  et **aucun jeu ne demande un tracé de précision**.
+
+### L'écart d'âge est le sujet : ⭐, et « le perdant choisit »
+
+- **Le handicap est un OBJET, jamais un multiplicateur caché** (§1.3) : deux dominos
+  déjà posés et marqués, un jeton ✂ à côté du panier, une lampe de plus sous le
+  plateau, une fourmi plus rapide annoncée par un ⭐ collé à elle, des trous rétrécis
+  avec un ⭐ posé contre le plateau. Sept jeux sur huit en portent un.
+- **PIÈGE VÉCU, LE PLUS GRAVE DE LA COLLECTION — la polarité ⭐ était INVERSÉE dans six
+  jeux sur huit** : l'accueil libelle ⭐ « un coup de plus » (le petit, qu'on aide) et
+  ⭐⭐ « sans coup de plus », mais `cake`, `plank`, `tree` et `tiles` (attrapés à l'audit
+  jeu par jeu), puis `ant` et `beast` (à l'harmonisation), lisaient `stars === 2` comme
+  l'aidé. **L'aide partait au mauvais enfant** — exactement la panne que le §1.3 décrit
+  (« le grand crie à la triche, le petit ne comprend pas sa victoire »), et elle est
+  invisible à l'œil : mesurée au fuzz sur `cake`, le siège ⭐ obtenait 40,5 % de son
+  fruit préféré au lieu de 59,3 %. Le patron canonique est désormais écrit **dans
+  `core/minigame.ts`**, le seul fichier que les huit lisent :
+  `helped = stars[0] !== stars[1] ? (stars[0] === 1 ? 0 : 1) : null` — `null` parce
+  qu'**un handicap donné aux DEUX n'en est plus un**.
+- **Le perdant choisit le jeu suivant** (seule règle de méta, obligatoire) : le menu
+  s'ouvre avec sa mascotte agrandie, un halo de SA teinte sur la grille et une ligne
+  `aria-live`. Une manche coopérative laisse le choisisseur inchangé.
+- **Aucun palmarès persistant.** Le score de table (`3 – 1`) vit en mémoire et meurt
+  avec l'onglet ; le save ne contient **aucun** compteur de victoires, aucun record,
+  aucun succès. `meta/save.ts` est l'endroit où cette décision de design se fait
+  respecter — même discipline que l'absence d'économie dans le save de Berceau. Clé
+  `rendilo-reale:duo:save:v1`, version DANS le JSON, fusion champ par champ avec garde
+  de type, `resetSave` qui mute en place.
+
+### Le shell — les quatre pannes qu'il a coûtées
+
+`core/shell.ts` (letterbox, calques, régions live, montage d'un micro-jeu),
+`core/flow.ts` (`home | menu | game | pass | result | pause`), `ui/{hud,screens,pass}.ts`.
+
+- **LE BANDEAU DE TABLE RECOUVRAIT LE HAUT DU REPÈRE LOGIQUE.** Il vit en espace ÉCRAN
+  (§4.1.3 : ⏸ ne doit pas valser d'un jeu `pass` à un jeu `side`) alors que le plateau
+  est letterboxé et centré sur la fenêtre entière : les deux se recouvraient d'une
+  hauteur qui n'est même pas constante — **mesuré de 0 à 114 px LOGIQUES** selon la
+  fenêtre et la posture. Cinq des huit jeux avaient contourné le trou chacun de son
+  côté, avec cinq constantes empiriques différentes (dont un `SHELL_BAR_H = 96` dans
+  `ant` faux dans les DEUX sens), et le sixième format de fenêtre les prenait toutes en
+  défaut. Correction de fond : le bandeau est **réservé hors du letterbox** (le plateau
+  se centre dans la bande libre), et `ctx.safeTop()` publie le recouvrement RÉSIDUEL
+  **recalculé, jamais affirmé** — il retombe à 0 pour les huit jeux dans les deux
+  postures. Un micro-jeu qui borde son bord haut lit CE nombre, jamais une constante.
+- **LE FOCUS RETOMBAIT SUR `<body>` PENDANT LE DÉLAI DE RÉSULTAT, SUR LES HUIT JEUX.**
+  `onOver` masque `#overlay` — donc l'élément focalisé disparaît — et le panneau n'ouvre
+  qu'1,1 s plus tard : entre les deux, plus rien à focaliser. Correctif : **le focus
+  d'abord, le masquage ensuite**, sur une ancre VIVANTE et nommée du bandeau qui annonce
+  au passage la cause de la fin de manche.
+- **L'ÉCRAN DE PASSAGE SURVIVAIT À TOUT CHANGEMENT D'ÉCRAN.** `#pass` n'était fermé que
+  par le tap de son propre bouton : « encore », « un autre jeu », « quitter » ou une fin
+  de manche déclenchée depuis le passage laissaient un plein écran OPAQUE par-dessus le
+  reste. Vu à la capture d'écran, pas au raisonnement — les huit jeux s'affichaient
+  derrière une grenouille géante, **sans une erreur console**. `Flow.enter()` est
+  désormais LE point unique qui re-décide les cinq plans d'un bloc (plateau, bandeau,
+  boutons du jeu, écran de passage, vignettes du menu) : toute nouvelle transition doit
+  y passer.
+- **LE SERVICE WORKER DU HUB SERT LA PAGE DU HUB SUR UNE URL À QUERY.** Il est configuré
+  avec `navigateFallback: '/index.html'` : dès qu'il est installé, une navigation vers
+  `/games/duo/?quelquechose` — URL absente du précache À CAUSE de la query — rend le
+  HUB, sans une erreur console. Mesuré sur l'échafaudage du §8.2, qui s'ouvrait par une
+  query et ne montrait plus que le menu du hub dès la deuxième visite ; il a fini en
+  hash, un hash ne partant jamais dans la requête réseau. À garder en tête pour tout
+  outil : **un scénario qui change d'URL doit utiliser un hash ou repartir d'un contexte
+  neuf**, et un changement de hash SEUL ne recharge pas le document (il faut un
+  `reload()`).
+
+Le plein écran de passage **masque** le plateau (`visibility:hidden`), il ne le voile
+pas : un voile semi-transparent laisse deviner le coup de l'autre. Pendant son
+affichage, il reste **exactement un élément focalisable** dans la page — mesuré.
+
+### La démonstration EST un rejeu du modèle réel (§2.4)
+
+`core/demo.ts` rejoue `def.demo` **à travers le modèle réel**, à cadence lente, en
+boucle. Écrire une animation de démonstration séparée est interdit : elle divergerait de
+la règle au premier ajustement, et c'est exactement le tutoriel qui doit rester vrai. Le
+rejoueur a **huit règles écrites en tête de fichier** parce que les huit jeux ont dû les
+DEVINER avant qu'il n'existe — la première porte tout : **le rejoueur recrée le micro-jeu
+à chaque tour de boucle, au même seed, donc deux boucles consécutives sont IDENTIQUES à
+la frame près**. Les autres : un verbe inconnu est transmis tel quel (le rejoueur ne juge
+aucun verbe, sinon la règle vivrait à deux endroits) ; `hold` absent ⇒ cadence lente,
+`hold` présent ⇒ exactement cette durée, zéro compris ; `update` n'est jamais appelé
+avant le premier coup ; les rappels du contexte sont INERTES et `stars = [2, 2]` (une
+vignette n'ouvre pas d'écran de passage et n'enseigne pas le réglage de la table) ;
+l'overlay est détaché du document ; les écouteurs `window` du micro-jeu sont neutralisés
+pendant `create()` — sans quoi une vignette de `plank` volait les flèches au joueur qui
+navigue dans le menu au clavier (mesuré : `defaultPrevented === true` sur ↑↓←→ et ZQSD).
+
+- **PIÈGE VÉCU : les démos divergeaient à leur deuxième boucle.** Celle de `plank`
+  franchissait la sortie du parcours 1 en 1,08 s, donc le tour suivant repartait du
+  parcours 2, puis du 3 — la vignette cessait d'enseigner le geste. Celle de `beast` se
+  FIGEAIT avec un chasseur ⭐ (la validation exige le compte exact de cases, la liste
+  canonique n'en éclaire que 3) et ne montrait que des 🔥, donc ni le thermomètre ni ses
+  trois codages. Celle de `cake` appliquait trois crans en un pas et téléportait la
+  poignée de 90°. La règle ① est aujourd'hui **mesurée** par le scénario `stress`
+  (`lastLoopTicks` identique d'une boucle à la suivante), pas seulement affirmée.
+- **LES VIGNETTES ANIMÉES DU MENU : la dépense est la RASTÉRISATION, pas le rejeu.**
+  Les huit micro-jeux sont montés dans huit conteneurs d'UNE MÊME scène Pixi, sur une
+  planche de 3×3 cellules invisible sous le panneau de menu, puis chaque cellule est
+  recopiée par UN `drawImage` dans le petit `<canvas>` de sa vignette — surface à
+  surface, sans `extract`, sans `toDataURL`, sans allocation. Mesuré : accueil 44 fps,
+  menu à huit vignettes repeintes par frame **14 fps**, et les rendre invisibles rend
+  **36 fps d'un coup** — couper le rejeu des modèles ou la recopie ne rend ~1 fps ni
+  l'un ni l'autre. D'où `PAINT_PER_FRAME = 2` en tourniquet : le coût par frame est
+  BORNÉ et indépendant du nombre de vignettes, chacune se rafraîchit à ~8 Hz et le
+  MODÈLE, lui, continue d'avancer à 60 Hz — **on espace la peinture, jamais le temps.**
+  Un `IntersectionObserver` coupe tick, rendu et recopie d'une vignette hors champ.
+  Écartés : huit `Application` Pixi (le navigateur plafonne les contextes WebGL) et une
+  grille de menu dessinée en Pixi (elle refaisait tout le focus et le défilement).
+
+### Accessibilité — le contrat de Cerveau et Trois Portes, à huit jeux
+
+Canvas `aria-hidden`, interaction en **vrais `<button>`/`<input>` transparents** dans
+`#overlay`, qui subit la même transformation que `#stage`. `#overlay` est
+`pointer-events: none` et rend les événements à `button`, `input`, **`.pad` et
+`.stickzone`** (les zones continues des jeux `side`) — sur leurs CONTENEURS, pas
+seulement sur les boutons, leçon de Cerveau prise à l'endroit cette fois. `refresh()`
+synchrone à chaque changement d'état, focus qui saute sur la première cible légale,
+`restoreFocus` qui ne rend le focus **que s'il était à nous**.
+
+- **PIÈGE VÉCU, invisible à tout test au doigt : trois jeux `side` volaient le clavier
+  au shell.** `onKeyDown` écoute sur `window` et faisait `preventDefault()` sans
+  regarder où était le focus — focus sur ⏸ ou 🔊 + Espace/Entrée = le personnage sautait
+  ET l'activation native du bouton était AVALÉE, donc **la pause devenait
+  inatteignable au clavier**, ce qui casse le §1.2. Même famille : `mirror` annulait
+  l'activation native du bouton ⬆ qu'il croyait protéger d'un double déclenchement, donc
+  Espace sur ⬆ focalisé ne sautait pas du tout ; et son ⬆ n'écoutait que `click` (donc
+  le `pointerup`), alors que sa fenêtre de coyote fait 0,1 s — la latence ÉTAIT la
+  mécanique.
+- **Le bot du dépôt avance par `el.click()`, une synthèse JS qui traverse
+  `pointer-events: none` sans rien remarquer.** Contrôle fait au VRAI pointeur sur les
+  huit jeux : les 49 contrôles vivants renvoient bien eux-mêmes sous leur centre, et un
+  glissement réel sur le `.pad` de `plank` fait bouger la bille. À refaire après toute
+  retouche du CSS de `#overlay`.
+- **Contrastes calculés, jamais jugés à l'œil** : une quinzaine d'échecs WCAG 1.4.11
+  trouvés au calcul et INVISIBLES à l'inspection — l'anneau de zone interdite de `ant`
+  (2,31:1), la mémoire du chasseur de `beast` atténuée à alpha 0,4 (1,96:1), le sol de
+  `mirror` contre le vide (1,56:1, c'est-à-dire l'information centrale du jeu), les
+  cases bloquées de `tiles` (1,54:1), le liseré de la sortie de `plank` (1,48:1). Le
+  texte ne se pose JAMAIS sur une teinte de mascotte : la chouette plafonne à 3,93:1,
+  donc l'écran de passage met son libellé sur une plaque `bgDeep` et garde la teinte
+  comme grand aplat (objet graphique, seuil 3:1). **`plum` est le piège récurrent** :
+  2,49:1 sur `panel`, 3,23:1 sur `bg`, 3,78:1 sur `bgDeep` — trois usages, trois
+  traitements explicites, et le scénario `contrast` du bot ne teste PAS `panel`.
+- **Jamais la couleur seule** : joueur = teinte + forme de socle + mascotte ; thermomètre
+  de `beast` = teinte + pictogramme + nombre de barres ; fruits de `cake` = couleur +
+  forme ; paniers de `tree` = disque/losange, teinte, et cadre doré pour le tour actif.
+- **Mouvement réduit** lu UNE fois au boot, en **OU** avec l'option joueur (jamais en
+  ET ; la case est alors cochée ET verrouillée). Il ne doit JAMAIS amputer
+  l'information : `tree` escamotait branche et pommes en une frame, donc supprimait
+  « ce que tu coupes tombe et part dans TON panier » — la chute est conservée, seule la
+  durée change ; la cadence de démo est ÷2, **jamais 0**.
+
+### Les huit jeux — ce que chacun a coûté
+
+- **`plank`** (side, coop) — sous-pas de collision : la bille ne traverse aucun mur à
+  `PLANK_VMAX`. **PIÈGE : la géométrie de 3 des 6 parcours était fausse UNIQUEMENT avec
+  l'aide ⭐ activée** (sortie ×1,3 mordant un bloc ou débordant de la plaque, trous
+  rétrécis peints hors plateau) — la vérification précédente, faite sans ⭐, ne pouvait
+  pas les voir. Toute vérification géométrique doit se faire **dans les deux réglages**.
+  **PIÈGE : la bille OSCILLAIT pendant la pause et tout l'écran de résultat** —
+  `prevX/prevY` étaient posés au MILIEU d'`update`, après les gardes de sortie : dès que
+  le modèle cesse d'avancer, `prev` reste une frame en arrière alors que le shell
+  continue d'appeler `render(alpha)` avec un alpha qui varie. `prev` se pose AVANT toute
+  garde, plus un `freezePrev()` appelé par `setPaused(true)`. Idem pour toute entité
+  interpolée d'un futur jeu.
+- **`mirror`** (side, coop) — un personnage, deux commandes, `MIRROR_COYOTE` = 0,1 s :
+  c'est LE paramètre qui rend le jeu jouable à deux. Rien ne bornait `x` à la bande de
+  jeu : sur le dernier parcours le personnage sortait par la droite, passait SOUS le
+  bouton ⬆ (l'overlay DOM est au-dessus du canvas) et tombait hors champ.
+- **`cake`** (pass, duel) — le point silencieusement cassable du jeu est le comptage des
+  fruits par part (le `computeFeedback` de cette collection) : fuzzé contre une
+  réimplémentation indépendante. **PIÈGE : les pastilles de compte étaient posées à
+  gauche et à droite de l'ÉCRAN**, alors que les parts sont à gauche et à droite de la
+  CORDE — dès que la corde penchait, l'enfant lisait le compte de l'autre part. Chaque
+  pastille est désormais au barycentre exact de sa part.
+- **`tree`** (pass, duel) — Hackenbush aux pommes, total de pommes IMPAIR donc jamais
+  d'égalité. **PIÈGE : la chute, « l'événement le plus important du jeu », n'était
+  JAMAIS vue** — `ctx.onTurn` était appelé à la frame même de la coupe, donc le plein
+  écran de passage recouvrait le plateau avant le premier pixel de chute. **PIÈGE :
+  deux boutons de branche tombaient au même point dès que deux branches se croisent**
+  (134 paires à moins de 2 px sur 300 tirages) : jouable au clavier, impossible au
+  doigt. Les paniers ont été descendus au sol — ils étaient en haut, et les pommes
+  REMONTAIENT l'écran.
+- **`tiles`** (pass, duel) — Domineering 6×6. **PIÈGE PIXI v8 : `sprite.width/height` ne
+  fait qu'ÉCRIRE `scale`**, donc le `scale.set(p)` du pop d'apparition écrasait le
+  format 1×2 et chaque domino retombait sur UNE case — la forme debout/couché, seul
+  porteur de la règle, disparaissait de l'écran. **PIÈGE : le `tint` de Pixi MULTIPLIE**
+  — sur un sprite ocre, le bleu ciel sortait olive et le rose sortait rouge brique
+  (aucun lien de couleur avec la pile, et une pièce rouge dans un jeu pour 5 ans).
+- **`beast`** (pass, asym) — **PIÈGE : le secret fuyait par la région live.** `#sr-board`
+  était réécrit AVANT `ctx.onTurn`, donc `aria-live` lisait « tu es la bête, rangée R
+  colonne C » à celui qui tenait ENCORE le téléphone ; et au lancement, `startRound`
+  affiche le plateau sans écran de passage, donc une manche sur deux le chasseur voyait
+  la case de départ. Drapeau `handOff` : tant que le passage n'est pas consommé,
+  `#sr-board` n'écrit qu'une ligne neutre.
+- **`suspects`** (pass, asym) — génération rejetée tant que 3 questions ne suffisent pas
+  à isoler le coupable (recherche exhaustive, c'est bon marché). **PIÈGE : le match nul**
+  — la 5ᵉ manche de départage pouvait se solder par le même score (31 nuls sur 80
+  parties mesurées), et un nul face à un enfant de 5 ans est une manche perdue pour rien.
+  **PIÈGE : le focus atterrissait sur un coup DESTRUCTEUR** — après chaque question,
+  `restoreFocus` prenait le premier bouton actif de l'ordre du DOM, donc « accuser » :
+  une Entrée de trop et la manche était jouée.
+- **`ant`** (side, asym) — le petit court, le grand bloque. **PIÈGE : la garde
+  `ANT_BLOCK_MIN_DIST` ne couvrait pas la RÉAPPARITION** (fuzz de 400 tirages) : un
+  géant qui campe le départ écrasait la fourmi à chaque but, et « le géant gagne en
+  écrasant » n'est pas un jeu. **PIÈGE : la zone interdite DESSINÉE ne disait pas la
+  vérité** — un cercle de rayon 40 pour une garde qui est en réalité la somme de
+  Minkowski du carré du bloc et du disque de garde (68 px sur l'axe, ~80 en diagonale),
+  et le clamp des bornes de pose renvoyait en plus tout le hors-bornes dans la zone
+  refusée. Tout un anneau était **dessiné comme permis et refusé en silence** — l'exact
+  contraire du critère ②. Le dessin est maintenant le LIEU EXACT des centres refusés
+  (carré arrondi, prolongé jusqu'au bord sur tout axe qui touche une borne), balayé sur
+  6 072 points : 0 point dessiné comme permis n'est refusé.
+- **Le tableau 8 lignes × 4 colonnes exigé par le §9** (où chaque critère du test des
+  5 ans est réalisé dans le code) n'a jamais été écrit dans un message de commit :
+  **c'est cette section qui en tient lieu**, et les quatre puces du §1 ci-dessus en
+  portent les entrées.
+
+### Écarts assumés à la spec — à lire avant de « corriger » quoi que ce soit
+
+Un écart qu'on n'écrit pas est un piège pour le prochain.
+
+- **TROIS pictogrammes de mode au lieu des deux du §4.1.2** : 🤝 coop, ⚔️ duel,
+  🎭 asym. Ranger un jeu asymétrique sous « l'un contre l'autre » aurait menti sur ce que
+  font les deux joueurs. Le sens complet reste dans l'`aria-label` de la vignette.
+- **`beast` ne joue plus qu'UNE moitié** (`BEAST_HALVES = 1`) et la bête a **9 tours au
+  lieu de 12** — arbitrage §1.2 contre §3.7, les deux sections se contredisent et le
+  §1.2 est déclaré non négociable. Mesuré sur 60 manches : 77 gestes + 29 écrans de
+  passage, soit **≈160 s** au budget assumé du dépôt (1,1 s par tap, 2,5 s par passage —
+  le tap PLUS la remise du téléphone) ; à une moitié la médiane tombe à **77 s**, et
+  12 → 9 tours ramène la QUEUE de 126 à 109 s. Aucune règle du jeu ne bouge : les rôles
+  s'échangent d'une MANCHE à l'autre au lieu de le faire au milieu, et le score de table
+  porte la symétrie. **Conséquence à connaître** : le départage à deux moitiés reste
+  écrit et testé (`decide`) mais ses formules (« l'autre moitié : … », « le sort a
+  tranché ») sont **INATTEIGNABLES** tant que `BEAST_HALVES` vaut 1 — ne pas les citer
+  comme la réponse du jeu. Remettre 2 suffit à tout rallumer.
+- **`ant` : 40 + 40 + 10 s au lieu des 45 + 45 + 15 du §3.6.** C'est le seul jeu dont
+  l'horloge est DÉTERMINISTE — il ne peut pas rentrer dans la bande par la qualité du
+  jeu — et 45+45+15 fait 105 s, au-dessus du plafond. Pire cas désormais **90 s pile**,
+  nominal 80 s (`play:ant` mesuré 108,3 s d'horloge avant, 93,3 s après). Le garde-fou
+  de `assertBalanceSane` ne vérifiait que le NOMINAL sous un commentaire promettant le
+  contraire : il porte maintenant sur le pire cas, plus un plancher. **Un garde-fou qui
+  vérifie autre chose que ce qu'il annonce est pire qu'absent.**
+- **Cinq démos sur huit enseignent leur geste en plus de 3 s** (§1.1). Durée d'un tour
+  de boucle, pause de lecture de 1,2 s comprise — donc le geste seul vaut la boucle
+  moins 1,2 s ; elle est mesurée en pas de simulation et ne varie JAMAIS d'un tour à
+  l'autre, c'est l'assertion exacte de la règle ① : plank 2,9 s · mirror 3,0 ·
+  tree 3,9 · tiles 4,8 · ant 5,5 · suspects 5,7 · cake 6,6 · beast 7,5.
+  Pour les deux plus longues l'écart est un plancher **GÉOMÉTRIQUE** : la fourmi doit
+  traverser 784 px à 190 px/s pour ATTEINDRE la fleur (critère ③, 4,1 s incompressibles)
+  et le thermomètre de `beast` doit montrer 🔥 🌤 ❄ plus une validation, soit sept coups.
+  On préfère une boucle plus longue à une boucle qui ampute son enseignement.
+- **`mirror` n'a AUCUN handicap ⭐**, et c'est conforme : le §3.5 est la seule section du
+  §3 sans ligne « ⭐ ». `stars` est accepté au constructeur pour la parité de signature
+  de `window.__game.models` et ne pilote rien.
+- **Arborescence** : quatre fichiers de plus que le §2.2 — `core/shell.ts` et
+  `core/flow.ts` (garder `Shell` dans `main.ts` faisait importer son type par
+  `core/flow.ts` : cycle d'imports ; `main.ts` ne fait plus que booter),
+  `games/plank/courses.ts` et `games/mirror/courses.ts` (donnée pure de niveau).
+- **Le `localStorage` est réellement touché par `meta/save.ts`, pas par
+  `core/session.ts`** : deux appels (`getItem`/`setItem`) dans toute la collection,
+  `session.ts` en est le seul APPELANT. Le §9 dit « aucun `localStorage` hors
+  `core/session.ts` » mais le §2.2 impose par ailleurs un `meta/save.ts`, qui est le seul
+  à connaître le schéma et sa migration. Écart nommé dans les deux fichiers — les
+  commentaires disaient auparavant l'inverse l'un de l'autre, ET tous les deux à côté du
+  code, ce qui faisait conclure au grep que l'invariant était cassé.
+- **L'échafaudage du §8.2 a été SUPPRIMÉ, et c'est une décision de périmètre.** Un
+  neuvième micro-jeu bidon (« tape le bouton ») a bien existé en `core/probe.ts` pour
+  valider le contrat `MiniGame` de bout en bout — `onTurn`, `onAnnounce`, `onOver`,
+  `setPaused`, `destroy` — tant que les huit vrais jeux étaient des coquilles. Il est
+  hors du bundle : le §10 interdit un neuvième jeu, aucun scénario du bot ne s'en
+  servait, et les huit jeux exercent aujourd'hui chacun des cinq rappels. Le rebâtir
+  pour un futur neuvième micro-jeu coûte une soirée ; le garder coûtait une ligne
+  d'exception au §10 et une porte dérobée dans un jeu pour enfants.
+- **Du tuning de gameplay vit hors de `config/balance.ts`**, contre le §2.2 :
+  `ANT_TOP_MARGIN` / `BOTTOM_MARGIN` / `ANT_START_X` dans `games/ant/model.ts` (ils
+  fixent la distance à parcourir et la hauteur de bande jouable, donc l'équilibrage du
+  duel) et `LEVEL_SIZE_MIN` / `LEVEL_SIZE_SPAN` dans `games/tree/model.ts`. Les
+  `MAX_GEN_ATTEMPTS` sont des garde-fous, pas du tuning.
+- **`suspects` est le seul des huit à ne pas appliquer le patron ⭐ canonique** : il lit
+  `stars[guesser] === 1` sans la garde `stars[0] !== stars[1]`, donc deux joueurs réglés
+  ⭐/⭐ reçoivent TOUS DEUX le grisé automatique là où les autres n'accordent alors aucune
+  aide. Symétrique, donc pas injuste — mais ⭐ n'y veut pas dire tout à fait la même
+  chose qu'ailleurs.
+- **`cake` ne fait pas glisser « deux grosses poignées »** (§3.2) : la coupe se règle par
+  quatre boutons de cran plus « ✂ couper ». Désobéissance à la lettre, mais elle sert le
+  second corollaire ergonomique (aucun tracé de précision au doigt) et rend `canNudge`
+  exprimable en `disabled`. `tree` affiche UN jeton ✂ (= un coup de plus, donc deux
+  coupes au premier tour) là où le §3.3 écrit « deux jetons ✂✂ ».
+- **« Le perdant choisit » n'est pas littéral** : sa mascotte est agrandie, doublée d'un
+  liseré, d'un halo et d'une annonce, mais l'ORDRE des chips du bandeau ne change pas —
+  deux enfants assis ont chacun son côté du bandeau. Conforme au §4.1.3, écart au §1.3
+  littéral. De même, **aucun jeu n'utilise la teinte de la MASCOTTE pour identifier un
+  siège sur le plateau** (paire fixe `sky`/`berry`, `sky`/`plum` pour `tree`) : deux
+  mascottes quelconques n'ont aucun contraste garanti entre elles, mais le lien « le
+  lapin rose, c'est moi » ne se prolonge donc jamais sur le plateau.
+- **Le plancher de 45 s du §1.2 n'est pas tenu sur certains tirages** de `tiles`
+  (39-45 s), `suspects` (30-49 s) et `tree` (35-58 s). Assumé : c'est le PLAFOND qui
+  protège le restaurant, et la phrase suivante du §1.2 dit « aucun jeu n'a de partie
+  longue ». Allonger un micro-jeu contredirait la spec plus qu'il ne la servirait.
+- **`assertBalanceSane()` n'est appelé que sous `import.meta.env.DEV`**, or tous les
+  scénarios du bot tournent sur `vite preview` (un build de PRODUCTION) : **aucun
+  scénario n'exerce le garde-fou de tuning**. C'est par ce trou que l'assertion
+  mensongère de `ant` a survécu. À exercer à la main (esbuild + import node) après toute
+  retouche de `balance.ts`, ou à câbler dans un scénario.
+- **`ant/view.ts` re-enregistre cinq chemins Pixi par frame** (zone interdite, fourmi,
+  jauge, jetons, réticule) là où `plank` et `mirror` gardent une géométrie statique et ne
+  font que `position.set` — et le commentaire de `plank/view.ts` énonce la règle POUR LA
+  COLLECTION. Non résolu : `crib/render/overlayView.ts` fait exactement la même chose
+  dans un jeu livré, où l'invariant « zéro allocation dans le tick » se lit comme portant
+  sur la SIMULATION. À trancher : soit le commentaire de `plank` est trop absolu, soit
+  `ant` doit s'y plier.
+
+### Vérification
+
+`node tools/verify-duo.mjs <url> <scénario>` — `rules` · `gen[:n]` · `contrast` ·
+`physics` · `play:<jeu>[:seed]` · `keyboard[:jeu]` · `stress`.
+
+**Lancer les scénarios sur `npx vite preview`, JAMAIS sur `npm run dev`** : le HMR
+recharge la page dès qu'on touche une source et tue le contexte du bot en pleine manche
+(deux runs perdus comme ça pendant l'écriture des huit jeux en parallèle).
+
+- **`rules` est le test de non-régression des modèles** et se lance après toute retouche
+  d'un `model.ts` ou de `balance.ts` : montées **hors de toute partie** sur
+  `window.__game.models`, donc elles rejouent les jeux sans les afficher.
+- **`play` et `keyboard` jouent en cliquant les VRAIS boutons du DOM / au clavier seul**,
+  depuis l'accueil — aucune API de raccourci en node. Il n'existe donc pas de second
+  chemin non testé, et les deux pannes d'interface les plus coûteuses de la collection
+  (le focus perdu un tiers de la manche dans `ant`, une poignée de `cake` qui se grisait
+  SOUS le focus) n'étaient visibles par AUCUNE assertion de modèle. Règle de comptage :
+  **traverser `<body>` pendant une TABULATION est le comportement normal du navigateur**
+  — seul le focus mesuré APRÈS une validation est compté.
+- **`play:<jeu>:<seed>` rejoue une manche à l'identique** (le seed rend déterministe le
+  `Math.random` du bot avant le chargement de la page, puisque le seed d'une manche n'est
+  pas un bouton).
+- Le budget de temps de `keyboard` est **par jeu** (280 s pour `beast`, 150 s pour les
+  autres `pass`) : `beast` demande 138 à 183 validations contre 12 à 48 aux quatre
+  autres, et un budget commun le faisait échouer sur du code parfaitement sain. **Un
+  test qui échoue à moitié sur du code sain est pire qu'un test absent.**
+
+**Bande mesurée** (conteneur, rendu logiciel, `vite preview`, 2026-09 — les taux absolus
+dépendent de la machine, lire en **RELATIF**, 2 runs minimum ; les runs de relecture ont
+tourné avec trois Chromium concurrents sur la même machine, ce qui divise les fps par
+deux sans toucher aux compteurs déterministes) :
+
+| scénario | assertions | échecs |
+|---|---|---|
+| `rules` | 1844 | 0 |
+| `gen:200` | 5 agrégats sur 200 tirages | 0 |
+| `contrast` | 26 | 0 |
+| `physics` | 94 (90 avant les 4 assertions de frontière d'`ant`) | 0 |
+| `stress` | 6 (4 avant les 2 assertions d'identité de boucle) | 0 |
+| `keyboard` | 128 à 135 selon le tirage | 0 |
+
+0 erreur console partout. `keyboard` : **focus perdu après validation 0** sur les cinq
+jeux `pass`, saut sur la première cible légale **100 %** (cake 47-48 validations, tree
+12-14, tiles 12-13, beast 138-183, suspects 22).
+
+`play` : les huit jeux atteignent `result`, 0 échec — 17 assertions pour un jeu `pass`,
+15 pour un `side` (pas de `#sr-board` à suivre sur un temps réel). Durées d'horloge :
+les trois `side` durent la **durée réelle d'une manche** (plank 93-96 s, mirror 93-95 s,
+ant **93,3 s** après le retune, 108,3 s avant) ; les cinq `pass` vont de 9 à 15 s, sauf
+`beast` (12 à 38 s selon la machine et le tirage).
+
+**PIÈGE DE LECTURE DE LA BANDE** : `play:beast` pilote **au hasard uniforme** parmi les
+boutons vivants, donc la bête erre au lieu de monter et la manche explose à 164-179 s au
+budget humain. Ce n'est pas l'équilibrage du jeu, c'est le bot : avec une politique
+plausible (bête qui monte, chasseur qui éclaire puis valide) la médiane retombe à **67 s**
+sur 8 tirages × 3 réglages ⭐, toutes ≤ 90 s. Toute relecture de la bande de `beast` doit
+refaire cette distinction. Même prudence sur `stress` : la bande de référence donnait
+~27 fps (menu), ~27-28 (`plank` seul) et ~22-23 (combiné), mais re-mesurée trois fois sur
+machine chargée elle sort à 11-16 fps **et l'écart de ~5 fps entre les phases ne se
+reproduit pas** (deltas +2, −2, 0) — la conclusion « les huit démos coûtent ~5 fps » est
+dans le bruit, à ne pas reprendre telle quelle. Enfin, `gen` ne fuzze QUE les quatre
+générateurs au tour par tour à contenu tiré (`tree`, `tiles`, `cake`, `suspects`),
+conformément au §7 — pas les huit.
+
+**Contrôle même machine** : hub = 6 jeux listés ; `verify-crib grip` 7/7 ;
+`verify-doors rules` 0 échec ; `verify-mind contrast` 0 échec ; `npm run typecheck` et
+`npm run build` verts, 0 warning nouveau (+47 modules, +2 entrées de précache par rapport
+au dépôt sans Duo).
+
+`window.__game = { session, save, game /* Shell */, flow, hud, screens, pass, palette,
+mascots, models, contrastRatio, games, gameById, demoBoard, demoSeeds }` — `models` expose
+les huit modèles purs pour que le bot monte ses scénarios hors partie.
+
+### Hors périmètre (à ne pas ajouter sans re-cadrer)
+
+Multijoueur en ligne ou par lien · plus de deux joueurs · comptes, profils persistants,
+classements · succès, éclats, monnaie, déblocages, méta-progression d'aucune sorte ·
+un neuvième jeu · voix, micro, caméra, vibration, accéléromètre · musique de fond ·
+publicité ou lien sortant · toute IA adverse (les huit jeux se jouent à deux humains, il
+n'y a aucun mode solo) · toute mécanique demandant de lire une phrase pour jouer.
+Si l'une de ces choses semble nécessaire, c'est le signe qu'une contrainte du §1 a été
+mal comprise, pas qu'il manque une fonctionnalité.
+
 ## Déploiement
 
 - **Prod** : https://rendilo-reale.netlify.app — déploiement continu Netlify sur push
@@ -928,6 +1400,9 @@ node tools/verify-crib.mjs http://localhost:5199/games/crib/ grip               
 node tools/verify-crib.mjs http://localhost:5199/games/crib/ win:kitchen          # Berceau, carte 2
 node tools/verify-doors.mjs http://localhost:5199/games/doors/ rules            # Trois Portes
 node tools/verify-doors.mjs http://localhost:5199/games/doors/ win:12345 420    # Trois Portes, run complète
+node tools/verify-duo.mjs http://localhost:5199/games/duo/ rules                # Duo, les 8 modèles hors partie
+node tools/verify-duo.mjs http://localhost:5199/games/duo/ play:cake            # Duo, une manche aux vrais boutons
+node tools/verify-duo.mjs http://localhost:5199/games/duo/ keyboard:beast 300   # Duo, test RGAA d'un seul jeu
 ```
 
 Modes du script verify : `campaign[:N]` | `endless` | `stress`, + 5e argument JSON

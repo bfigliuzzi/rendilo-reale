@@ -45,4 +45,11 @@ export const GAMES: GameEntry[] = [
     path: '/games/crib/',
     emoji: '🍼',
   },
+  {
+    id: 'duo',
+    title: 'Duo',
+    tagline: 'Huit jeux à deux sur un seul téléphone.',
+    path: '/games/duo/',
+    emoji: '👫',
+  },
 ];

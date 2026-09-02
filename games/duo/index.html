@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Comme Cerveau et Trois Portes : on NE bloque PAS le zoom (`user-scalable=no`
+       est RETIRÉ, WCAG 1.4.4). Les trois jeux `side` ont bien un geste continu
+       (curseur, joystick), mais ils posent `touch-action: none` sur LEURS zones de
+       contrôle uniquement — jamais sur le body, jamais sur la page. Le canvas, lui,
+       le porte en permanence : il est purement décoratif. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Rendilo Reale — Duo</title>
+  <meta name="theme-color" content="#3b2a20" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" href="/pwa-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <style>
+    /* ───────── Charte CHAUDE ET DOUCE, public de 5 ans ─────────
+       Cacao, crème, or, et six teintes de mascottes. Copie locale des hex de
+       src/render/textures.ts (le dépôt duplique volontairement tant qu'un seul
+       jeu consomme la palette). Rien qui fasse peur : pas de rouge sang, pas de
+       noir pur — le contour est un brun (#2a1b14).
+       Contrastes calculés sur #3b2a20 : #fff3e2 12,5:1 · #e8cfb4 9,1:1 ·
+       #ffc95e 9,0:1 · #c79a7b 5,4:1 — et les 6 teintes de mascottes ≥ 3,2:1,
+       toutes séparées d'au moins 1,26:1 EN NIVEAUX DE GRIS. Vérifié au calcul
+       par le scénario `contrast` du bot, jamais à l'œil. */
+    :root {
+      /* Hauteur du bandeau de table — UNE seule source, lue par `#ui` (qui la
+         réserve) et imposée à `.hudbar` (qui la remplit). */
+      --hudbar-h: 72px;
+    }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #3b2a20;
+      overflow: hidden;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #fff3e2;
+    }
+
+    /* ───────── Letterbox À TAILLE LOGIQUE VARIABLE ─────────
+       540×960 en posture 'pass' (téléphone en main), 960×540 en posture 'side'
+       (téléphone posé à plat). Ni la largeur ni la hauteur ne sont écrites ici :
+       c'est `Shell.setLogical(w, h)` qui pose width/height ET la transform, sur
+       #stage COMME sur #overlay. Constanter 540/960 dans ce CSS rendrait
+       impossible le basculement portrait ↔ paysage entre deux micro-jeux. */
+    #stage { position: fixed; left: 50%; top: 50%; }
+    /* Le canvas est PUR DÉCOR (aria-hidden) : toute l'interaction est du DOM. */
+    #stage canvas { display: block; touch-action: none; }
+
+    /* ORDRE DE PEINTURE, et il porte du sens : #stage (le plateau) sous #ui
+       (les panneaux) sous #hud (le bandeau de table) sous #pass (le passage).
+       Le bandeau passe DEVANT les panneaux parce que le §4.1.3 l'exige sur le
+       menu — mascottes, score, 🔊, ⏸. Ce n'est pas une entorse à la règle
+       « masquer le HUD avant d'ouvrir un panneau » : celle-ci interdit de
+       laisser des boutons INVISIBLES focalisables derrière un panneau, et le
+       flow masque bien `#overlay` (les boutons du jeu) à chaque ouverture. */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+
+    /* Superposé au canvas et transformé EXACTEMENT comme lui (même letterbox),
+       il contient de vrais <button>/<input> aux coordonnées logiques du jeu
+       courant. Le canvas porte le visuel, le DOM porte l'interaction : on
+       récupère gratuitement l'ordre de tabulation, les noms accessibles,
+       Entrée/Espace, et un anneau de focus réellement visible AU-DESSUS du
+       canvas. */
+    #overlay { position: fixed; left: 50%; top: 50%; pointer-events: none; }
+    /* PIÈGE (leçon de Berceau, reprise à l'envers sur Cerveau) : rendre
+       pointer-events aux CONTENEURS porteurs de contrôles (.pad, .stickzone),
+       pas seulement aux boutons — sinon un glissement démarré entre deux
+       boutons passe au travers. Et ne pas oublier `input` : sans lui la
+       palette de Cerveau était injouable au doigt tout en restant parfaite au
+       clavier, panne qu'aucun test clavier ne voit. */
+    #overlay button, #overlay input, #overlay .pad, #overlay .stickzone { pointer-events: auto; }
+    #overlay[hidden] { display: none; }
+
+    /* ───────── Cibles tactiles ─────────
+       CRITÈRE §1.1 : toute cible fait ≥ 60 px DANS LE REPÈRE LOGIQUE. Les
+       classes ci-dessous posent ce plancher ; une cible plus petite est un bug,
+       pas un choix de mise en page. */
+    .cell, .pick {
+      position: absolute; margin: 0; padding: 0;
+      min-width: 60px; min-height: 60px;
+      background: none; border: 0; border-radius: 16px;
+      color: transparent; font: inherit; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* CRITÈRE §1.1.2 : le coup illégal est physiquement impossible — la case
+       inerte n'est pas seulement grisée, elle est `disabled` donc ni tappable
+       ni focusable. Le jeu n'affiche JAMAIS « coup interdit ». */
+    .cell:disabled, .pick:disabled { cursor: default; }
+    .cell:focus, .pick:focus { outline: none; }
+    .cell:focus-visible, .pick:focus-visible {
+      outline: 4px solid #ffc95e; outline-offset: 2px; border-radius: 18px;
+    }
+    /* Un bouton actif porte un liseré discret même sans focus : sur tactile,
+       rien n'indiquerait sinon qu'une case est jouable. */
+    .cell:not(:disabled) { box-shadow: inset 0 0 0 3px rgba(255, 201, 94, 0.3); }
+
+    /* Zones de contrôle des jeux `side` (curseur, joystick, gros bouton SAUT).
+       `touch-action: none` vit ICI et sur le canvas — jamais sur le body : un
+       pincement de zoom doit rester possible ailleurs sur la page (WCAG 1.4.4). */
+    .pad, .stickzone { position: absolute; touch-action: none; }
+    .bigbtn {
+      position: absolute; margin: 0; border: 0; border-radius: 24px;
+      font: inherit; font-size: 30px; font-weight: 900;
+      color: #fff3e2; background: #54392c; cursor: pointer;
+      touch-action: none; -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35);
+    }
+    .bigbtn:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+    .bigbtn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+    .bigbtn:focus { outline: none; }
+    .bigbtn:focus-visible { outline: 4px solid #ffc95e; outline-offset: 3px; }
+
+    /* ───────── Miroir pour lecteurs d'écran ─────────
+       Le canvas est inaccessible par nature : ce résumé de plateau et ce journal
+       sont ce qui rend la manche jouable sans voir l'écran. Les deux régions
+       n'écrivent QUE sur changement réel (sinon le lecteur répète en boucle). */
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    /* ───────── Écrans plein cadre (menu, passage, résultat) ─────────
+       Fond OPAQUE, jamais translucide : un plateau qui transparaît rend le
+       contraste réel imprévisible, donc invérifiable — et surtout, l'écran de
+       passage DOIT masquer totalement le plateau (§4.2), un voile laisserait
+       deviner le coup de l'autre. */
+    #ui {
+      position: fixed; inset: 0; display: none;
+      align-items: flex-start; justify-content: center;
+      background: #2c1f18;
+      /* Réserve la hauteur du bandeau, qui est peint par-dessus. UNE seule
+         source pour cette hauteur (`--hudbar-h`) : elle était écrite en dur
+         ici ET déduite du gabarit des boutons dans `.hudbar`, donc agrandir
+         un bouton faisait passer les titres des panneaux SOUS le bandeau. */
+      padding-top: var(--hudbar-h);
+      box-sizing: border-box;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      z-index: 10;
+    }
+    #ui.visible { display: flex; }
+    .panel {
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      width: min(94vw, 460px); padding: 22px 14px 40px;
+      text-align: center;
+      animation: panel-in 0.24s cubic-bezier(0.2, 1.2, 0.4, 1);
+    }
+    .panel.wide { width: min(96vw, 720px); }
+    @keyframes panel-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .panel h1 {
+      margin: 4px 0; font-size: 46px; font-weight: 900; letter-spacing: 2px;
+      line-height: 1; color: #ffc95e; text-shadow: 0 3px 0 #7a4a08;
+    }
+    .panel h2 { margin: 6px 0 0; font-size: 28px; font-weight: 900; }
+    /* Le titre reçoit le focus à chaque changement d'écran : on garde un
+       indicateur — un joueur au clavier doit voir où il vient d'atterrir. */
+    .panel h1:focus, .panel h2:focus { outline: none; }
+    .panel h1:focus-visible, .panel h2:focus-visible { outline: 4px solid #87cfe8; outline-offset: 6px; border-radius: 8px; }
+    .sub { font-size: 15px; line-height: 1.5; color: #e8cfb4; margin: 0; }
+
+    .btn {
+      width: 100%; min-height: 60px; padding: 15px 18px; border: 0; border-radius: 16px;
+      font: inherit; font-size: 18px; font-weight: 700; color: #fff3e2;
+      background: #54392c; cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+    }
+    .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
+    .btn.primary { background: #ffc95e; color: #3b2a20; box-shadow: 0 4px 0 #8a5c10; }
+    .btn.huge { font-size: 26px; min-height: 96px; }
+    .btn:disabled { opacity: 0.42; cursor: default; box-shadow: none; }
+    .btn:focus { outline: none; }
+    .btn:focus-visible { outline: 4px solid #87cfe8; outline-offset: 3px; }
+
+    /* Grille des 8 micro-jeux : des vignettes carrées, l'emoji et les deux
+       pictogrammes (posture, mode) suffisent — AUCUN texte n'est requis pour
+       jouer (§1.2), le titre écrit n'est là que pour le nom accessible. */
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; }
+    .tile {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      min-height: 132px; padding: 12px 8px; border: 0; border-radius: 18px;
+      font: inherit; color: #fff3e2; background: #54392c; cursor: pointer;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+    }
+    .tile:active { transform: translateY(3px); box-shadow: none; }
+    .tile:focus { outline: none; }
+    .tile:focus-visible { outline: 4px solid #87cfe8; outline-offset: 3px; }
+    .tile-name { font-size: 14px; font-weight: 700; }
+    .tile-tags { font-size: 15px; letter-spacing: 4px; }
+
+    /* ───────── Vignette ANIMÉE d'un micro-jeu (§2.4, §4.1.2) ─────────
+       Le carré est rempli par `core/demo.ts` : il y RECOPIE la cellule où le
+       shell vient de peindre le micro-jeu réel rejoué en boucle. Carré alors
+       que les plateaux sont en 9:16 ou 16:9 — la démo y est « contenue », donc
+       une vignette haute et étroite dit « téléphone en main » et une vignette
+       large et basse « posé à plat », gratuitement, en plus du pictogramme.
+       L'emoji reste, en pastille : c'est l'identité du jeu, et c'est lui qu'on
+       voit quand la démo n'a pas encore démarré. */
+    /* 120 px CSS, EXACTEMENT le côté de la cellule de rendu (`CELL` dans
+       core/demo.ts) : la recopie est donc 1 pour 1 en pixels device, et
+       `pixelated` garde des arêtes franches au lieu de créneler une réduction.
+       Taille FIXE et non « toute la largeur » : à 100 % de largeur, une
+       vignette carrée faisait des cases de 250 px et la grille de huit ne
+       tenait plus sur un téléphone. */
+    .thumbwrap { position: relative; display: block; width: 120px; margin: 0 auto; }
+    .thumb {
+      display: block; width: 120px; height: 120px;
+      border-radius: 12px; background: #3b2a20;
+      image-rendering: pixelated;
+    }
+    .tile-emoji {
+      position: absolute; left: 2px; top: -2px;
+      font-size: 26px; line-height: 1;
+      text-shadow: 0 2px 0 rgba(42, 27, 20, 0.85);
+    }
+
+    /* ───────── Écran de démonstration d'un jeu jamais lancé (§2.4) ─────────
+       « Elle tourne, un tap la coupe » : le bouton COUVRE tout le plateau et
+       il est le SEUL focalisable de la page à ce moment-là. Transparent (même
+       piège que `.passbtn` : sans `background`, le gris `buttonface` du
+       navigateur recouvrirait la démonstration entière). */
+    .demoskip {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      display: flex; align-items: flex-end; justify-content: center;
+      margin: 0; padding: 0 0 74px; border: 0;
+      background: transparent; font: inherit; color: #fff3e2; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .demoskip:focus { outline: none; }
+    .demoskip:focus-visible { outline: 6px solid #ffc95e; outline-offset: -10px; border-radius: 10px; }
+    .demotip {
+      padding: 12px 20px; border-radius: 16px; background: #2c1f18;
+      font-size: 20px; font-weight: 900;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+    }
+
+    /* Vignettes pixel art (mascottes, fruits, tuiles) : échelle ENTIÈRE côté
+       DOM, donc `pixelated` — à l'inverse du canvas letterboxé, qui reste en
+       `scaleMode: 'linear'` parce que son échelle est fractionnaire. */
+    .pix { image-rendering: pixelated; display: block; }
+
+    .row { display: flex; gap: 10px; width: 100%; }
+    .row .btn { flex: 1; }
+    .col { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+
+    /* Cible tactile ≥ 60 px, comme les boutons : un lien de 16 px de haut est
+       le genre de cible qu'un enfant de cinq ans rate trois fois sur quatre. */
+    a.hub-link {
+      display: inline-flex; align-items: center; min-height: 60px; padding: 0 12px;
+      margin-top: 8px; text-decoration: none; color: #e8cfb4; font-size: 14px;
+    }
+    a.hub-link:focus-visible { outline: 4px solid #87cfe8; outline-offset: 3px; border-radius: 6px; }
+
+    /* ═════════════════ BANDEAU DE TABLE (§4.1.3) ═════════════════
+       Il vit en ESPACE ÉCRAN, pas dans le repère logique du micro-jeu : c'est
+       du mobilier, pas du plateau. La conséquence est voulue — il ne change ni
+       de taille ni de place quand on passe d'un jeu 'pass' (540×960) à un jeu
+       'side' (960×540), donc ⏸ reste EXACTEMENT au même endroit d'un jeu à
+       l'autre (§1.2 : « pause instantanée, toujours atteignable »). Le mettre
+       dans #overlay l'aurait fait valser à chaque changement de posture. */
+    .hudbar {
+      position: fixed; left: 0; right: 0; top: 0;
+      display: flex; align-items: center; gap: 8px;
+      min-height: var(--hudbar-h); box-sizing: border-box;
+      padding: 6px 10px calc(6px) 10px;
+      padding-top: max(6px, env(safe-area-inset-top));
+      background: rgba(44, 31, 24, 0.9);
+      pointer-events: auto;
+    }
+    .hudbar[hidden] { display: none; }
+    .chip { display: flex; align-items: center; gap: 6px; }
+    /* TRIPLE CODAGE d'un joueur (§5) : la teinte du socle, sa FORME, et
+       l'animal. Aucun des trois n'est facultatif — deux joueurs doivent rester
+       distinguables en niveaux de gris et sans lire le nom. */
+    .socle {
+      display: flex; align-items: center; justify-content: center;
+      width: 40px; height: 40px; font-size: 24px; line-height: 1;
+      box-shadow: inset 0 0 0 2px rgba(42, 27, 20, 0.55);
+    }
+    .socle.disc { border-radius: 50%; }
+    .socle.square { border-radius: 9px; }
+    .socle.hex { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
+    .socle.triangle { clip-path: polygon(50% 2%, 100% 100%, 0 100%); }
+    .socle.flower { border-radius: 50% 18% 50% 18%; }
+    .socle.cloud { border-radius: 50% 50% 20% 20% / 62% 62% 30% 30%; }
+    /* « Le perdant choisit » : sa mascotte est AGRANDIE (une taille, pas une
+       couleur) et doublée d'un liseré clair. */
+    .chip.big .socle { width: 56px; height: 56px; font-size: 34px; box-shadow: inset 0 0 0 2px rgba(42, 27, 20, 0.55), 0 0 0 3px #fff3e2; }
+    .chip-stars { font-size: 12px; color: #e8cfb4; letter-spacing: -2px; }
+    .hud-score {
+      flex: 1; text-align: center; margin: 0;
+      font-size: 22px; font-weight: 900; color: #fff3e2; letter-spacing: 2px;
+    }
+    /* 60 px, pas 52 : le corollaire ergonomique du §1.1 vaut aussi pour les
+       deux seules commandes PERMANENTES de la collection (🔇 et ⏸), que le
+       §1.2 exige « toujours atteignables ». Mesurées à 52×52 CSS px, elles
+       étaient les plus petites cibles tapables d'une collection faite pour des
+       doigts de cinq ans. La hauteur du bandeau suit (`--hudbar-h`), et le
+       shell la RE-MESURE (`resize`, `hud.element.offsetHeight`) : rien à
+       recaler ailleurs. */
+    .hudbtn {
+      width: 60px; height: 60px; padding: 0; border: 0; border-radius: 14px;
+      font: inherit; font-size: 24px; color: #fff3e2; background: #54392c;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .hudbtn:focus { outline: none; }
+    .hudbtn:focus-visible { outline: 4px solid #87cfe8; outline-offset: 2px; }
+
+    /* ═════════════════ ÉCRAN DE PASSAGE (§4.2) ═════════════════
+       UN SEUL bouton, plein écran, fond de la teinte du destinataire. Il MASQUE
+       le plateau (le shell pose `visibility:hidden` sur le canvas ET sur le HUD)
+       au lieu de le voiler : un voile semi-transparent laisse deviner le coup de
+       l'autre, ce qui vide l'écran de passage de sa fonction.
+       Le texte ne se pose JAMAIS sur la teinte (la chouette ne dépasse pas
+       3,93:1 avec l'encre sombre, donc échouerait le 4,5:1 des textes) : il vit
+       sur une plaque sombre posée dessus. */
+    #pass { position: fixed; inset: 0; display: none; z-index: 40; }
+    #pass.visible { display: block; }
+    .passbtn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; height: 100%; margin: 0; padding: 0; border: 0;
+      /* TRANSPARENT, sinon le gris `buttonface` par défaut du navigateur couvre
+         tout l'écran et mange la teinte du destinataire — le bouton fait la
+         taille de l'écran, donc le défaut ne se voit nulle part ailleurs.
+         Constaté à la capture, invisible au raisonnement. */
+      background: transparent;
+      font: inherit; color: #fff3e2; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .passbtn:focus { outline: none; }
+    .passbtn:focus-visible { outline: 6px solid #2c1f18; outline-offset: -12px; }
+    .pass-socle {
+      display: flex; align-items: center; justify-content: center;
+      width: 172px; height: 172px; font-size: 108px; line-height: 1;
+      box-shadow: inset 0 0 0 5px rgba(42, 27, 20, 0.5);
+    }
+    .pass-arrow { font-size: 46px; animation: pass-bounce 1.1s ease-in-out infinite; }
+    @keyframes pass-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(14px); } }
+    .pass-plate {
+      padding: 14px 26px; border-radius: 18px; background: #2c1f18;
+      font-size: 30px; font-weight: 900;
+    }
+
+    /* ═════════════════ ACCUEIL, MENU, RÉSULTAT ═════════════════ */
+    .slot { width: 100%; padding: 10px; border-radius: 18px; background: #54392c; }
+    .mascotgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+    /* Cible tactile ≥ 60 px logiques (§1.1) — ici en px écran, ces écrans ne
+       subissent pas le letterbox. */
+    .mbtn {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-height: 74px; padding: 6px 2px; border: 0; border-radius: 14px;
+      font: inherit; font-size: 11px; color: #fff3e2; background: #3b2a20; cursor: pointer;
+    }
+    .mbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 4px #ffc95e; }
+    .mbtn:focus { outline: none; }
+    .mbtn:focus-visible { outline: 4px solid #87cfe8; outline-offset: 2px; }
+    .starrow { display: flex; gap: 8px; }
+    .starbtn {
+      flex: 1; min-height: 60px; border: 0; border-radius: 14px;
+      font: inherit; font-size: 20px; color: #fff3e2; background: #3b2a20; cursor: pointer;
+    }
+    .starbtn[aria-pressed="true"] { box-shadow: inset 0 0 0 4px #ffc95e; color: #ffc95e; }
+    .starbtn:focus { outline: none; }
+    .starbtn:focus-visible { outline: 4px solid #87cfe8; outline-offset: 2px; }
+    /* Le `<input>` fait 26 px mais la CIBLE est le `<label>` entier (l'input y
+       est imbriqué) : c'est lui qu'on porte à 60 px, comme tout le reste. */
+    .opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 60px; font-size: 15px; color: #e8cfb4; }
+    .opt input { width: 26px; height: 26px; accent-color: #ffc95e; }
+    .opt input:disabled + span { opacity: 0.75; }
+
+    /* Halo de la teinte du perdant sur la grille (§4.1.3). Doublé d'une phrase
+       en région live et de la mascotte agrandie : jamais la couleur seule. */
+    .grid.halo { padding: 8px; border-radius: 22px; box-shadow: 0 0 0 4px var(--halo, #ffc95e); }
+
+    /* La cause en UNE IMAGE (§4.3) : deux barres de la teinte de chaque joueur,
+       longueur proportionnelle au score. Aucune statistique, aucune courbe. */
+    .cause { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .causerow { display: flex; align-items: center; gap: 10px; }
+    .causebar { height: 26px; border-radius: 13px; box-shadow: inset 0 0 0 2px rgba(42, 27, 20, 0.5); }
+    .causenum { font-size: 22px; font-weight: 900; color: #fff3e2; min-width: 34px; text-align: left; }
+
+    /* Mouvement réduit : on coupe TOUTES les animations décoratives du DOM. Le
+       pendant côté canvas est géré en JS (le CSS ne peut atteindre ni les
+       particules Pixi ni la cadence des démos). L'INFORMATION n'est jamais
+       amputée : tout se lit à l'arrêt, et la démo ralentit sans jamais s'arrêter. */
+    @media (prefers-reduced-motion: reduce) {
+      .panel { animation: none; }
+      .pass-arrow { animation: none; }
+      .btn:active:not(:disabled), .tile:active, .bigbtn:active:not(:disabled) { transform: none; }
+    }
+    /* Le média CSS ne voit QUE la préférence système. L'option JOUEUR passe par
+       cette classe posée sur <body> par le shell : les deux sont en OU (jamais
+       en ET — on ne contredit pas une préférence système). */
+    body.rm .panel { animation: none; }
+    body.rm .pass-arrow { animation: none; }
+    body.rm .btn:active:not(:disabled), body.rm .tile:active, body.rm .bigbtn:active:not(:disabled) { transform: none; }
+  </style>
+</head>
+<body>
+  <div id="stage" aria-hidden="true"></div>
+  <div id="hud">
+    <div id="overlay" hidden></div>
+    <div id="sr" class="sr-only">
+      <p id="sr-log" aria-live="polite" aria-atomic="true"></p>
+      <p id="sr-board" aria-live="polite" aria-atomic="true"></p>
+    </div>
+  </div>
+  <div id="ui"></div>
+  <!-- Écran de passage : hors de #ui, car il doit pouvoir masquer le plateau
+       SANS être un panneau parmi d'autres, et rester le seul élément focusable
+       de la page pendant qu'il est affiché (§4.2). -->
+  <div id="pass" hidden></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
